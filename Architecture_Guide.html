@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bosch Porosity Inspector - Architecture & Flow</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+    </script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
+        .glass-card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 24px; backdrop-filter: blur(10px); }
+        .gradient-text { background: linear-gradient(135deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    </style>
+</head>
+<body class="p-8 md:p-16 antialiased">
+
+    <div class="max-w-5xl mx-auto space-y-12">
+        <!-- Header -->
+        <header class="text-center space-y-4">
+            <h1 class="text-4xl md:text-5xl font-black tracking-tight gradient-text">Bosch Porosity Inspector</h1>
+            <p class="text-lg text-slate-400">Architecture, Data Flow, and Technology Stack</p>
+        </header>
+
+        <!-- Flowchart Section -->
+        <section class="glass-card space-y-6 shadow-2xl">
+            <h2 class="text-2xl font-bold border-b border-slate-700 pb-2">1. End-to-End Data Flow</h2>
+            <p class="text-slate-300 leading-relaxed">
+                The diagram below illustrates how data moves from the user's browser, gets processed by the backend mathematical engine, and returns as a compliance verdict and PDF report.
+            </p>
+            <div class="bg-slate-900 p-6 rounded-xl overflow-x-auto border border-slate-800">
+                <div class="mermaid text-center">
+sequenceDiagram
+    participant User
+    participant Frontend as Frontend (Vanilla JS)
+    participant Backend as Backend (FastAPI)
+    participant ReportLab as PDF Engine (ReportLab)
+
+    Note over User, Frontend: Phase 1: Setup & Input
+    User->>Frontend: 1. Enter Drawing Specs (VW50093)
+    User->>Frontend: 2. Upload Image & Calibrate Scale
+    User->>Frontend: 3. Trace/Auto-detect Pores (Custom CV)
+    
+    Note over Frontend, Backend: Phase 2: Evaluation
+    Frontend->>Frontend: Compile Specs & Pores array into JSON
+    Frontend->>Backend: POST /api/porosity/evaluate (JSON payload)
+    Backend->>Backend: Validate JSON using Pydantic Models
+    Backend->>Backend: Run VW50093 math (H/N conditions, Zones)
+    Backend-->>Frontend: Return Verdict & Metrics JSON
+    Frontend-->>User: Update Dashboard UI (Pass/Fail)
+    
+    Note over User, ReportLab: Phase 3: Reporting
+    User->>Frontend: Click 'Export PDF Report'
+    Frontend->>Backend: POST /api/porosity/export-pdf (JSON payload)
+    Backend->>ReportLab: Render lines, tables, text programmatically
+    ReportLab-->>Backend: Return PDF byte stream
+    Backend-->>Frontend: Return application/pdf Blob
+    Frontend-->>User: Trigger File Download
+                </div>
+            </div>
+        </section>
+
+        <!-- Libraries Breakdown -->
+        <section class="space-y-8">
+            <h2 class="text-3xl font-bold gradient-text">2. Technology Stack & Libraries</h2>
+
+            <div class="grid md:grid-cols-2 gap-8">
+                <!-- Frontend -->
+                <div class="glass-card space-y-6">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center border border-blue-500/50">
+                            <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-100">Frontend (Client)</h3>
+                    </div>
+                    
+                    <ul class="space-y-6">
+                        <li class="space-y-2">
+                            <h4 class="font-bold text-blue-300">Vanilla HTML5, CSS3, JavaScript</h4>
+                            <p class="text-sm text-slate-400"><strong>How:</strong> The entire interface is built as a Single Page Application (SPA) inside a single <code>index.html</code> file without heavy frameworks like React or Angular.</p>
+                            <p class="text-sm text-slate-400"><strong>Why:</strong> Ensures instantaneous load times, absolute zero-dependency architecture, and direct manipulation of the DOM and Canvas without framework overhead.</p>
+                        </li>
+                        <li class="space-y-2">
+                            <h4 class="font-bold text-blue-300">HTML5 Canvas API</h4>
+                            <p class="text-sm text-slate-400"><strong>How:</strong> Used to render the uploaded casting image and draw interactive polygons, circles, and bounding boxes over detected pores.</p>
+                            <p class="text-sm text-slate-400"><strong>Why:</strong> It provides native, hardware-accelerated 2D graphics rendering directly in the browser.</p>
+                        </li>
+                        <li class="space-y-2">
+                            <h4 class="font-bold text-blue-300">Custom Computer Vision Engine</h4>
+                            <p class="text-sm text-slate-400"><strong>How:</strong> The developer wrote custom algorithms (Otsu Thresholding, Morphological closing, PCA) purely in JavaScript.</p>
+                            <p class="text-sm text-slate-400"><strong>Why:</strong> Eliminates the need to download massive WebAssembly libraries (like OpenCV.js), keeping the application offline-capable and extremely lightweight.</p>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Backend -->
+                <div class="glass-card space-y-6">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center border border-emerald-500/50">
+                            <svg class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path></svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-100">Backend (Server)</h3>
+                    </div>
+
+                    <ul class="space-y-6">
+                        <li class="space-y-2">
+                            <h4 class="font-bold text-emerald-300">FastAPI</h4>
+                            <p class="text-sm text-slate-400"><strong>How:</strong> Serves the REST API endpoints (<code>/api/porosity/evaluate</code>) that process the frontend's mathematical requests.</p>
+                            <p class="text-sm text-slate-400"><strong>Why:</strong> It is currently one of the fastest Python web frameworks available. It auto-generates documentation and seamlessly handles asynchronous requests.</p>
+                        </li>
+                        <li class="space-y-2">
+                            <h4 class="font-bold text-emerald-300">Pydantic</h4>
+                            <p class="text-sm text-slate-400"><strong>How:</strong> Defines strict Python classes (Models) for what a 'Pore' or a 'Spec' should look like. It catches errors if the frontend sends bad data.</p>
+                            <p class="text-sm text-slate-400"><strong>Why:</strong> VW50093 is an exact mathematical standard. Pydantic ensures data integrity (e.g., verifying diameters are numbers, not strings) before calculations run.</p>
+                        </li>
+                        <li class="space-y-2">
+                            <h4 class="font-bold text-emerald-300">ReportLab</h4>
+                            <p class="text-sm text-slate-400"><strong>How:</strong> Programmatically draws PDF documents pixel-by-pixel (lines, text, tables) based on the evaluation results.</p>
+                            <p class="text-sm text-slate-400"><strong>Why:</strong> It is the industry standard in Python for generating complex, highly customized, print-ready PDF reports.</p>
+                        </li>
+                        <li class="space-y-2">
+                            <h4 class="font-bold text-emerald-300">Uvicorn</h4>
+                            <p class="text-sm text-slate-400"><strong>How:</strong> Runs as the ASGI server executing the FastAPI application.</p>
+                            <p class="text-sm text-slate-400"><strong>Why:</strong> It acts as the lightning-fast bridge between the internet (HTTP requests) and the Python code.</p>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Data Pipeline Detail -->
+        <section class="glass-card space-y-4">
+            <h2 class="text-2xl font-bold gradient-text">3. Step-by-Step Data Pipeline</h2>
+            <div class="space-y-4 text-slate-300">
+                <p><strong>Step 1: Calibration & Extraction</strong><br> User traces pores on the frontend Canvas. The Custom JS CV converts these pixel shapes into real-world millimeters using the user's scale calibration. </p>
+                <p><strong>Step 2: Serialization</strong><br> The frontend bundles the VW50093 limits (e.g., Max Φ, Max Area %) and an array of every pore's (X, Y, Diameter) into a clean JSON string.</p>
+                <p><strong>Step 3: Network Transfer</strong><br> The JSON string is sent via a native JS <code>fetch()</code> POST request to the FastAPI backend.</p>
+                <p><strong>Step 4: Mathematical Evaluation</strong><br> The backend calculates complex spatial relationships (like edge-to-edge distance for the "Looseness" H-condition and "Packing" N-condition) using standard Python math.</p>
+                <p><strong>Step 5: Verdict Generation</strong><br> The backend returns a new JSON object detailing exactly which checks Passed/Failed. The frontend parses this to update the UI dashboards and indicators.</p>
+            </div>
+        </section>
+        
+        <footer class="text-center text-slate-500 text-sm pb-8">
+            Generated for Bosch Porosity Inspector Architecture Overview
+        </footer>
+    </div>
+</body>
+</html>
