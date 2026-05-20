@@ -655,6 +655,33 @@ select.fi option{background:var(--c2)}
                 <div class="fi-wrap"><input class="fi" id="sp-a" type="number" value="2" min="1" step="1"></div>
                 <div class="fh">Min gap = A × Φ_smaller</div>
               </div>
+              <!-- Type-specific limits -->
+              <div class="fi-item" style="grid-column:1/-1;border-top:1px dashed var(--bd2);padding-top:8px;margin-top:2px">
+                <div class="fl" style="font-weight:600;color:var(--tx)">Gas pore limits <span style="font-weight:400;color:var(--dim)">(leave blank = use global)</span></div>
+              </div>
+              <div class="fi-item">
+                <div class="fl">Gas max Φ</div>
+                <div class="fi-wrap"><input class="fi" id="sp-phi-gas" type="number" min="0.1" step="0.5" placeholder="—"><span class="fi-unit">mm</span></div>
+                <div class="fh">Override max Φ for gas pores only</div>
+              </div>
+              <div class="fi-item">
+                <div class="fl">Gas max area</div>
+                <div class="fi-wrap"><input class="fi" id="sp-pct-gas" type="number" min="0.1" step="1" placeholder="—"><span class="fi-unit">%</span></div>
+                <div class="fh">Override porosity % for gas pores only</div>
+              </div>
+              <div class="fi-item" style="grid-column:1/-1">
+                <div class="fl" style="font-weight:600;color:var(--tx)">Shrink pore limits</div>
+              </div>
+              <div class="fi-item">
+                <div class="fl">Shrink max Φ</div>
+                <div class="fi-wrap"><input class="fi" id="sp-phi-shrink" type="number" min="0.1" step="0.5" placeholder="—"><span class="fi-unit">mm</span></div>
+                <div class="fh">Override max Φ for shrinkage pores only</div>
+              </div>
+              <div class="fi-item">
+                <div class="fl">Shrink max area</div>
+                <div class="fi-wrap"><input class="fi" id="sp-pct-shrink" type="number" min="0.1" step="1" placeholder="—"><span class="fi-unit">%</span></div>
+                <div class="fh">Override porosity % for shrinkage pores only</div>
+              </div>
               <div class="fi-item">
                 <div class="fl">Ignore threshold U</div>
                 <div class="fi-wrap"><input class="fi" id="sp-u" type="number" value="0.2" min="0" step="0.1"><span class="fi-unit">mm</span></div>
@@ -781,10 +808,12 @@ select.fi option{background:var(--c2)}
     <button class="spec-tab-add" onclick="addSpecTab()">+ New Spec Tab</button>
   </div>
 
-  <!-- IMAGE TOOLBAR - Deep Upgraded -->
-  <div id="img-toolbar">
+  <!-- IMAGE TOOLBAR -->
+  <div id="img-toolbar" style="position:relative;overflow:visible">
+
+    <!-- 1. LOAD -->
     <div class="tb-group">
-      <span class="tb-lbl">IMAGE:</span>
+      <span class="tb-lbl">LOAD:</span>
       <button class="btn-stack" onclick="document.getElementById('img-file-input').click()">
         <span class="btn-stack__icon">📁</span>
         <span class="btn-stack__label">Upload</span>
@@ -792,8 +821,9 @@ select.fi option{background:var(--c2)}
     </div>
     <div class="tb-sep"></div>
 
+    <!-- 2. PREPARE — crop, rotate, flip -->
     <div class="tb-group">
-      <span class="tb-lbl">EDIT:</span>
+      <span class="tb-lbl">PREPARE:</span>
       <button class="btn-stack" id="btn-crop" onclick="imgToolActivate('crop')">
         <span class="btn-stack__icon" style="color:#ef4444">✂️</span>
         <span class="btn-stack__label">Crop</span>
@@ -802,27 +832,32 @@ select.fi option{background:var(--c2)}
         <span class="btn-stack__icon">✅</span>
         <span class="btn-stack__label">Apply</span>
       </button>
-      <button class="btn-stack icon-only" onclick="rotateImage(-90)" title="Rotate CCW">
+      <button class="btn-stack" id="btn-cancelcrop" style="display:none;color:#ef4444" onclick="cancelCrop()" title="Cancel crop selection (Esc)">
+        <span class="btn-stack__icon">✕</span>
+        <span class="btn-stack__label">Cancel</span>
+      </button>
+      <button class="btn-stack icon-only" onclick="rotateImage(-90)" title="Rotate 90° CCW">
         <span class="btn-stack__icon">↺</span>
-        <span class="btn-stack__label">Rotate</span>
+        <span class="btn-stack__label">CCW</span>
       </button>
-      <button class="btn-stack icon-only" onclick="rotateImage(90)" title="Rotate CW">
+      <button class="btn-stack icon-only" onclick="rotateImage(90)" title="Rotate 90° CW">
         <span class="btn-stack__icon">↻</span>
-        <span class="btn-stack__label">Rotate</span>
+        <span class="btn-stack__label">CW</span>
       </button>
-      <button class="btn-stack" onclick="flipImage('h')">
+      <button class="btn-stack" onclick="flipImage('h')" title="Flip horizontal">
         <span class="btn-stack__icon">⇄</span>
         <span class="btn-stack__label">Flip H</span>
       </button>
-      <button class="btn-stack" onclick="flipImage('v')">
+      <button class="btn-stack" onclick="flipImage('v')" title="Flip vertical">
         <span class="btn-stack__icon">⇅</span>
         <span class="btn-stack__label">Flip V</span>
       </button>
     </div>
     <div class="tb-sep"></div>
 
+    <!-- 3. CALIBRATE — must set scale before detecting -->
     <div class="tb-group">
-      <span class="tb-lbl">SCALE:</span>
+      <span class="tb-lbl">CALIBRATE:</span>
       <button class="btn-stack" id="btn-scale-tool" onclick="imgToolActivate('scale_line')">
         <span class="btn-stack__icon" style="color:#3b82f6">📐</span>
         <span class="btn-stack__label">Set Scale</span>
@@ -833,6 +868,7 @@ select.fi option{background:var(--c2)}
     </div>
     <div class="tb-sep"></div>
 
+    <!-- 4. ENHANCE — brightness / contrast for better detection -->
     <div class="tb-group">
       <span class="tb-lbl">ENHANCE:</span>
       <div class="slider-group" style="color:#eab308">
@@ -846,6 +882,36 @@ select.fi option{background:var(--c2)}
     </div>
     <div class="tb-sep"></div>
 
+    <!-- 5. DETECT — run auto-detection -->
+    <div class="tb-group">
+      <span class="tb-lbl">DETECT:</span>
+      <div style="display:flex;gap:3px;align-items:center">
+        <span style="font-size:9px;color:var(--dim)">Preset:</span>
+        <button class="btn-hz" style="font-size:9px;padding:2px 6px" onclick="setDetectPreset('fine')" title="Fine: sensitive, for small gas pores">Fine</button>
+        <button class="btn-hz" style="font-size:9px;padding:2px 6px" onclick="setDetectPreset('balanced')" title="Balanced: good starting point for most castings">Balanced</button>
+        <button class="btn-hz" style="font-size:9px;padding:2px 6px" onclick="setDetectPreset('coarse')" title="Coarse: large shrinkage voids, ignores micro-pores">Coarse</button>
+      </div>
+      <div class="slider-group" title="Detection threshold — 50=Auto (Otsu)" style="color:#8b5cf6">
+        <span style="font-size:9px;font-weight:700">Threshold</span>
+        <input type="range" id="detect-threshold" min="10" max="90" value="50" step="5"
+          oninput="document.getElementById('detect-sens-val').textContent=this.value+(this.value=='50'?' (Auto)':this.value>50?' +'+(this.value-50):' '+(this.value-50))" style="width:56px">
+        <span id="detect-sens-val" style="font-size:10px;font-weight:700;min-width:52px">50 (Auto)</span>
+      </div>
+      <div class="slider-group" title="Minimum pore diameter to detect (mm)" style="color:#0b7285">
+        <span style="font-size:9px;font-weight:700">Min Φ</span>
+        <input type="range" id="detect-min-dia" min="0.05" max="2.0" value="0.1" step="0.05"
+          oninput="document.getElementById('detect-min-dia-val').textContent=parseFloat(this.value).toFixed(2)+'mm'" style="width:48px">
+        <span id="detect-min-dia-val" style="font-size:10px;font-weight:700;width:38px">0.10mm</span>
+      </div>
+      <button class="btn-stack btn-purple" id="btn-autodetect" onclick="autoDetectPores()" style="margin-left:4px">
+        <span class="btn-stack__icon">🔍</span>
+        <span class="btn-stack__label">Auto-Detect</span>
+      </button>
+      <button class="btn-hz" style="font-size:9px;padding:2px 7px;position:relative" onclick="toggleDetectAdvanced()" id="btn-adv-toggle" title="Show/hide advanced parameters">⚙ Advanced ▾</button>
+    </div>
+    <div class="tb-sep"></div>
+
+    <!-- 6. EXPORT -->
     <div class="tb-group">
       <span class="tb-lbl">EXPORT:</span>
       <button class="btn-stack" onclick="downloadAnnotatedImage()">
@@ -853,42 +919,140 @@ select.fi option{background:var(--c2)}
         <span class="btn-stack__label">PNG</span>
       </button>
     </div>
-    <div class="tb-sep"></div>
+    <!-- ADVANCED PANEL — Monochrome clean design -->
+    <div id="detect-advanced" style="display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:300;
+      width:480px;background:var(--c2);border:1px solid var(--bd2);border-radius:10px;
+      box-shadow:0 12px 32px rgba(0,0,0,.35);overflow:hidden;font-family:var(--fs)">
 
-    <div class="tb-group">
-      <span class="tb-lbl">AUTO-DETECT:</span>
-      <div class="slider-group" style="color:#8b5cf6">
-        <span style="font-size:9px">Sens:</span>
-        <input type="range" id="detect-threshold" min="10" max="90" value="45" step="5" oninput="document.getElementById('detect-sens-val').textContent=this.value" style="width:50px">
-        <span id="detect-sens-val" style="font-size:10px;font-weight:700;min-width:16px">45</span>
+      <!-- Header -->
+      <div style="padding:11px 14px 10px;border-bottom:1px solid var(--bd);
+        display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--tx)">⚙ Advanced Detection Parameters</div>
+          <div style="font-size:9px;color:var(--dim);margin-top:2px">Adjust only when presets give inaccurate results</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button onclick="_resetAdvancedDefaults()"
+            style="font-size:9px;padding:3px 9px;background:transparent;border:1px solid var(--bd2);
+              border-radius:5px;color:var(--dim);cursor:pointer">↺ Defaults</button>
+          <button onclick="toggleDetectAdvanced()"
+            style="font-size:11px;padding:2px 8px;background:var(--c3);border:1px solid var(--bd);
+              border-radius:5px;color:var(--dim);cursor:pointer">✕</button>
+        </div>
       </div>
-      <button class="btn-stack btn-purple" id="btn-autodetect" onclick="autoDetectPores()" style="margin-left:4px">
-        <span class="btn-stack__icon">🔍</span>
-        <span class="btn-stack__label">Auto-Detect</span>
-      </button>
-      <div class="slider-group" title="Noise smoothing passes before thresholding">
-        <span style="font-size:9px">Blur</span>
-        <input type="range" id="detect-blur" min="0" max="3" value="1" step="1" oninput="document.getElementById('detect-blur-val').textContent=this.value" style="width:42px">
-        <span id="detect-blur-val" style="font-size:10px;font-weight:700;width:10px">1</span>
+
+      <!-- 2-column grid -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--bd)">
+
+        <!-- ASPECT RATIO -->
+        <div style="background:var(--c2);padding:12px 14px;position:relative"
+          onmouseover="this.style.background='var(--c3)'" onmouseout="this.style.background='var(--c2)'">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--tx)">Aspect Ratio</div>
+              <div style="font-size:8px;color:var(--dim);margin-top:1px">shape filter</div>
+            </div>
+            <span id="detect-aspect-val" style="font-size:18px;font-weight:800;color:var(--tx);font-variant-numeric:tabular-nums;line-height:1">6</span>
+          </div>
+          <!-- Track bar -->
+          <div style="height:3px;background:var(--bd2);border-radius:2px;margin-bottom:4px;position:relative">
+            <div id="adv-aspect-pip" style="position:absolute;top:50%;transform:translate(-50%,-50%);
+              width:10px;height:10px;border-radius:50%;background:var(--tx);left:40%;transition:left .1s"></div>
+          </div>
+          <input type="range" id="detect-aspect" min="2" max="12" value="6" step="1"
+            oninput="document.getElementById('detect-aspect-val').textContent=this.value;
+              document.getElementById('adv-aspect-pip').style.left=((this.value-2)/10*100)+'%'"
+            style="width:100%;margin:0;height:18px;opacity:0;position:absolute;left:0;right:0;cursor:pointer;margin-top:-11px">
+          <div style="display:flex;justify-content:space-between;font-size:7px;color:var(--dim)">
+            <span>2 strict</span><span>12 loose</span></div>
+          <div style="font-size:8px;color:var(--dim);margin-top:7px;padding-top:7px;border-top:1px solid var(--bd);line-height:1.5">
+            Max blob elongation. Rejects cracks &amp; edge smears.</div>
+        </div>
+
+        <!-- NOISE BLUR -->
+        <div style="background:var(--c2);padding:12px 14px;position:relative"
+          onmouseover="this.style.background='var(--c3)'" onmouseout="this.style.background='var(--c2)'">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--tx)">Noise Blur</div>
+              <div style="font-size:8px;color:var(--dim);margin-top:1px">pre-process</div>
+            </div>
+            <span id="detect-blur-val" style="font-size:18px;font-weight:800;color:var(--tx);font-variant-numeric:tabular-nums;line-height:1">1</span>
+          </div>
+          <div style="height:3px;background:var(--bd2);border-radius:2px;margin-bottom:4px;position:relative">
+            <div id="adv-blur-pip" style="position:absolute;top:50%;transform:translate(-50%,-50%);
+              width:10px;height:10px;border-radius:50%;background:var(--tx);left:33%;transition:left .1s"></div>
+          </div>
+          <input type="range" id="detect-blur" min="0" max="3" value="1" step="1"
+            oninput="document.getElementById('detect-blur-val').textContent=this.value;
+              document.getElementById('adv-blur-pip').style.left=(this.value/3*100)+'%'"
+            style="width:100%;margin:0;height:18px;opacity:0;position:absolute;left:0;right:0;cursor:pointer;margin-top:-11px">
+          <div style="display:flex;justify-content:space-between;font-size:7px;color:var(--dim)">
+            <span>0 off</span><span>3 heavy</span></div>
+          <div style="font-size:8px;color:var(--dim);margin-top:7px;padding-top:7px;border-top:1px solid var(--bd);line-height:1.5">
+            Gaussian blur before thresholding. Reduces false micro-detections.</div>
+        </div>
+
+        <!-- MORPHOLOGICAL CLOSING -->
+        <div style="background:var(--c2);padding:12px 14px;position:relative"
+          onmouseover="this.style.background='var(--c3)'" onmouseout="this.style.background='var(--c2)'">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--tx)">Closing</div>
+              <div style="font-size:8px;color:var(--dim);margin-top:1px">fill holes</div>
+            </div>
+            <span id="detect-close-val" style="font-size:18px;font-weight:800;color:var(--tx);font-variant-numeric:tabular-nums;line-height:1">2</span>
+          </div>
+          <div style="height:3px;background:var(--bd2);border-radius:2px;margin-bottom:4px;position:relative">
+            <div id="adv-close-pip" style="position:absolute;top:50%;transform:translate(-50%,-50%);
+              width:10px;height:10px;border-radius:50%;background:var(--tx);left:40%;transition:left .1s"></div>
+          </div>
+          <input type="range" id="detect-close" min="0" max="5" value="2" step="1"
+            oninput="document.getElementById('detect-close-val').textContent=this.value;
+              document.getElementById('adv-close-pip').style.left=(this.value/5*100)+'%'"
+            style="width:100%;margin:0;height:18px;opacity:0;position:absolute;left:0;right:0;cursor:pointer;margin-top:-11px">
+          <div style="display:flex;justify-content:space-between;font-size:7px;color:var(--dim)">
+            <span>0 off</span><span>5 max fill</span></div>
+          <div style="font-size:8px;color:var(--dim);margin-top:7px;padding-top:7px;border-top:1px solid var(--bd);line-height:1.5">
+            Fills specks inside pore blobs. High values may merge adjacent pores.</div>
+        </div>
+
+        <!-- CONTOUR POINTS -->
+        <div style="background:var(--c2);padding:12px 14px;position:relative"
+          onmouseover="this.style.background='var(--c3)'" onmouseout="this.style.background='var(--c2)'">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--tx)">Contour Pts</div>
+              <div style="font-size:8px;color:var(--dim);margin-top:1px">shape accuracy</div>
+            </div>
+            <span id="detect-curve-val" style="font-size:18px;font-weight:800;color:var(--tx);font-variant-numeric:tabular-nums;line-height:1">32</span>
+          </div>
+          <div style="height:3px;background:var(--bd2);border-radius:2px;margin-bottom:4px;position:relative">
+            <div id="adv-curve-pip" style="position:absolute;top:50%;transform:translate(-50%,-50%);
+              width:10px;height:10px;border-radius:50%;background:var(--tx);left:29%;transition:left .1s"></div>
+          </div>
+          <input type="range" id="detect-curve" min="12" max="80" value="32" step="4"
+            oninput="document.getElementById('detect-curve-val').textContent=this.value;
+              document.getElementById('adv-curve-pip').style.left=((this.value-12)/68*100)+'%'"
+            style="width:100%;margin:0;height:18px;opacity:0;position:absolute;left:0;right:0;cursor:pointer;margin-top:-11px">
+          <div style="display:flex;justify-content:space-between;font-size:7px;color:var(--dim)">
+            <span>12 fast</span><span>80 precise</span></div>
+          <div style="font-size:8px;color:var(--dim);margin-top:7px;padding-top:7px;border-top:1px solid var(--bd);line-height:1.5">
+            Polygon points per pore outline. Higher = smoother for large voids.</div>
+        </div>
       </div>
-      <div class="slider-group" title="Morphological closing radius in pixels">
-        <span style="font-size:9px">Close</span>
-        <input type="range" id="detect-close" min="0" max="5" value="2" step="1" oninput="document.getElementById('detect-close-val').textContent=this.value" style="width:42px">
-        <span id="detect-close-val" style="font-size:10px;font-weight:700;width:10px">2</span>
-      </div>
-      <div class="slider-group" title="More points follow pore curves more closely">
-        <span style="font-size:9px">Curve</span>
-        <input type="range" id="detect-curve" min="12" max="80" value="32" step="4" oninput="document.getElementById('detect-curve-val').textContent=this.value" style="width:46px">
-        <span id="detect-curve-val" style="font-size:10px;font-weight:700;width:18px">32</span>
-      </div>
-      <div class="slider-group" title="Maximum accepted blob elongation">
-        <span style="font-size:9px">Aspect</span>
-        <input type="range" id="detect-aspect" min="2" max="12" value="8" step="1" oninput="document.getElementById('detect-aspect-val').textContent=this.value" style="width:42px">
-        <span id="detect-aspect-val" style="font-size:10px;font-weight:700;width:14px">8</span>
+
+      <!-- Footer tip -->
+      <div style="padding:8px 14px;border-top:1px solid var(--bd)">
+        <div style="font-size:8px;color:var(--dim);line-height:1.6">
+          <strong style="color:var(--tx)">When to adjust:</strong>
+          Cracks detected → lower Aspect &middot;
+          False dots → raise Blur &middot;
+          Hollow pores → raise Closing
+        </div>
       </div>
     </div>
-    
-    <div style="margin-left:auto;text-align:right">
+    <div style="margin-left:auto;text-align:right;position:relative">
       <span id="img-overlay-info" style="font-size:9px;color:var(--dim)">No image — upload to begin</span>
     </div>
   </div>
@@ -896,15 +1060,34 @@ select.fi option{background:var(--c2)}
 
   <!-- CANVAS TOOLBAR -->
   <div id="canvas-toolbar">
+
+    <!-- 1. VIEW — navigation always first -->
     <div class="tb-group">
-      <span class="tb-lbl">TOOL:</span>
-      <button class="btn-hz on" id="tool-place" onclick="setTool('place')">⊕ Place Pore</button>
-      <button class="btn-hz" id="tool-select" onclick="setTool('select')">↖ Select</button>
-      <button class="btn-hz" id="tool-measure" onclick="setTool('measure')">⟷ Measure Gap</button>
-      <button class="btn-hz" id="tool-datum" onclick="setTool('datum')">□ Set Datum</button>
+      <span class="tb-lbl">VIEW:</span>
+      <button class="btn-hz" id="tool-pan" onclick="setTool('pan')" title="Pan / drag canvas">⛶ Pan</button>
+      <button class="btn-hz" onclick="resetView()" title="Fit to window">⊡ Fit</button>
+      <button class="btn-hz" onclick="zoom(1.2)" style="padding:4px 8px" title="Zoom in">+</button>
+      <button class="btn-hz" onclick="zoom(1/1.2)" style="padding:4px 8px" title="Zoom out">−</button>
     </div>
     <div class="tb-sep"></div>
 
+    <!-- 2. PORES — core annotation tools -->
+    <div class="tb-group">
+      <span class="tb-lbl">PORES:</span>
+      <button class="btn-hz" id="tool-place" onclick="setTool('place')" title="Click canvas to place pore">⊕ Place</button>
+      <div class="slider-group" title="Pore diameter for next placed pore" style="color:#374151;margin-left:2px">
+        <span style="font-size:9px;font-weight:700;color:var(--dim)">Φ</span>
+        <input type="range" id="phi-slider" min="0.2" max="4.0" step="0.05" value="1.0"
+          oninput="S.nextPhi=+this.value;document.getElementById('phi-disp').textContent=S.nextPhi.toFixed(2)"
+          style="width:60px">
+        <span id="phi-disp" style="font-size:11px;font-weight:700;width:28px">1.00</span>
+      </div>
+      <div class="tb-sep" style="height:18px;margin:0 4px"></div>
+      <button class="btn-hz" id="tool-select" onclick="setTool('select')" title="Select and edit existing pores">↖ Select</button>
+    </div>
+    <div class="tb-sep"></div>
+
+    <!-- 3. TYPE — classify pore type (paired with Place) -->
     <div class="tb-group">
       <span class="tb-lbl">TYPE:</span>
       <button class="btn-hz on" id="type-gas" onclick="setPoreType('gas')" style="color:#3b82f6">● Gas</button>
@@ -912,58 +1095,60 @@ select.fi option{background:var(--c2)}
     </div>
     <div class="tb-sep"></div>
 
+    <!-- 4. MEASURE — analysis tools -->
     <div class="tb-group">
-      <span class="tb-lbl">Φ (MM):</span>
-      <div class="slider-group" style="color:#374151">
-        <input type="range" id="phi-slider" min="0.2" max="4.0" step="0.05" value="1.0" oninput="S.nextPhi=+this.value;document.getElementById('phi-disp').textContent=S.nextPhi.toFixed(2)" style="width:70px">
-        <span id="phi-disp" style="font-size:12px;font-weight:700;width:30px">1.00</span>
-      </div>
+      <span class="tb-lbl">MEASURE:</span>
+      <button class="btn-hz" id="tool-measure" onclick="setTool('measure')" title="Measure edge-to-edge gap between two pores">⟷ Gap</button>
+      <button class="btn-hz" id="tool-datum" onclick="setTool('datum')" title="Draw datum reference area for porosity %">□ Datum</button>
+      <button class="btn-hz" id="btn-clear-datum" onclick="clearDatum()" style="display:none;color:#ef4444" title="Remove datum square">✕ Datum</button>
     </div>
     <div class="tb-sep"></div>
 
+    <!-- 5. LINKS — pore grouping radius -->
     <div class="tb-group">
       <span class="tb-lbl">LINKS:</span>
       <div class="slider-group" style="color:#f59e0b">
-        <input type="range" id="link-range" min="0" max="20" step="0.5" value="0" oninput="document.getElementById('link-disp').textContent=this.value==0?'Nearest':this.value+'mm';if(typeof drawCanvas==='function') drawCanvas();" style="width:60px">
+        <input type="range" id="link-range" min="0" max="20" step="0.5" value="0"
+          oninput="document.getElementById('link-disp').textContent=this.value==0?'Nearest':this.value+'mm';if(typeof drawCanvas==='function') drawCanvas();"
+          style="width:60px">
         <span id="link-disp" style="font-size:10px;font-weight:700;width:40px">Nearest</span>
       </div>
     </div>
     <div class="tb-sep"></div>
 
-    <div class="tb-group">
-      <span class="tb-lbl">ZOOM:</span>
-      <button class="btn-hz" onclick="zoom(1.2)" style="padding:6px">+</button>
-      <button class="btn-hz" onclick="zoom(1/1.2)" style="padding:6px">−</button>
-      <button class="btn-hz" onclick="resetView()">⊡ Fit</button>
-      <button class="btn-hz" id="tool-pan" onclick="setTool('pan')">⛶ Pan</button>
-    </div>
-    <div class="tb-sep"></div>
-
+    <!-- 6. HISTORY — right-aligned -->
     <div class="tb-group" style="margin-left:auto">
-      <button class="btn-hz" onclick="undoPore()" id="btn-undo" disabled>↩ Undo</button>
-      <button class="btn-hz" onclick="redoPore()" id="btn-redo" disabled>↪ Redo</button>
-      <button class="btn-hz" onclick="loadSamplePores()">⊕ Sample</button>
-      <button class="btn-hz" onclick="clearAllPores()" style="color:#ef4444">✕ Clear</button>
+      <button class="btn-hz" onclick="undoPore()" id="btn-undo" disabled title="Undo last action">↩ Undo</button>
+      <button class="btn-hz" onclick="redoPore()" id="btn-redo" disabled title="Redo">↪ Redo</button>
+      <button class="btn-hz" onclick="loadSamplePores()" title="Load sample pore set for testing">⊕ Sample</button>
+      <button class="btn-hz" onclick="clearAllPores()" style="color:#ef4444" title="Clear all pores">✕ Clear</button>
     </div>
   </div>
-  <!-- Scale input overlay -->
+  <!-- Scale input overlay — upgraded -->
   <div id="scale-input-overlay" style="display:none;position:absolute;z-index:50;
-    background:white;border:1px solid var(--bd2);border-radius:var(--r2);
-    padding:16px 20px;box-shadow:0 8px 32px rgba(0,0,0,.18);min-width:280px;
+    background:var(--c2);border:1.5px solid var(--amb);border-radius:var(--r2);
+    padding:16px 20px;box-shadow:0 8px 32px rgba(0,0,0,.35);min-width:320px;
     font-family:var(--fs)">
-    <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:4px">📐 Set Scale</div>
-    <div id="scale-px-info" style="font-size:11px;color:var(--dim);margin-bottom:12px"></div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-      <input id="scale-mm-input" type="number" min="0.001" step="0.001" placeholder="Enter real length..."
+    <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">&#128208; Set Scale Calibration</div>
+    <div style="font-size:10px;color:var(--dim);margin-bottom:8px">Draw the line along a known reference (e.g. the scale bar in the image). Enter the <strong>real-world length</strong> of that line.</div>
+    <div id="scale-px-info" style="font-size:10px;color:var(--amb);margin-bottom:10px;padding:4px 8px;background:rgba(255,173,0,.08);border-radius:4px"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <input id="scale-mm-input" type="number" min="0.001" step="0.001" placeholder="e.g. 5  (for a 5mm scale bar)"
         style="flex:1;padding:7px 10px;border:1px solid var(--bd2);border-radius:6px;
-          font-size:13px;font-family:var(--fs);outline:none"
+          font-size:13px;font-family:var(--fs);outline:none;background:var(--c1);color:var(--tx)"
+        oninput="_scalePreview(this.value)"
         onkeydown="if(event.key==='Enter') confirmScale()">
       <span style="font-size:12px;color:var(--dim);white-space:nowrap">mm</span>
     </div>
-    <div style="display:flex;gap:8px">
-      <button onclick="confirmScale()" class="btn btn-pri" style="flex:1;font-size:12px;padding:6px">✓ Apply</button>
-      <button onclick="cancelScale()" class="btn btn-tool" style="font-size:12px;padding:6px 12px">✕</button>
+    <!-- Live preview of what image dimensions would be -->
+    <div id="scale-dim-preview" style="font-size:10px;color:var(--g);padding:4px 8px;background:rgba(0,232,162,.06);border-radius:4px;margin-bottom:10px;display:none">
+      &#8594; Image size: <strong id="scale-preview-wh"></strong>
     </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="confirmScale()" class="btn btn-pri" style="flex:1;font-size:12px;padding:6px">&#10003; Apply</button>
+      <button onclick="cancelScale()" class="btn btn-tool" style="font-size:12px;padding:6px 12px">&#10005;</button>
+    </div>
+    <div style="font-size:9px;color:var(--dim);margin-top:8px">Tip: If image has a printed scale bar (e.g. &#34;5 mm&#34;), draw along it and enter 5.</div>
   </div>
   <!-- CANVAS AREA + PORE PANEL -->
   <div style="flex:1;display:flex;overflow:hidden">
@@ -984,6 +1169,94 @@ select.fi option{background:var(--c2)}
         <div class="image-tab-title">Images for Active Spec</div>
         <div class="image-tab-list" id="image-tabs"></div>
         <button class="image-tab-add" onclick="addImageTab()" style="width:100%;margin-top:7px">+ Add Image Tab</button>
+      </div>
+      <!-- Image Position in Wall — vertical zone strip -->
+      <div class="pp-section" id="img-offset-row" style="padding:8px 12px;background:var(--c3);border-bottom:1px solid var(--bd)">
+        <div class="pp-title" style="margin-bottom:7px">Image Position in Wall</div>
+
+        <div style="display:flex;align-items:stretch;gap:8px">
+
+          <!-- VERTICAL WALL STRIP (video-editor style) -->
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
+            <div style="font-size:7px;color:#374151;font-weight:700;line-height:1">A</div>
+            <!-- Draggable vertical strip -->
+            <div id="wall-vstrip"
+              style="position:relative;width:22px;height:96px;border-radius:4px;overflow:hidden;cursor:ns-resize;user-select:none"
+              onmousedown="_wallVStripDragStart(event)"
+              title="Drag to set image position in wall">
+              <!-- HR top zone -->
+              <div style="position:absolute;top:0;left:0;right:0;height:33.3%;background:#e5e7eb;display:flex;align-items:center;justify-content:center">
+                <span style="font-size:6px;color:#6b7280;font-weight:700;writing-mode:vertical-lr;text-orientation:mixed;transform:rotate(180deg)">HR</span>
+              </div>
+              <!-- HK center zone -->
+              <div style="position:absolute;top:33.3%;left:0;right:0;height:33.4%;background:#9ca3af;display:flex;align-items:center;justify-content:center;border-top:1px solid #6b7280;border-bottom:1px solid #6b7280">
+                <span style="font-size:6px;color:#1e293b;font-weight:700;writing-mode:vertical-lr;text-orientation:mixed;transform:rotate(180deg)">HK</span>
+              </div>
+              <!-- HR bottom zone -->
+              <div style="position:absolute;bottom:0;left:0;right:0;height:33.3%;background:#e5e7eb;display:flex;align-items:center;justify-content:center">
+                <span style="font-size:6px;color:#6b7280;font-weight:700;writing-mode:vertical-lr;text-orientation:mixed;transform:rotate(180deg)">HR</span>
+              </div>
+              <!-- Image window overlay -->
+              <div id="wall-strip-window"
+                style="position:absolute;left:1px;right:1px;background:rgba(59,130,246,0.38);border:1.5px solid #3b82f6;border-radius:2px;display:none;box-shadow:0 0 0 1px rgba(59,130,246,.3)">
+                <!-- Grip dots -->
+                <div style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:1px">
+                  <div style="width:8px;height:1.5px;background:rgba(29,78,216,.6);border-radius:1px"></div>
+                  <div style="width:8px;height:1.5px;background:rgba(29,78,216,.6);border-radius:1px"></div>
+                  <div style="width:8px;height:1.5px;background:rgba(29,78,216,.6);border-radius:1px"></div>
+                </div>
+              </div>
+            </div>
+            <div style="font-size:7px;color:#374151;font-weight:700;line-height:1">B</div>
+          </div>
+
+          <!-- CONTROLS COLUMN -->
+          <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+
+            <!-- ▲ Nudge Up button -->
+            <button onclick="_nudgeOffset(-0.5)"
+              style="width:100%;font-size:9px;padding:3px 4px;border:1px solid var(--bd2);background:var(--c1);color:var(--tx);border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:3px"
+              title="Move image up 0.5mm (toward Surface A)">
+              <span style="font-size:10px">▲</span><span>−0.5 mm</span>
+            </button>
+
+            <!-- Zone label display -->
+            <div id="img-offset-zones"
+              style="font-size:8px;font-weight:600;color:var(--tx);text-align:center;padding:3px 4px;background:var(--c0);border:1px solid var(--bd2);border-radius:4px;min-height:22px;display:flex;align-items:center;justify-content:center">
+              full section
+            </div>
+
+            <!-- ▼ Nudge Down button -->
+            <button onclick="_nudgeOffset(0.5)"
+              style="width:100%;font-size:9px;padding:3px 4px;border:1px solid var(--bd2);background:var(--c1);color:var(--tx);border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:3px"
+              title="Move image down 0.5mm (toward Surface B)">
+              <span style="font-size:10px">▼</span><span>+0.5 mm</span>
+            </button>
+
+            <!-- Quick presets -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px">
+              <button onclick="_setOffsetPreset('full')"   style="font-size:7px;padding:2px 3px;border:1px solid var(--bd2);background:var(--c1);color:var(--tx);border-radius:3px;cursor:pointer" title="Full wall">Full</button>
+              <button onclick="_setOffsetPreset('hr_top')" style="font-size:7px;padding:2px 3px;border:1px solid var(--bd2);background:var(--c1);color:var(--tx);border-radius:3px;cursor:pointer" title="HR top ⅓">HR ↑</button>
+              <button onclick="_setOffsetPreset('hk')"     style="font-size:7px;padding:2px 3px;border:1px solid var(--bd2);background:var(--c1);color:var(--tx);border-radius:3px;cursor:pointer" title="HK center ⅓">HK</button>
+              <button onclick="_setOffsetPreset('hr_bot')" style="font-size:7px;padding:2px 3px;border:1px solid var(--bd2);background:var(--c1);color:var(--tx);border-radius:3px;cursor:pointer" title="HR bottom ⅓">HR ↓</button>
+            </div>
+
+            <!-- Numeric offset input -->
+            <div style="display:flex;align-items:center;gap:3px">
+              <span style="font-size:8px;color:var(--dim);white-space:nowrap">Top:</span>
+              <input id="img-offset-mm" type="number" min="0" step="0.1" value="0"
+                style="flex:1;font-size:10px;padding:2px 3px;border:1px solid var(--bd2);border-radius:3px;background:var(--c0);color:var(--tx);min-width:0"
+                onkeydown="if(event.key==='Enter')applyImgOffset(this.value)"
+                title="Distance from Surface A to image top (mm)">
+              <span style="font-size:8px;color:var(--dim)">mm</span>
+              <button onclick="applyImgOffset(document.getElementById('img-offset-mm').value)"
+                style="font-size:9px;padding:2px 7px;border-radius:3px;border:1px solid var(--bd2);background:var(--tx);color:var(--c0);cursor:pointer;font-weight:700"
+                title="Apply offset">↵</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="img-offset-warn" style="display:none;font-size:8px;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:3px;padding:4px 6px;margin-top:6px;line-height:1.4"></div>
       </div>
       <div class="pp-section">
         <div class="pp-title">Specification Details</div>
@@ -1035,25 +1308,6 @@ select.fi option{background:var(--c2)}
         </div>
       </div>
 
-      <!-- Manual entry -->
-      <div class="pp-section">
-        <div class="pp-title">Manual Pore Entry</div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <div class="fi-item">
-            <div class="fl">Φ diameter (mm)</div>
-            <div class="fi-wrap"><input class="fi" id="me-phi" type="number" step="0.05" min="0.1" placeholder="1.20" style="font-size:12px;padding:6px 10px"><span class="fi-unit">mm</span></div>
-          </div>
-          <div class="fi-item">
-            <div class="fl">Depth from surface A (%)</div>
-            <div class="fi-wrap"><input class="fi" id="me-dep" type="number" step="1" min="0" max="100" placeholder="50" style="font-size:12px;padding:6px 10px"><span class="fi-unit">%</span></div>
-          </div>
-          <div class="fi-item">
-            <div class="fl">H-position in section</div>
-            <div class="fi-wrap"><input class="fi" id="me-hpos" type="number" step="1" min="0" max="100" placeholder="50" style="font-size:12px;padding:6px 10px"><span class="fi-unit">%</span></div>
-          </div>
-          <button class="btn btn-sec btn-sm" onclick="addManualPore()" style="width:100%">Add Pore ↵</button>
-        </div>
-      </div>
 
       <!-- Pore registry -->
       <div style="padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between">
@@ -1062,13 +1316,23 @@ select.fi option{background:var(--c2)}
       </div>
       <div id="pore-registry" class="scrollable"></div>
 
-      <!-- Selected pore edit panel -->
-      <div id="pore-edit-panel" style="display:none;padding:10px 12px;border-top:1px solid var(--bd2);background:var(--c2)">
-        <div class="pp-title" style="color:var(--tx);margin-bottom:8px">✎ Edit Selected Pore</div>
+      <!-- Selected pore edit panel — upgraded -->
+      <div id="pore-edit-panel" style="display:none;padding:10px 12px;border-top:2px solid var(--amb);background:rgba(255,173,0,.06)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div class="pp-title" style="color:var(--amb);margin:0">&#9998; Edit Pore <span id="ep-pore-id" style="font-size:9px;color:var(--dim);font-weight:400"></span></div>
+          <button onclick="const p=AP().find(p=>p.id===S.selectedId);if(p)removePore(p.id);" style="font-size:10px;padding:2px 8px;background:var(--ra);color:var(--red);border:1px solid var(--red);border-radius:4px;cursor:pointer">&#10005; Delete</button>
+        </div>
         <div style="display:flex;flex-direction:column;gap:6px">
           <div class="fi-item">
-            <div class="fl">Φ diameter (mm)</div>
+            <div class="fl">&#934; diameter (mm)</div>
             <div class="fi-wrap"><input class="fi" id="ep-phi" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.05" min="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
+          </div>
+          <div class="fi-item">
+            <div class="fl">Type</div>
+            <select class="fi" id="ep-type" onchange="const p=AP().find(p=>p.id===S.selectedId);if(p){p.type=this.value;drawCanvas();updateLiveMetrics();updatePoreRegistry();}" style="font-size:12px;padding:4px 8px">
+              <option value="gas">Gas pore</option>
+              <option value="shrink">Shrinkage</option>
+            </select>
           </div>
           <div class="fi-item">
             <div class="fl">X position (mm)</div>
@@ -1078,6 +1342,7 @@ select.fi option{background:var(--c2)}
             <div class="fl">Y depth (mm)</div>
             <div class="fi-wrap"><input class="fi" id="ep-y" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
           </div>
+          <button onclick="S.selectedId=null;document.getElementById('pore-edit-panel').style.display='none';setTool('place');drawCanvas();updatePoreRegistry();" style="width:100%;font-size:10px;padding:5px 0;background:var(--c3);border:1px solid var(--bd);border-radius:4px;cursor:pointer;color:var(--dim);margin-top:2px">Done &#10003;</button>
         </div>
       </div>
     </div>
@@ -1117,6 +1382,15 @@ select.fi option{background:var(--c2)}
       <div style="font-size:11px;color:var(--dim)">Calculating porosity, zones and spacing conditions</div>
     </div>
 
+    <!-- ── Spec tab strip (multi-tab mode) ────────────────── -->
+    <div id="v-spec-tabs" style="display:none;background:var(--c2);border-bottom:1px solid var(--bd);padding:8px 16px 0">
+      <div style="display:flex;gap:4px;align-items:center;overflow-x:auto" id="v-spec-tabs-inner"></div>
+    </div>
+    <!-- ── Image sub-tab strip ───────────────────────────── -->
+    <div id="v-image-tabs" style="display:none;background:var(--c3);border-bottom:1px solid var(--bd);padding:6px 16px 0">
+      <div style="display:flex;gap:3px;align-items:center;overflow-x:auto" id="v-image-tabs-inner"></div>
+    </div>
+
     <!-- Hero -->
     <div class="verdict-hero" id="v-hero">
       <div>
@@ -1138,11 +1412,27 @@ select.fi option{background:var(--c2)}
         <div class="card-h"><div class="card-title">Parameter Evaluation</div><div style="margin-left:auto;font-size:10px;color:var(--dim)" id="v-pass-count"></div></div>
         <div class="card-body" style="padding:0 14px" id="v-checks"></div>
       </div>
-      <!-- Zone SVG -->
-      <div class="card">
-        <div class="card-h"><div class="card-title">Cross-Section — Zone Map</div></div>
-        <div class="card-body" style="padding:10px">
-          <svg id="v-zone-svg" viewBox="0 0 460 320" style="width:100%;height:auto;display:block"></svg>
+      <!-- Zone maps: Full image + Datum crop -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <!-- Full image zone map -->
+        <div class="card">
+          <div class="card-h">
+            <div class="card-title">Cross-Section — Full Image</div>
+            <div style="margin-left:auto;font-size:10px;color:var(--dim)" id="v-full-pore-count"></div>
+          </div>
+          <div class="card-body" style="padding:10px">
+            <svg id="v-zone-svg" viewBox="0 0 460 320" style="width:100%;height:auto;display:block"></svg>
+          </div>
+        </div>
+        <!-- Datum cropped image (only shown when datum is set) -->
+        <div class="card" id="v-datum-card" style="display:none">
+          <div class="card-h">
+            <div class="card-title" style="color:var(--amb)">□ Datum Zone — Cropped View</div>
+            <div style="margin-left:auto;font-size:10px;color:var(--dim)" id="v-datum-pore-count"></div>
+          </div>
+          <div class="card-body" style="padding:10px">
+            <canvas id="v-datum-canvas" style="width:100%;height:auto;border-radius:6px;display:block"></canvas>
+          </div>
         </div>
       </div>
     </div>
@@ -1230,6 +1520,49 @@ select.fi option{background:var(--c2)}
 </div><!-- #main -->
 </div><!-- #shell -->
 
+<!-- ═══ EVAL SELECTOR MODAL ═══════════════════════════════════════════════ -->
+<div id="eval-selector-modal" onclick="if(event.target===this)closeEvalSelector()"
+  style="display:none;position:fixed;inset:0;z-index:1000;
+  background:rgba(0,0,0,.6);backdrop-filter:blur(4px);
+  align-items:center;justify-content:center">
+  <div style="background:var(--c2);border:1px solid var(--bd2);border-radius:12px;
+    width:520px;max-height:80vh;display:flex;flex-direction:column;
+    box-shadow:0 24px 60px rgba(0,0,0,.5)">
+
+    <!-- Modal header -->
+    <div style="padding:14px 18px 12px;border-bottom:1px solid var(--bd);
+      display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--tx)">⚡ Select Specs &amp; Images to Evaluate</div>
+        <div style="font-size:10px;color:var(--dim);margin-top:2px">Choose which spec tabs and image pages to include</div>
+      </div>
+      <button onclick="closeEvalSelector()" style="font-size:12px;padding:3px 9px;
+        background:var(--c3);border:1px solid var(--bd);border-radius:5px;color:var(--dim);cursor:pointer">✕</button>
+    </div>
+
+    <!-- Select all row -->
+    <div style="padding:8px 18px;border-bottom:1px solid var(--bd);background:var(--c3);
+      display:flex;align-items:center;gap:10px">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:10px;color:var(--tx);font-weight:700">
+        <input type="checkbox" id="eval-sel-all" onchange="_evalSelToggleAll(this.checked)"
+          style="width:14px;height:14px;cursor:pointer"> Select All
+      </label>
+      <span style="font-size:9px;color:var(--dim)" id="eval-sel-count">0 images selected</span>
+    </div>
+
+    <!-- Spec/image list -->
+    <div id="eval-selector-list" style="flex:1;overflow-y:auto;padding:10px 18px"></div>
+
+    <!-- Footer actions -->
+    <div style="padding:12px 18px;border-top:1px solid var(--bd);display:flex;align-items:center;gap:8px">
+      <button onclick="closeEvalSelector()" class="btn btn-sec btn-sm">Cancel</button>
+      <div style="flex:1"></div>
+      <button onclick="runSelectedEval('view')" class="btn btn-pri"
+        style="font-size:11px">⚡ Evaluate All → View Results</button>
+    </div>
+  </div>
+</div>
+
 <script src="/static/tools/porosity.js?v=20260427h"></script>
 <script>
 // ═══════════════════════════════════════════════════
@@ -1272,7 +1605,8 @@ HPDC_STATE.load();
 
 const S = {
   spec: { pno:'', zone:'', rev:'', insp:'', pct:5, phi:1.5, a:2, u:0.2, t:6, datum:100,
-          h:0, n:0, hr:0, nr:0, hk:1, nk:1, method:'visual', specSaved:false },
+          h:0, n:0, hr:0, nr:0, hk:1, nk:1, method:'visual', specSaved:false,
+          phi_gas:null, phi_shrink:null, pct_gas:null, pct_shrink:null },
   pores: [],           // draw-mode pore objects {id,x,y,dia,type,zone}
   imgPores: [],        // image-mode pore objects (independent list)
   selectedId: null,
@@ -1280,7 +1614,7 @@ const S = {
   redoHistory: [],
   nextPhi: 1.0,
   poreType: 'gas',
-  tool: 'place',       // place | select | measure | datum
+  tool: 'select',      // place | select | measure | datum
   measurePt1: null,
   datumRect: null,     // {x,y,w,h} in mm (wall-relative)
   // Canvas state
@@ -1322,6 +1656,22 @@ const S = {
 
 const SCALE_BASE = 50; // px per mm at zoom=1
 
+// ── Status bar scale display helper ──────────────────────────────────────────
+function _updateScaleDisplay(){
+  const el = document.getElementById('sb-scale');
+  if(!el) return;
+  if(S.imgMode && S.imgState.scalePxPerMm){
+    el.textContent = S.imgState.scalePxPerMm.toFixed(2) + ' px/mm ✓';
+    el.style.color = 'var(--g)';
+  } else if(S.imgMode){
+    el.textContent = '— set scale';
+    el.style.color = 'var(--amb)';
+  } else {
+    el.textContent = S.cv.scale.toFixed(0) + ' px/mm';
+    el.style.color = '';
+  }
+}
+
 function makeImageState(){
   return {
     image: null, scalePxPerMm: null, calibPts: [], calibrating: false,
@@ -1346,7 +1696,9 @@ function makeImagePage(index){
     history: [],
     redoHistory: [],
     evaluated: false,
-    verdict: null
+    verdict: null,
+    datumRect: null,         // per-image datum zone — never shared across tabs
+    imgOffsetMm: 0           // mm offset from Surface A for cropped images
   };
 }
 
@@ -1373,6 +1725,7 @@ Workspace.specs[0].images[0].pores = S.imgPores;
 Workspace.specs[0].images[0].imgState = S.imgState;
 Workspace.specs[0].images[0].history = S.history;
 Workspace.specs[0].images[0].redoHistory = S.redoHistory;
+Workspace.specs[0].images[0].datumRect = S.datumRect;  // sync initial datum
 
 function activeSpecTab(){ return Workspace.specs[Workspace.activeSpec]; }
 function activeImagePage(){ const tab=activeSpecTab(); return tab.images[tab.activeImage]; }
@@ -1388,6 +1741,8 @@ function bindActiveWorkspace(){
   S.redoHistory = page.redoHistory;
   S.evaluated = S.imgMode ? page.evaluated : tab.evaluated;
   S.verdict = S.imgMode ? page.verdict : tab.verdict;
+  // Restore per-image datum — prevents cross-tab leakage
+  S.datumRect = (page.datumRect !== undefined) ? page.datumRect : null;
 }
 
 function persistActiveResults(){
@@ -1397,6 +1752,8 @@ function persistActiveResults(){
   tab.verdict = S.imgMode ? tab.verdict : S.verdict;
   page.evaluated = S.imgMode ? S.evaluated : page.evaluated;
   page.verdict = S.imgMode ? S.verdict : page.verdict;
+  // Save datum per image-page so it is never shared across spec tabs or image tabs
+  page.datumRect = S.datumRect || null;
 }
 
 function setToggleValue(gid, value){
@@ -1410,6 +1767,11 @@ function loadSpecIntoForm(){
   const s=S.spec;
   const fields=['pno','zone','rev','insp','pct','phi','a','u','t','datum'];
   fields.forEach(f=>{ const el=document.getElementById('sp-'+f); if(el) el.value=s[f] ?? ''; });
+  // Type-specific limits
+  const gs=document.getElementById('sp-phi-gas');    if(gs) gs.value = s.phi_gas    != null ? s.phi_gas    : '';
+  const ss=document.getElementById('sp-phi-shrink'); if(ss) ss.value = s.phi_shrink != null ? s.phi_shrink : '';
+  const gp=document.getElementById('sp-pct-gas');    if(gp) gp.value = s.pct_gas    != null ? s.pct_gas    : '';
+  const sp2=document.getElementById('sp-pct-shrink'); if(sp2) sp2.value = s.pct_shrink != null ? s.pct_shrink : '';
   setToggleValue('tg-h', s.h||0); setToggleValue('tg-n', s.n||0);
   setToggleValue('tg-hr', s.hr||0); setToggleValue('tg-nr', s.nr||0);
   setToggleValue('tg-hk', s.hk||0); setToggleValue('tg-nk', s.nk||0);
@@ -1530,8 +1892,156 @@ function refreshWorkspaceUI(){
   updateImgHint();
   updatePoreRegistry();
   showEditPanel();
+  refreshImgOffsetUI();
   if(mctx) drawCanvas();
 }
+
+function refreshImgOffsetUI(){
+  const row = document.getElementById('img-offset-row');
+  const input = document.getElementById('img-offset-mm');
+  if(!row || !input) return;
+  const page = activeImagePage();
+  const show = S.imgMode || (page.imgOffsetMm > 0);
+  row.style.display = show ? 'block' : 'none';
+  if(show){
+    input.value = (page.imgOffsetMm || 0).toFixed(1);
+    _updateOffsetZoneLabel(page.imgOffsetMm || 0);
+    _checkCroppedImageWarning(page.imgOffsetMm || 0);
+    _updateWallStripWindow(page.imgOffsetMm || 0);
+  }
+}
+
+function _getImageHeightMm(){
+  if(S.imgState && S.imgState.scalePxPerMm && S.imgState.image){
+    return S.imgState.image.naturalHeight / (S.imgState.scalePxPerMm / (S.imgState.fitScale || 1));
+  }
+  return 0;
+}
+
+function _updateOffsetZoneLabel(offsetMm){
+  const el = document.getElementById('img-offset-zones');
+  if(!el) return;
+  const t = S.spec.t || 6;
+  const t3 = t / 3;
+  const imgH = _getImageHeightMm();
+  if(offsetMm === 0 && imgH === 0){ el.textContent = 'full section'; return; }
+  const top = offsetMm;
+  const bot = offsetMm + (imgH || t);
+  const coverage = Math.round(Math.min(bot, t) / t * 100 - Math.max(top, 0) / t * 100);
+  const zones = [];
+  if(top < t3) zones.push('HR(top)');
+  if(bot > t3 && top < t3*2) zones.push('HK(mid)');
+  if(bot > t3*2) zones.push('HR(bot)');
+  el.textContent = zones.length ? zones.join('+') + ' · ' + coverage + '% wall' : '—';
+}
+
+function _checkCroppedImageWarning(offsetMm){
+  const warnEl = document.getElementById('img-offset-warn');
+  if(!warnEl) return;
+  const t = S.spec.t || 6;
+  const imgH = _getImageHeightMm();
+  if(imgH === 0){ warnEl.style.display='none'; return; }
+  // Warn if image covers < 85% of wall AND offset is still 0
+  const isCropped = imgH < t * 0.85;
+  if(isCropped && offsetMm === 0){
+    const guessOffset = (t - imgH) / 2;  // assume centered crop
+    warnEl.innerHTML = '⚠ Image covers ~' + imgH.toFixed(1) + ' mm of ' + t + ' mm wall. '
+      + 'Zone classification will be wrong without setting the offset. '
+      + 'If this image shows the HK zone, set offset ≈ ' + guessOffset.toFixed(1) + ' mm.';
+    warnEl.style.display = 'block';
+  } else {
+    warnEl.style.display = 'none';
+  }
+}
+
+function applyImgOffset(val){
+  const mm = Math.max(0, Math.min(S.spec.t || 6, parseFloat(val) || 0));
+  const page = activeImagePage();
+  page.imgOffsetMm = mm;
+  // sync input
+  const inp = document.getElementById('img-offset-mm');
+  if(inp) inp.value = mm.toFixed(1);
+  _updateOffsetZoneLabel(mm);
+  _checkCroppedImageWarning(mm);
+  _updateWallStripWindow(mm);
+  updateLiveMetrics();
+}
+
+function _updateWallStripWindow(offsetMm){
+  const win = document.getElementById('wall-strip-window');
+  const strip = document.getElementById('wall-vstrip');
+  if(!win || !strip) return;
+  const t = S.spec.t || 6;
+  const imgH = _getImageHeightMm() || t;
+  const pctTop   = Math.max(0, offsetMm / t) * 100;
+  const pctHeight = Math.min((imgH / t) * 100, 100 - pctTop);
+  win.style.top    = pctTop + '%';
+  win.style.height = pctHeight + '%';
+  win.style.display = 'block';
+}
+
+// Vertical strip drag support
+let _vStripDrag = null;
+function _wallVStripDragStart(e){
+  const strip = document.getElementById('wall-vstrip');
+  if(!strip) return;
+  e.preventDefault();
+  const rect = strip.getBoundingClientRect();
+  _vStripDrag = { rect, startY: e.clientY };
+  const onMove = (ev) => {
+    if(!_vStripDrag) return;
+    const frac = Math.max(0, Math.min(1, (ev.clientY - _vStripDrag.rect.top) / _vStripDrag.rect.height));
+    const t = S.spec.t || 6;
+    const imgH = _getImageHeightMm();
+    const maxOffset = Math.max(0, t - (imgH || t * 0.33));
+    const newOffset = frac * t;
+    const clamped = Math.max(0, Math.min(maxOffset, newOffset));
+    const inp = document.getElementById('img-offset-mm');
+    if(inp) inp.value = clamped.toFixed(1);
+    applyImgOffset(clamped.toFixed(1));
+  };
+  const onUp = () => {
+    _vStripDrag = null;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+function _nudgeOffset(deltaMm){
+  const page = activeImagePage();
+  const t = S.spec.t || 6;
+  const imgH = _getImageHeightMm();
+  // maxOffset: how far can the image top slide toward Surface B
+  // Allow offset up to t (full wall) so both top AND bottom nudges work
+  // When imgH >= t the image covers the full wall; offset still lets user
+  // annotate which portion of the wall this image represents
+  const maxOffset = t; // allow full 0..t range
+  const current = page.imgOffsetMm || 0;
+  const next = Math.max(0, Math.min(maxOffset, +(current + deltaMm).toFixed(1)));
+  const inp = document.getElementById('img-offset-mm');
+  if(inp) inp.value = next.toFixed(1);
+  applyImgOffset(next.toFixed(1));
+}
+
+// Legacy horizontal strip click (kept for compatibility, now a no-op since strip is vertical)
+function _wallStripClick(e){}
+
+
+function _setOffsetPreset(preset){
+  const t = S.spec.t || 6;
+  const imgH = _getImageHeightMm();
+  let offset = 0;
+  if(preset === 'full')   offset = 0;
+  else if(preset === 'hr_top') offset = 0;           // top third starts at 0
+  else if(preset === 'hk')     offset = t / 3;       // center third starts at t/3
+  else if(preset === 'hr_bot') offset = (t / 3) * 2; // bottom third starts at 2t/3
+  const inp = document.getElementById('img-offset-mm');
+  if(inp) inp.value = offset.toFixed(1);
+  applyImgOffset(offset.toFixed(1));
+}
+
 
 function switchSpecTab(index){
   persistActiveResults();
@@ -1764,6 +2274,10 @@ function saveCustomPreset() {
     u:   +document.getElementById('sp-u').value||0.2,
     t:   +document.getElementById('sp-t').value||6,
     datum: +document.getElementById('sp-datum').value||100,
+    phi_gas:    document.getElementById('sp-phi-gas')?.value    ? +document.getElementById('sp-phi-gas').value    : null,
+    phi_shrink: document.getElementById('sp-phi-shrink')?.value ? +document.getElementById('sp-phi-shrink').value : null,
+    pct_gas:    document.getElementById('sp-pct-gas')?.value    ? +document.getElementById('sp-pct-gas').value    : null,
+    pct_shrink: document.getElementById('sp-pct-shrink')?.value ? +document.getElementById('sp-pct-shrink').value : null,
     h: getv('tg-h'), n: getv('tg-n'),
     hr: getv('tg-hr'), nr: getv('tg-nr'),
     hk: getv('tg-hk'), nk: getv('tg-nk')
@@ -1901,7 +2415,8 @@ let isPointerDown = false;
 let lastMoveEvent = null;
 let dragState = null; // {pore, startMx, startMy, origX, origY}
 
-function initCanvas(){
+function resizeCanvas(){
+  // Only resizes the canvas — does NOT rebind events (prevents duplicate listeners)
   MC = document.getElementById('main-canvas');
   OC = document.getElementById('overlay-canvas');
   const wrap = document.getElementById('canvas-wrap');
@@ -1915,11 +2430,20 @@ function initCanvas(){
   OC.style.width  = W+'px'; OC.style.height = H+'px';
   mctx = MC.getContext('2d');
   octx = OC.getContext('2d');
-  mctx.scale(dpr,dpr); octx.scale(dpr,dpr);
+  // CRITICAL: reset transform before scale to prevent accumulation on resize
+  mctx.setTransform(1,0,0,1,0,0); mctx.scale(dpr,dpr);
+  octx.setTransform(1,0,0,1,0,0); octx.scale(dpr,dpr);
   S.cv.W=W; S.cv.H=H;
   fitWall();
-  bindCanvasEvents();
   drawCanvas();
+  console.log(`[PVI] Canvas resize: ${W}×${H}px, dpr=${dpr}`);
+}
+
+function initCanvas(){
+  // Full init: resize canvas + bind events (events bound only once via evtsBound guard)
+  resizeCanvas();
+  bindCanvasEvents();
+  console.log('[PVI] Canvas init complete');
 }
 
 function fitWall(){
@@ -1935,7 +2459,7 @@ function fitWall(){
   S.cv.originX = 0;
   S.cv.originY = 0;
   document.getElementById('sb-datum').textContent=(S.imgMode?getEffectiveDatum().toFixed(1)+' mm² (img)':S.spec.datum+' mm²');
-  document.getElementById('sb-scale').textContent=S.cv.scale+' px/mm';
+  _updateScaleDisplay();
 }
 
 function resetView(){ fitWall(); drawCanvas(); }
@@ -1952,7 +2476,7 @@ function zoom(f, cx, cy){
   S.cv.scale = newScale;
   document.getElementById('sb-zoom').textContent=Math.round(newScale/SCALE_BASE*100)+'%';
   document.getElementById('sb-datum').textContent=(S.imgMode?getEffectiveDatum().toFixed(1)+' mm² (img)':S.spec.datum+' mm²');
-  document.getElementById('sb-scale').textContent=newScale.toFixed(0)+' px/mm';
+  _updateScaleDisplay();
   drawCanvas();
 }
 
@@ -1986,6 +2510,7 @@ function wallWidthMm(){  return S.cv.wallW / S.cv.scale; }
 function drawCanvas(){
   if(!mctx) return;
   const {W,H,scale}=S.cv;
+  if(W < 1 || H < 1){ console.warn('[PVI] drawCanvas: canvas not sized yet, skipping'); return; }
   // Apply pan to all wall coords
   const wallL   = S.cv.wallL   + S.cv.originX;
   const wallTop = S.cv.wallTop + S.cv.originY;
@@ -2098,6 +2623,8 @@ function drawCanvas(){
 
       // Permanent scale bar — proper alignment (bottom-left of image)
       if(S.imgState.scalePxPerMm){
+        // Update status bar scale every draw
+        _updateScaleDisplay();
         const pxPerMm=S.imgState.scalePxPerMm;
         const barMm=[1,2,5,10,20,50].find(v=>v*pxPerMm>70)||10;
         const barPx=barMm*pxPerMm;
@@ -2128,99 +2655,205 @@ function drawCanvas(){
   // ── END IMAGE BACKGROUND ──────────────────────────────────────────────────
 
 
-  // Fine grid lines
-  mctx.strokeStyle='rgba(0,0,0,.06)'; mctx.lineWidth=0.5;
-  const gs=24;
-  for(let x=0;x<W;x+=gs){
-    mctx.beginPath(); mctx.moveTo(x,0); mctx.lineTo(x,H); mctx.stroke();
+  // Fine grid — draw mode: standard dots; image mode: very subtle background grid
+  if(!S.imgMode){
+    mctx.strokeStyle='rgba(0,0,0,.06)'; mctx.lineWidth=0.5;
+    const gs=24;
+    for(let x=0;x<W;x+=gs){
+      mctx.beginPath(); mctx.moveTo(x,0); mctx.lineTo(x,H); mctx.stroke();
+    }
+    for(let y=0;y<H;y+=gs){
+      mctx.beginPath(); mctx.moveTo(0,y); mctx.lineTo(W,y); mctx.stroke();
+    }
+    // Crosshair dots at intersections
+    mctx.fillStyle='rgba(0,0,0,.09)';
+    for(let x=0;x<W;x+=gs) for(let y=0;y<H;y+=gs){
+      mctx.fillRect(x-0.5,y-0.5,1,1);
+    }
+  } else {
+    // Image mode: very subtle dot grid on background only (outside image area)
+    mctx.fillStyle='rgba(0,0,0,.055)';
+    const gs=28;
+    for(let x=0;x<W;x+=gs) for(let y=0;y<H;y+=gs){
+      mctx.fillRect(x-0.5,y-0.5,1,1);
+    }
   }
-  for(let y=0;y<H;y+=gs){
-    mctx.beginPath(); mctx.moveTo(0,y); mctx.lineTo(W,y); mctx.stroke();
+
+  // ── ZONE LINES (image-aware, correctly positioned) ─────────────────────
+  const t = S.spec.t || 6;
+  const t3mm = t / 3;
+  const wR = wallL + wallW, wB = wallTop + wallH;
+
+  // In image mode, use actual image bounds for zone positioning
+  const page = activeImagePage ? activeImagePage() : null;
+  const offsetMm = (page && page.imgOffsetMm) || 0;
+
+  // Determine the canvas rect where the image actually lives
+  // (ix,iy,dw,dh): set by the image draw block above, or fall back to wall rect
+  const imgX  = (S.imgMode && S.imgState.image && S.imgState.imgW > 0) ? S.imgState.imgX : wallL;
+  const imgY  = (S.imgMode && S.imgState.image && S.imgState.imgH > 0) ? S.imgState.imgY : wallTop;
+  const imgDW = (S.imgMode && S.imgState.image && S.imgState.imgW > 0) ? S.imgState.imgW : wallW;
+  const imgDH = (S.imgMode && S.imgState.image && S.imgState.imgH > 0) ? S.imgState.imgH : wallH;
+  const imgRight = imgX + imgDW;
+
+  let zoneY1, zoneY2;
+  let imgTopMm = 0, imgBotMm = t;
+
+  if(S.imgMode && S.imgState.scalePxPerMm && S.imgState.image){
+    const rawPxPerMm = S.imgState.scalePxPerMm / (S.imgState.fitScale || 1);
+    const imgHmm = rawPxPerMm > 0 ? S.imgState.image.naturalHeight / rawPxPerMm : t;
+    imgTopMm = offsetMm;
+    imgBotMm = offsetMm + imgHmm;
+    if(offsetMm > 0){
+      // Offset set: compute zone boundary fractions within image
+      const f1 = imgHmm > 0 ? (t3mm   - offsetMm) / imgHmm : 1/3;
+      const f2 = imgHmm > 0 ? (t3mm*2 - offsetMm) / imgHmm : 2/3;
+      zoneY1 = imgY + f1 * imgDH;
+      zoneY2 = imgY + f2 * imgDH;
+    } else {
+      // No offset: zones are thirds of the IMAGE canvas height
+      zoneY1 = imgY + imgDH / 3;
+      zoneY2 = imgY + imgDH * 2 / 3;
+    }
+  } else {
+    // Draw mode: zones are thirds of the WALL height
+    const t3px = wallH / 3;
+    zoneY1 = wallTop + t3px;
+    zoneY2 = wallTop + t3px * 2;
   }
-  // Crosshair dots at intersections
-  mctx.fillStyle='rgba(0,0,0,.09)';
-  for(let x=0;x<W;x+=gs) for(let y=0;y<H;y+=gs){
-    mctx.fillRect(x-0.5,y-0.5,1,1);
+
+  const clipTop = (S.imgMode && S.imgState.image) ? imgY : wallTop;
+  const clipBot = (S.imgMode && S.imgState.image) ? imgY + imgDH : wallTop + wallH;
+  const y1c = Math.max(clipTop, Math.min(clipBot, zoneY1));
+  const y2c = Math.max(clipTop, Math.min(clipBot, zoneY2));
+
+  if(!S.imgMode){
+    // ── DRAW MODE ONLY: zone fills, wall border, surface lines, dimension labels ──
+
+    // Zone fills
+    mctx.fillStyle='rgba(255,165,0,.07)';
+    mctx.fillRect(wallL, clipTop, wallW, y1c - clipTop);
+    mctx.fillStyle='rgba(120,90,230,.06)';
+    mctx.fillRect(wallL, y1c, wallW, y2c - y1c);
+    mctx.fillStyle='rgba(255,165,0,.07)';
+    mctx.fillRect(wallL, y2c, wallW, clipBot - y2c);
+
+    // Zone dividers
+    mctx.setLineDash([7,4]); mctx.lineWidth=1;
+    mctx.strokeStyle='rgba(0,0,0,.18)';
+    mctx.beginPath(); mctx.moveTo(wallL,y1c); mctx.lineTo(wR,y1c); mctx.stroke();
+    mctx.beginPath(); mctx.moveTo(wallL,y2c); mctx.lineTo(wR,y2c); mctx.stroke();
+    mctx.setLineDash([]);
+
+    // Zone labels
+    mctx.font='8px Space Grotesk'; mctx.textBaseline='top'; mctx.textAlign='left';
+    mctx.fillStyle='rgba(180,110,0,.55)';
+    mctx.fillText('HR  OUTER ⅓', wallL+5, clipTop+5);
+    mctx.fillStyle='rgba(100,60,200,.55)';
+    mctx.fillText('HK  CENTRAL ⅓', wallL+5, y1c+5);
+    mctx.fillStyle='rgba(180,110,0,.55)';
+    mctx.fillText('HR  OUTER ⅓', wallL+5, y2c+5);
+
+    // Surface A / B lines
+    mctx.strokeStyle='rgba(30,100,200,.5)'; mctx.lineWidth=2;
+    mctx.beginPath(); mctx.moveTo(wallL,wallTop); mctx.lineTo(wR,wallTop); mctx.stroke();
+    mctx.strokeStyle='rgba(30,100,200,.25)'; mctx.lineWidth=1.5;
+    mctx.beginPath(); mctx.moveTo(wallL,wB); mctx.lineTo(wR,wB); mctx.stroke();
+
+    // Wall border
+    mctx.strokeStyle='rgba(0,0,0,.25)'; mctx.lineWidth=1.5;
+    mctx.strokeRect(wallL,wallTop,wallW,wallH);
+
+    // Surface labels
+    mctx.font='9px Space Grotesk'; mctx.textAlign='center'; mctx.textBaseline='bottom';
+    mctx.fillStyle='rgba(30,100,200,.7)';
+    mctx.fillText('SURFACE A', wallL+wallW*.5, wallTop-4);
+    mctx.textBaseline='top';
+    mctx.fillStyle='rgba(30,100,200,.4)';
+    mctx.fillText('SURFACE B', wallL+wallW*.5, wB+5);
+
+    // Wall thickness dimension
+    const dimX=wallL-28;
+    mctx.strokeStyle='rgba(0,0,0,.2)'; mctx.lineWidth=1;
+    mctx.beginPath(); mctx.moveTo(dimX,wallTop); mctx.lineTo(dimX,wB); mctx.stroke();
+    [wallTop,wB].forEach(y=>{
+      mctx.beginPath(); mctx.moveTo(dimX-4,y); mctx.lineTo(dimX+4,y); mctx.stroke();
+    });
+    mctx.save(); mctx.translate(dimX-10,wallTop+wallH/2); mctx.rotate(-Math.PI/2);
+    mctx.fillStyle='rgba(0,0,0,.4)'; mctx.font='9px Space Grotesk'; mctx.textAlign='center';
+    mctx.fillText('t = '+t+' mm',0,0); mctx.restore();
+
+    // t/3 brackets (right)
+    const bX=wR+12;
+    const t3px = wallH / 3;
+    mctx.strokeStyle='rgba(0,0,0,.18)'; mctx.lineWidth=1;
+    [[wallTop,wallTop+t3px,'t/3','rgba(180,110,0,.6)'],
+     [wallTop+t3px,wallTop+t3px*2,'t/3','rgba(100,60,200,.6)'],
+     [wallTop+t3px*2,wB,'t/3','rgba(180,110,0,.6)']].forEach(([y1,y2,lbl,col])=>{
+      mctx.strokeStyle=col; mctx.beginPath(); mctx.moveTo(bX,y1); mctx.lineTo(bX,y2); mctx.stroke();
+      [y1,y2].forEach(y=>{ mctx.beginPath(); mctx.moveTo(bX-3,y); mctx.lineTo(bX+3,y); mctx.stroke(); });
+      mctx.fillStyle=col; mctx.font='9px Space Grotesk'; mctx.textAlign='left'; mctx.textBaseline='middle';
+      mctx.fillText(lbl,bX+6,(y1+y2)/2);
+    });
+
+  } else if(S.imgState.image) {
+    // ── IMAGE MODE with image loaded: zone dividers on image ──────────────
+    // Zone dividers — span only the image width, not the full canvas
+    mctx.setLineDash([8,4]); mctx.lineWidth=1.5;
+    mctx.strokeStyle='rgba(255,255,255,.55)';
+    if(zoneY1 >= clipTop && zoneY1 <= clipBot){
+      mctx.beginPath(); mctx.moveTo(imgX,zoneY1); mctx.lineTo(imgRight,zoneY1); mctx.stroke();
+    }
+    if(zoneY2 >= clipTop && zoneY2 <= clipBot){
+      mctx.beginPath(); mctx.moveTo(imgX,zoneY2); mctx.lineTo(imgRight,zoneY2); mctx.stroke();
+    }
+    mctx.setLineDash([]);
+
+    // Zone labels — anchored to image left edge, not canvas left
+    mctx.font='bold 9px Space Grotesk'; mctx.textBaseline='top'; mctx.textAlign='left';
+    const lx = imgX + 8;
+    if(imgTopMm < t3mm){
+      mctx.fillStyle='rgba(255,210,80,.95)';
+      mctx.fillText('HR  OUTER ⅓', lx, imgY + 8);
+    }
+    if(imgBotMm > t3mm && imgTopMm < t3mm*2){
+      mctx.fillStyle='rgba(210,170,255,.95)';
+      mctx.fillText('HK  CENTRAL ⅓', lx, Math.max(imgY + 8, y1c + 8));
+    }
+    if(imgBotMm > t3mm*2){
+      mctx.fillStyle='rgba(255,210,80,.95)';
+      mctx.fillText('HR  OUTER ⅓', lx, Math.max(imgY + 8, y2c + 8));
+    }
+
+    // Offset badge — top-right of image
+    if(offsetMm > 0){
+      mctx.save();
+      mctx.font='bold 8px Space Grotesk'; mctx.fillStyle='rgba(120,200,255,.95)';
+      mctx.textAlign='right'; mctx.textBaseline='top';
+      mctx.fillText(`+${offsetMm.toFixed(1)} mm from Surface A`, imgRight - 6, imgY + 6);
+      mctx.restore();
+    }
   }
 
-  const wR=wallL+wallW, wB=wallTop+wallH;
-  const t=S.spec.t||6;
-  const t3px=(wallH/3);
-
-  // Zone fills — professional light colours
-  const fnt='9px Space Grotesk';
-  mctx.fillStyle='rgba(255,165,0,.07)'; mctx.fillRect(wallL,wallTop,wallW,t3px);          // HR top
-  mctx.fillStyle='rgba(120,90,230,.06)'; mctx.fillRect(wallL,wallTop+t3px,wallW,t3px);    // HK
-  mctx.fillStyle='rgba(255,165,0,.07)'; mctx.fillRect(wallL,wallTop+t3px*2,wallW,t3px);   // HR bottom
-
-  // Zone dividers — crisp dashes
-  mctx.setLineDash([7,4]); mctx.lineWidth=1;
-  mctx.strokeStyle='rgba(0,0,0,.18)';
-  [wallTop+t3px, wallTop+t3px*2].forEach(y=>{
-    mctx.beginPath(); mctx.moveTo(wallL,y); mctx.lineTo(wR,y); mctx.stroke();
-  });
-  mctx.setLineDash([]);
-
-  // Zone labels — top-left of each zone (no overlap)
-  mctx.font='8px Space Grotesk'; mctx.textBaseline='top';
-  mctx.textAlign='left';
-  mctx.fillStyle='rgba(180,110,0,.55)';
-  mctx.fillText('HR  OUTER ⅓', wallL+5, wallTop+5);
-  mctx.fillText('HR  OUTER ⅓', wallL+5, wallTop+t3px*2+5);
-  mctx.fillStyle='rgba(100,60,200,.55)';
-  mctx.fillText('HK  CENTRAL ⅓', wallL+5, wallTop+t3px+5);
-
-  // Surface A / B lines
-  mctx.strokeStyle='rgba(30,100,200,.5)'; mctx.lineWidth=2;
-  mctx.beginPath(); mctx.moveTo(wallL,wallTop); mctx.lineTo(wR,wallTop); mctx.stroke();
-  mctx.strokeStyle='rgba(30,100,200,.25)'; mctx.lineWidth=1.5;
-  mctx.beginPath(); mctx.moveTo(wallL,wB); mctx.lineTo(wR,wB); mctx.stroke();
-
-  // Wall border
-  mctx.strokeStyle='rgba(0,0,0,.25)'; mctx.lineWidth=1.5;
-  mctx.strokeRect(wallL,wallTop,wallW,wallH);
-
-  // Surface labels
-  mctx.font='9px Space Grotesk'; mctx.textAlign='center'; mctx.textBaseline='bottom';
-  mctx.fillStyle='rgba(30,100,200,.7)';
-  mctx.fillText('SURFACE A', wallL+wallW*.5, wallTop-4);
-  mctx.textBaseline='top';
-  mctx.fillStyle='rgba(30,100,200,.4)';
-  mctx.fillText('SURFACE B', wallL+wallW*.5, wB+5);
-
-  // Wall thickness dimension
-  const dimX=wallL-28;
-  mctx.strokeStyle='rgba(0,0,0,.2)'; mctx.lineWidth=1;
-  mctx.beginPath(); mctx.moveTo(dimX,wallTop); mctx.lineTo(dimX,wB); mctx.stroke();
-  [wallTop,wB].forEach(y=>{
-    mctx.beginPath(); mctx.moveTo(dimX-4,y); mctx.lineTo(dimX+4,y); mctx.stroke();
-  });
-  mctx.save(); mctx.translate(dimX-10,wallTop+wallH/2); mctx.rotate(-Math.PI/2);
-  mctx.fillStyle='rgba(0,0,0,.4)'; mctx.font=fnt; mctx.textAlign='center';
-  mctx.fillText('t = '+t+' mm',0,0); mctx.restore();
-
-  // t/3 brackets (right)
-  const bX=wR+12;
-  mctx.strokeStyle='rgba(0,0,0,.18)'; mctx.lineWidth=1;
-  [[wallTop,wallTop+t3px,'t/3','rgba(180,110,0,.6)'],
-   [wallTop+t3px,wallTop+t3px*2,'t/3','rgba(100,60,200,.6)'],
-   [wallTop+t3px*2,wB,'t/3','rgba(180,110,0,.6)']].forEach(([y1,y2,lbl,col])=>{
-    mctx.strokeStyle=col; mctx.beginPath(); mctx.moveTo(bX,y1); mctx.lineTo(bX,y2); mctx.stroke();
-    [y1,y2].forEach(y=>{ mctx.beginPath(); mctx.moveTo(bX-3,y); mctx.lineTo(bX+3,y); mctx.stroke(); });
-    mctx.fillStyle=col; mctx.font='9px Space Grotesk'; mctx.textAlign='left'; mctx.textBaseline='middle';
-    mctx.fillText(lbl,bX+6,(y1+y2)/2);
-  });
-
-  // Datum rectangle
+  // Datum rectangle / square
   const dr = S.datumRect;
   if(dr){
     const dp = mmToCanvas(dr.x, dr.y);
-    const dw = dr.w*scale, dh=dr.h*scale;
-    mctx.fillStyle='rgba(255,173,0,.05)'; mctx.fillRect(dp.x,dp.y,dw,dh);
-    mctx.setLineDash([6,4]); mctx.strokeStyle='rgba(255,173,0,.5)'; mctx.lineWidth=1.5;
+    // Use image scale in image mode, draw scale otherwise
+    const drawSc = (S.imgMode && S.imgState.scalePxPerMm) ? S.imgState.scalePxPerMm : scale;
+    const dw = dr.w * drawSc;
+    const dh = dr.h * drawSc; // h == w (square enforced)
+    mctx.fillStyle='rgba(255,173,0,.07)'; mctx.fillRect(dp.x,dp.y,dw,dh);
+    mctx.setLineDash([6,4]); mctx.strokeStyle='rgba(255,173,0,.7)'; mctx.lineWidth=2;
     mctx.strokeRect(dp.x,dp.y,dw,dh); mctx.setLineDash([]);
-    mctx.fillStyle='rgba(255,173,0,.5)'; mctx.font='9px Space Grotesk'; mctx.textAlign='left'; mctx.textBaseline='bottom';
-    mctx.fillText('DATUM  '+S.spec.datum+'mm²',dp.x+4,dp.y-3);
+    // Corner tick marks for square indicator
+    const tk=8;
+    mctx.strokeStyle='rgba(255,173,0,.9)'; mctx.lineWidth=2;
+    [[dp.x,dp.y],[dp.x+dw,dp.y],[dp.x,dp.y+dh],[dp.x+dw,dp.y+dh]].forEach(([cx2,cy2])=>{
+      mctx.beginPath(); mctx.moveTo(cx2,cy2+Math.sign(cy2-dp.y-dh/2)*tk); mctx.lineTo(cx2,cy2); mctx.lineTo(cx2+Math.sign(cx2-dp.x-dw/2)*tk,cy2); mctx.stroke();
+    });
+    mctx.fillStyle='rgba(255,173,0,.85)'; mctx.font='bold 9px Space Grotesk'; mctx.textAlign='left'; mctx.textBaseline='bottom';
+    mctx.fillText('DATUM □  '+(dr.w*dr.h).toFixed(1)+'mm²  ('+dr.w.toFixed(2)+'×'+dr.h.toFixed(2)+'mm)',dp.x+4,dp.y-3);
   } else {
     // Default datum centred in wall
     const dw2=Math.sqrt(S.spec.datum||100)*scale*.8;
@@ -2419,17 +3052,32 @@ function drawPore(p, selected){
 
 function drawRuler(){
   const {scale,W,wallTop,wallH}=S.cv;
-  const rx=S.cv.wallL, ry=wallTop+wallH+22;
-  const mmW=10, px=mmW*scale;
-  mctx.strokeStyle='rgba(0,0,0,.35)'; mctx.lineWidth=1.5;
+  // In image mode use the calibrated scale; in draw mode use canvas scale
+  const rulerScale = (S.imgMode && S.imgState.scalePxPerMm) ? S.imgState.scalePxPerMm : scale;
+  // Choose a nice tick length: pick the largest power-of-2/5/10 that renders >= 60px
+  const niceSteps = [0.5,1,2,5,10,20,50];
+  const mmW = niceSteps.find(v => v * rulerScale >= 60) || 10;
+  const px = mmW * rulerScale;
+
+  // Position ruler below the image (or below the wall in draw mode)
+  const imgBot = (S.imgMode && S.imgState.image && S.imgState.imgH > 0)
+    ? S.imgState.imgY + S.imgState.imgH
+    : wallTop + wallH;
+  const rx = (S.imgMode && S.imgState.image && S.imgState.imgX > 0)
+    ? S.imgState.imgX
+    : S.cv.wallL;
+  const ry = imgBot + 18;
+
+  mctx.strokeStyle='rgba(0,0,0,.4)'; mctx.lineWidth=1.5;
   mctx.beginPath(); mctx.moveTo(rx,ry); mctx.lineTo(rx+px,ry); mctx.stroke();
-  [rx,rx+px/2,rx+px].forEach(x=>{
-    mctx.beginPath(); mctx.moveTo(x,ry-3); mctx.lineTo(x,ry+3); mctx.stroke();
+  // Tick marks at 0, half, end
+  [rx, rx+px/2, rx+px].forEach(x=>{
+    mctx.beginPath(); mctx.moveTo(x,ry-4); mctx.lineTo(x,ry+4); mctx.stroke();
   });
-  mctx.fillStyle='rgba(0,0,0,.45)'; mctx.font='8px Space Grotesk';
+  mctx.fillStyle='rgba(0,0,0,.5)'; mctx.font='bold 8px Space Grotesk';
   mctx.textAlign='center'; mctx.textBaseline='top';
-  mctx.fillText('0',rx,ry+4);
-  mctx.fillText(mmW+'mm',rx+px,ry+4);
+  mctx.fillText('0', rx, ry+5);
+  mctx.fillText(mmW >= 1 ? mmW+'mm' : (mmW*10).toFixed(0)+'×0.1mm', rx+px, ry+5);
 }
 
 // ═══════════════════════════════════════════════════
@@ -2462,8 +3110,18 @@ function bindCanvasEvents(){
   // Escape key: cancel active image tool or scale input
   document.addEventListener('keydown', e=>{
     if(e.key==='Escape'){
-      if(document.getElementById('scale-input-overlay').style.display!=='none') cancelScale();
-      else if(S.imgState.imgTool){ S.imgState.imgTool=null; S.imgState.scaleLine=null; updateImgHint(); drawCanvas(); }
+      // Priority 1: cancel scale input dialog
+      if(document.getElementById('scale-input-overlay').style.display!=='none'){
+        cancelScale();
+      }
+      // Priority 2: cancel crop selection (don't exit crop tool, just clear selection)
+      else if(S.imgState.imgTool==='crop' && S.imgState.cropRect){
+        cancelCrop();
+      }
+      // Priority 3: exit any active image tool
+      else if(S.imgState.imgTool){
+        imgToolActivate(S.imgState.imgTool); // toggles off
+      }
     }
     if((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey){ e.preventDefault(); undoPore(); }
     if((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))){ e.preventDefault(); redoPore(); }
@@ -2471,6 +3129,14 @@ function bindCanvasEvents(){
   wrap.addEventListener('contextmenu',e=>{
     e.preventDefault();
     const p=getCanvasPos(e);
+    // Right-click on datum square → remove it
+    if(S.datumRect && S.datumRect.w>0){
+      const dr=S.datumRect;
+      const mm=canvasToMm(p.x,p.y);
+      if(mm.x>=dr.x && mm.x<=(dr.x+dr.w) && mm.y>=dr.y && mm.y<=(dr.y+dr.h)){
+        clearDatum(); return;
+      }
+    }
     const pore=poreAtCanvas(p.x,p.y);
     if(pore){ removePore(pore.id); }
   });
@@ -2526,7 +3192,16 @@ function bindCanvasEvents(){
       if(!S.measurePt1){ S.measurePt1=mm; drawCanvas(); }
       else { S.measurePt1=null; drawCanvas(); }
     } else if(S.tool==='datum'){
-      S.datumRect={x:mm.x,y:mm.y,w:10,h:10};
+      // If clicking INSIDE existing datum → move it
+      if(S.datumRect && S.datumRect.w > 0){
+        const dr=S.datumRect;
+        if(mm.x>=dr.x && mm.x<=(dr.x+dr.w) && mm.y>=dr.y && mm.y<=(dr.y+dr.h)){
+          dragState={type:'datum_move', startMx:p.x, startMy:p.y, origDX:dr.x, origDY:dr.y};
+          isPointerDown=true; drawCanvas(); return;
+        }
+      }
+      // Otherwise start a NEW datum square
+      S.datumRect={_ox:mm.x, _oy:mm.y, x:mm.x, y:mm.y, w:0, h:0};
       isPointerDown=true; drawCanvas();
     }
   });
@@ -2572,12 +3247,26 @@ function bindCanvasEvents(){
       }
       return;
     }
+    // Datum MOVE drag
+    if(dragState && dragState.type==='datum_move' && S.datumRect){
+      const sc=(S.imgMode && S.imgState.scalePxPerMm)?S.imgState.scalePxPerMm:S.cv.scale;
+      S.datumRect.x = dragState.origDX + (p.x-dragState.startMx)/sc;
+      S.datumRect.y = dragState.origDY + (p.y-dragState.startMy)/sc;
+      const a=(S.datumRect.w*S.datumRect.h).toFixed(1);
+      document.getElementById('sb-datum').textContent=`${a} mm² (datum □)`;
+      drawCanvas(); return;
+    }
     const pore=poreAtCanvas(p.x,p.y);
     showCanvasTip(pore,e);
-    if(S.tool==='datum'&&isPointerDown&&S.datumRect){
-      const orig={x:S.datumRect.x,y:S.datumRect.y};
-      S.datumRect={x:Math.min(mm.x,orig.x),y:Math.min(mm.y,orig.y),
-                   w:Math.abs(mm.x-orig.x)||.5, h:Math.abs(mm.y-orig.y)||.5};
+    if(S.tool==='datum'&&isPointerDown&&S.datumRect&&S.datumRect._ox!==undefined){
+      // SQUARE CONSTRAINT — anchor at click origin, extend in drag direction
+      const ox=S.datumRect._ox, oy=S.datumRect._oy;
+      const dx=mm.x-ox, dy=mm.y-oy;
+      const side=Math.max(Math.abs(dx),Math.abs(dy))||.01;
+      const nx=dx>=0?ox:ox-side;
+      const ny=dy>=0?oy:oy-side;
+      S.datumRect={_ox:ox,_oy:oy,x:nx,y:ny,w:side,h:side};
+      document.getElementById('sb-datum').textContent=`${(side*side).toFixed(1)} mm² (datum □)`;
     }
     if(S.tool==='measure') drawCanvas();
     if(isPointerDown&&S.tool==='datum') drawCanvas();
@@ -2587,8 +3276,44 @@ function bindCanvasEvents(){
     const p=getCanvasPos(e);
     if(S.imgState.imgDragging){ S.imgState.imgDragging=false; wrap.style.cursor='default'; isPointerDown=false; dragState=null; return; }
     if(S.imgMode && handleImageToolMouseup(p)){ isPointerDown=false; dragState=null; return; }
+    if(dragState && dragState.type==='datum_move'){ isPointerDown=false; dragState=null; updateLiveMetrics(); updatePoreRegistry(); drawCanvas(); return; }
     isPointerDown=false; dragState=null;
     if(S.tool==='pan') wrap.style.cursor='grab'; else wrap.style.cursor='default';
+    // If datum was just drawn, show the clear button, auto-switch to Place Pore, and recalculate
+    if(S.tool==='datum' && S.datumRect && S.datumRect.w>0.01){
+      const btn=document.getElementById('btn-clear-datum');
+      if(btn) btn.style.display='inline-flex';
+      updateLiveMetrics(); updatePoreRegistry();
+      // Auto-return to Select after drawing datum
+      setTool('select');
+      toast('Datum □ set — '+S.datumRect.w.toFixed(2)+'×'+S.datumRect.h.toFixed(2)+'mm · Now place pores or evaluate');
+    }
+  });
+
+  // Double-click: instantly select pore + open edit panel
+  wrap.addEventListener('dblclick',e=>{
+    const p=getCanvasPos(e);
+    const pore=poreAtCanvas(p.x,p.y);
+    if(pore){
+      S.selectedId=pore.id;
+      setTool('select');
+      drawCanvas(); updatePoreRegistry(); showEditPanel();
+    } else {
+      S.selectedId=null;
+      drawCanvas(); updatePoreRegistry();
+      const ep=document.getElementById('pore-edit-panel');
+      if(ep) ep.style.display='none';
+    }
+  });
+
+  // Close advanced dropdown when clicking outside
+  document.addEventListener('click',e=>{
+    const adv=document.getElementById('detect-advanced');
+    const btn=document.getElementById('btn-adv-toggle');
+    if(adv && adv.style.display==='flex' && !adv.contains(e.target) && e.target!==btn){
+      adv.style.display='none';
+      if(btn) btn.style.background='';
+    }
   });
 
   wrap.addEventListener('wheel',e=>{
@@ -2840,7 +3565,12 @@ function hideTip(){ document.getElementById('ctip').style.display='none'; }
 function updatePoreRegistry(){
   const reg=document.getElementById('pore-registry');
   const eff=effectivePores();
-  document.getElementById('reg-count').textContent=AP().length+' pores ('+eff.length+' effective)';
+  const evalPores=getPoresForEvaluation(AP());
+  const hasDatum=S.datumRect && S.datumRect.w>0;
+  const countTxt=hasDatum
+    ? `${AP().length} total · ${evalPores.length} in datum · ${eff.length} effective`
+    : `${AP().length} pores (${eff.length} effective)`;
+  document.getElementById('reg-count').textContent=countTxt;
   const poreCountEl=document.getElementById('tb-pores');
   if(poreCountEl) poreCountEl.textContent=AP().length;
   renderImageTabs();
@@ -2854,12 +3584,14 @@ function updatePoreRegistry(){
     const zCol=p.zone==='hr'?'var(--amb)':p.zone==='hk'?'var(--pur)':'var(--g)';
     const tCol=p.type==='gas'?'#4db8f5':'#c88c5a';
     const sel=S.selectedId===p.id;
-    return `<div class="pr-item${sel?' sel':''}" onclick="selectPore(${JSON.stringify(p.id)})">
+    // Check if pore is outside datum square
+    const outDatum=hasDatum&&!(p.x>=S.datumRect.x&&p.x<=(S.datumRect.x+S.datumRect.w)&&p.y>=S.datumRect.y&&p.y<=(S.datumRect.y+S.datumRect.h));
+    return `<div class="pr-item${sel?' sel':''}" onclick="selectPore(${JSON.stringify(p.id)})" style="${outDatum?'opacity:.45':''}">
       <div class="pr-dot" style="background:${tCol};opacity:${ignored?.3:1}"></div>
       <span style="font-variant-numeric:tabular-nums;font-size:10px;color:${fail?'var(--red)':ignored?'var(--dim)':'var(--tx)'}">
         #${i+1} Ø${p.dia.toFixed(2)}mm</span>
       <span style="font-size:9px;color:${zCol};font-weight:700">${p.zone.toUpperCase()}</span>
-      ${ignored?'<span style="font-size:9px;color:var(--dim)">IGN</span>':fail?'<span style="font-size:9px;color:var(--red)">FAIL</span>':'<span style="font-size:9px;color:var(--dim)">—</span>'}
+      ${outDatum?'<span style="font-size:9px;color:var(--dim);background:var(--c4);padding:1px 4px;border-radius:3px">OUT</span>':ignored?'<span style="font-size:9px;color:var(--dim)">IGN</span>':fail?'<span style="font-size:9px;color:var(--red)">FAIL</span>':'<span style="font-size:9px;color:var(--dim)">—</span>'}
       <button class="pr-del" onclick="event.stopPropagation();removePore(${JSON.stringify(p.id)})">×</button>
     </div>`;
   }).join('');
@@ -2867,7 +3599,14 @@ function updatePoreRegistry(){
 
 function selectPore(id){
   S.selectedId=S.selectedId===id?null:id;
+  // Switch to Select tool so user can drag/edit the pore
+  if(S.selectedId && S.tool==='place') setTool('select');
   drawCanvas(); updatePoreRegistry(); showEditPanel();
+  // Scroll edit panel into view
+  if(S.selectedId){
+    const ep=document.getElementById('pore-edit-panel');
+    if(ep && ep.style.display!=='none') ep.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
 }
 
 // ── PORE EDIT PANEL ──────────────────────────────
@@ -2881,7 +3620,12 @@ function showEditPanel(){
   document.getElementById('ep-phi').value=p.dia.toFixed(2);
   document.getElementById('ep-x').value=p.x.toFixed(2);
   document.getElementById('ep-y').value=p.y.toFixed(2);
+  // Also populate type if field exists
+  const epType=document.getElementById('ep-type');
+  if(epType) epType.value=p.type||'gas';
   preEditState = JSON.stringify(AP());
+  // Scroll into view after render
+  requestAnimationFrame(()=>ep.scrollIntoView({behavior:'smooth',block:'nearest'}));
 }
 
 function applyEditPanelLive(){
@@ -2942,24 +3686,54 @@ function getEffectiveWallW(){
   return wallWidthMm()||20;
 }
 function getEffectiveDatum(){
+  // Priority 1: user drew a datum square
+  if(S.datumRect && S.datumRect.w > 0){
+    return +(S.datumRect.w * S.datumRect.h).toFixed(2);
+  }
+  // Priority 2: image mode with calibrated scale → full image area
   if(S.imgMode && S.imgState.image && S.imgState.scalePxPerMm && S.imgState.fitScale){
-    const natPxMm = S.imgState.scalePxPerMm / (S.imgState.fitScale||1);
-    const wMm = S.imgState.image.naturalWidth  / natPxMm;
-    const hMm = S.imgState.image.naturalHeight / natPxMm;
-    return +(wMm * hMm).toFixed(2);  // actual image cross-section area in mm²
+    const natPxMm=S.imgState.scalePxPerMm/(S.imgState.fitScale||1);
+    const wMm=S.imgState.image.naturalWidth/natPxMm;
+    const hMm=S.imgState.image.naturalHeight/natPxMm;
+    return +(wMm*hMm).toFixed(2);
   }
   return S.spec.datum || 100;
 }
 
+// Returns only pores within datum square (or all pores if no datum drawn)
+function getPoresForEvaluation(pores){
+  if(!pores) pores=AP();
+  if(!S.datumRect || S.datumRect.w<=0) return pores;
+  const dr=S.datumRect;
+  return pores.filter(p=>p.x>=dr.x && p.x<=(dr.x+dr.w) && p.y>=dr.y && p.y<=(dr.y+dr.h));
+}
+
+// Remove datum square
+function clearDatum(){
+  S.datumRect=null;
+  const btn=document.getElementById('btn-clear-datum');
+  if(btn) btn.style.display='none';
+  const sbDatum=document.getElementById('sb-datum');
+  if(sbDatum) sbDatum.textContent=S.imgMode?getEffectiveDatum().toFixed(1)+' mm² (img)':(S.spec.datum||100)+' mm²';
+  drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+  toast('Datum square removed');
+}
+
 function getImagePageMetrics(page, spec){
   const imgState=page?.imgState || {};
+  // Check if a datum square was drawn for this page
+  const dr = S.datumRect && S.datumRect.w>0 ? S.datumRect : null;
   if(imgState.image && imgState.scalePxPerMm && imgState.fitScale){
     const natPxMm=imgState.scalePxPerMm/(imgState.fitScale||1);
     const wallW=imgState.image.naturalWidth/natPxMm;
     const wallH=imgState.image.naturalHeight/natPxMm;
-    return {wallW, wallH, datum:+(wallW*wallH).toFixed(2), calibrated:true};
+    const datum = dr ? +(dr.w*dr.h).toFixed(2) : +(wallW*wallH).toFixed(2);
+    const offset = page ? (page.imgOffsetMm || 0) : 0;
+  return {wallW, wallH, datum, calibrated:true, datumRect:dr, offset};
   }
-  return {wallW:20, wallH:spec.t||6, datum:spec.datum||100, calibrated:false};
+  const datum = dr ? +(dr.w*dr.h).toFixed(2) : (spec.datum||100);
+  const offset = page ? (page.imgOffsetMm || 0) : 0;
+  return {wallW:20, wallH:spec.t||6, datum, calibrated:false, datumRect:dr, offset};
 }
 function calcPorosity(){
   // True mm² calculation
@@ -3020,7 +3794,9 @@ function updateLiveMetrics(){
   if(metricDebounce) clearTimeout(metricDebounce);
   metricDebounce = setTimeout(() => {
     try {
-      const data = runEvaluationLocal(AP(), S.spec, getEffectiveWallH());
+      // FILTER pores to datum square if drawn
+      const evalPores = getPoresForEvaluation(AP());
+      const data = runEvaluationLocal(evalPores, S.spec, getEffectiveWallH(), null, activeImagePage().imgOffsetMm || 0);
 
       const pct=data.pct;
       const maxPhi=data.max_phi;
@@ -3104,13 +3880,18 @@ function _effectivePores(pores, spec){
   return u > 0 ? pores.filter(p => p.dia >= u) : [...pores];
 }
 
-function _getZone(y, wallH){
-  if(wallH <= 0) return 'hr';
-  const t3 = wallH / 3.0;
-  if(y < 0 || y > wallH) return 'outside';
-  if(y < t3) return 'hr';
-  if(y <= t3 * 2) return 'hk';
-  return 'hr';
+function _getZone(y, wallH, poreOffset, specT){
+  // poreOffset: mm from Surface A to top of cropped image (0 = full section)
+  // specT: full wall thickness from spec — used as total height when offset > 0
+  const offset = poreOffset || 0;
+  const totalH = (offset > 0 && specT > 0) ? specT : wallH;
+  const absY = y + offset;  // absolute position from Surface A
+  if(totalH <= 0) return 'hr';
+  const t3 = totalH / 3.0;
+  if(absY < 0 || absY > totalH) return 'outside';
+  if(absY < t3) return 'hr';           // Surface A zone
+  if(absY <= t3 * 2) return 'hk';     // middle zone
+  return 'hr';                          // Surface B zone (matches original mapping)
 }
 
 function _calcPorosity(pores, spec, datumOverride){
@@ -3168,9 +3949,10 @@ function _analyseZone(pores, spec, zone){
   return { h: hTrig, n: nTrig, cluster: maxCluster, pores: n, min_gap: minGapVal };
 }
 
-function runEvaluationLocal(pores, spec, wallH, datumOverride){
-  // Re-assign zones
-  pores.forEach(p => p.zone = _getZone(p.y, wallH));
+function runEvaluationLocal(pores, spec, wallH, datumOverride, poreOffset){
+  // Re-assign zones — offset applied for cropped images
+  const _off = poreOffset || 0;
+  pores.forEach(p => p.zone = _getZone(p.y, wallH, _off, spec.t || wallH));
 
   const datum  = datumOverride || getEffectiveDatum();
   const pct    = _calcPorosity(pores, spec, datum);
@@ -3195,7 +3977,7 @@ function runEvaluationLocal(pores, spec, wallH, datumOverride){
     { n:'Porosity %',            par:'%',   pass: pct <= (spec.pct||5),
       meas:`${pct.toFixed(2)}%`,       limit:`≤${spec.pct||5}%`,
       detail:`Σπr²=${eff.reduce((s,p)=>s+Math.PI*(p.dia/2)**2,0).toFixed(2)}mm² / Datum ${datum.toFixed(1)}mm² = ${pct.toFixed(3)}%` },
-    { n:'Max pore Φ',            par:'Φ',   pass: maxPhi <= (spec.phi||1.5),
+    { n:'Max pore Φ (combined)', par:'Φ',   pass: maxPhi <= (spec.phi||1.5),
       meas:`${maxPhi.toFixed(3)} mm`,  limit:`≤${spec.phi||1.5} mm`,
       detail:`Largest effective pore ${maxPhi.toFixed(3)} mm` },
     { n:'Spacing A (global)',     par:'A',   pass: !hTrig,
@@ -3217,6 +3999,39 @@ function runEvaluationLocal(pores, spec, wallH, datumOverride){
       meas: hkZ.h ? `H-group (${hkZ.pores} pores, gap ${(hkZ.min_gap||0).toFixed(2)}mm)` : 'Clean',
       limit: (spec.hk||1) === 2 ? 'N/A' : `HK${spec.hk||1} / NK${spec.nk||1}`,
       detail: (spec.hk||1) === 2 ? 'Not specified' : hkZ.h ? `Central ⅓: looseness, cluster ${hkZ.cluster.toFixed(2)} mm` : 'Central ⅓ clean' },
+    // ── Type-specific checks — only added when pores of that type exist ──
+    ...(() => {
+      const gasP  = _effectivePores(pores.filter(p => (p.type||'gas') === 'gas'),  spec);
+      const shrP  = _effectivePores(pores.filter(p =>  p.type === 'shrink'),        spec);
+      const phiG  = spec.phi_gas    != null ? spec.phi_gas    : (spec.phi || 1.5);
+      const phiS  = spec.phi_shrink != null ? spec.phi_shrink : (spec.phi || 1.5);
+      const pctG  = spec.pct_gas    != null ? spec.pct_gas    : (spec.pct || 5);
+      const pctS  = spec.pct_shrink != null ? spec.pct_shrink : (spec.pct || 5);
+      const maxPhiG = gasP.length ? Math.max(...gasP.map(p => p.dia)) : 0;
+      const maxPhiS = shrP.length ? Math.max(...shrP.map(p => p.dia)) : 0;
+      const areaG = gasP.reduce((s, p) => s + Math.PI * (p.dia/2)**2, 0);
+      const areaS = shrP.reduce((s, p) => s + Math.PI * (p.dia/2)**2, 0);
+      const pctGval = areaG / Math.max(datum, 0.01) * 100;
+      const pctSval = areaS / Math.max(datum, 0.01) * 100;
+      const rows = [];
+      if(gasP.length > 0){
+        rows.push({ n:`Gas Φ max (${gasP.length}p)`,    par:'Φ_G', pass: maxPhiG <= phiG,
+          meas:`${maxPhiG.toFixed(3)} mm`, limit:`≤${phiG} mm`,
+          detail:`${gasP.length} gas pore(s) — largest Φ ${maxPhiG.toFixed(3)} mm` });
+        rows.push({ n:`Gas porosity %`,                 par:'%_G', pass: pctGval <= pctG,
+          meas:`${pctGval.toFixed(2)}%`, limit:`≤${pctG}%`,
+          detail:`Gas area ${areaG.toFixed(2)} mm² / ${datum.toFixed(1)} mm² datum` });
+      }
+      if(shrP.length > 0){
+        rows.push({ n:`Shrink Φ max (${shrP.length}p)`, par:'Φ_S', pass: maxPhiS <= phiS,
+          meas:`${maxPhiS.toFixed(3)} mm`, limit:`≤${phiS} mm`,
+          detail:`${shrP.length} shrink pore(s) — largest Φ ${maxPhiS.toFixed(3)} mm` });
+        rows.push({ n:`Shrink porosity %`,              par:'%_S', pass: pctSval <= pctS,
+          meas:`${pctSval.toFixed(2)}%`, limit:`≤${pctS}%`,
+          detail:`Shrink area ${areaS.toFixed(2)} mm² / ${datum.toFixed(1)} mm² datum` });
+      }
+      return rows;
+    })(),
   ];
 
   return {
@@ -3232,38 +4047,351 @@ function runEvaluationLocal(pores, spec, wallH, datumOverride){
 // ═══════════════════════════════════════════════════
 // EVALUATION (STANDALONE — no server needed)
 // ═══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// EVALUATE ALL SPECS + EXPORT
+// ══════════════════════════════════════════════════════════
+function evaluateAllSpecs(){
+  persistActiveResults();
+  let totalSpecs = 0, passedSpecs = 0;
+  const summary = [];
+
+  Workspace.specs.forEach((tab, si) => {
+    const spec = tab.spec;
+    let tabAllPass = true;
+    let tabTotalImages = 0, tabPassedImages = 0;
+
+    tab.images.forEach((page) => {
+      const pores = JSON.parse(JSON.stringify(page.pores || []));
+      const metrics = getImagePageMetrics(page, spec);
+      const data = runEvaluationLocal(pores, spec, metrics.wallH, metrics.datum);
+      page.verdict = {
+        allPass: data.all_pass, checks: data.checks, pct: data.pct,
+        maxPhi: data.max_phi, gapD: data.gap_data,
+        hTriggered: data.h_triggered, nTriggered: data.n_triggered,
+        hrZ: data.hr_zone, hkZ: data.hk_zone,
+        eff: Array(data.eff_pores).fill({})
+      };
+      page.evaluated = true;
+      page.pores.forEach((p, i) => { if(data.updated_pores[i]) p.zone = data.updated_pores[i].zone; });
+      tabTotalImages++;
+      if(data.all_pass) tabPassedImages++; else tabAllPass = false;
+    });
+
+    tab.verdict = { allPass: tabAllPass, tabPassedImages, tabTotalImages };
+    totalSpecs++;
+    if(tabAllPass) passedSpecs++;
+    summary.push({
+      name: tab.name || `Spec ${si+1}`,
+      pno: spec.pno || '-',
+      zone: spec.zone || '-',
+      allPass: tabAllPass,
+      passedImages: tabPassedImages,
+      totalImages: tabTotalImages
+    });
+  });
+
+  const allPass = passedSpecs === totalSpecs;
+  // Render summary panel
+  const grid = document.getElementById('v-all-specs-grid');
+  const badge = document.getElementById('v-all-verdict-badge');
+  const panel = document.getElementById('v-all-specs-summary');
+  if(grid){
+    grid.innerHTML = summary.map((s, i) => `
+      <div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px 12px;
+        align-items:center;padding:7px 10px;border-radius:6px;
+        background:${s.allPass?'rgba(0,232,162,.05)':'rgba(255,61,61,.05)'};
+        border:1px solid ${s.allPass?'rgba(0,232,162,.15)':'rgba(255,61,61,.15)'}">
+        <span style="font-size:9px;font-weight:700;color:var(--dim);min-width:18px">${i+1}</span>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--tx)">${escapeHtml(s.name)}</div>
+          <div style="font-size:8px;color:var(--dim)">Part: ${escapeHtml(s.pno)} &middot; Zone: ${escapeHtml(s.zone)}</div>
+        </div>
+        <span style="font-size:9px;color:var(--dim)">${s.passedImages}/${s.totalImages} img</span>
+        <span style="font-size:10px;font-weight:800;color:${s.allPass?'var(--g)':'var(--red)'}">${s.allPass?'PASS':'FAIL'}</span>
+        <span style="font-size:14px">${s.allPass?'✅':'❌'}</span>
+      </div>`).join('');
+  }
+  if(badge){
+    badge.textContent = allPass ? `ALL ${totalSpecs} PASS` : `${totalSpecs-passedSpecs}/${totalSpecs} FAIL`;
+    badge.style.background = allPass ? 'var(--ga)' : 'var(--ra)';
+    badge.style.color = allPass ? 'var(--g)' : 'var(--red)';
+  }
+  if(panel) panel.style.display = 'block';
+
+  // Update global badge based on active spec
+  HPDC_STATE.set('lastVerdict', allPass ? 'ACCEPT' : 'REJECT', 'Tool 01');
+  updateHomeVerdictBadge(); setPlatformBadge('porosity');
+  toast(`Evaluated ${totalSpecs} spec(s): ${passedSpecs} PASS, ${totalSpecs-passedSpecs} FAIL`, allPass?'ok':'warn');
+  return { allPass, summary };
+}
+
+function evaluateAllAndExport(){
+  const btn = document.getElementById('btn-eval-all');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Evaluating…'; }
+  try {
+    evaluateAllSpecs();
+    nav('verdict');
+    setTimeout(() => {
+      downloadPDF();
+      if(btn){ btn.disabled=false; btn.textContent='⚡ Eval All'; }
+    }, 400);
+  } catch(e) {
+    toast('Evaluation error: ' + e.message, 'err');
+    if(btn){ btn.disabled=false; btn.textContent='⚡ Eval All'; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// EVAL SELECTOR MODAL — open / close / render / run
+// ═══════════════════════════════════════════════════════════════════
+function openEvalSelector(){
+  persistActiveResults();
+  renderEvalSelectorUI();
+  const modal = document.getElementById('eval-selector-modal');
+  if(modal){ modal.style.display='flex'; }
+}
+function closeEvalSelector(){
+  const modal = document.getElementById('eval-selector-modal');
+  if(modal){ modal.style.display='none'; }
+}
+function renderEvalSelectorUI(){
+  const list = document.getElementById('eval-selector-list');
+  if(!list) return;
+  list.innerHTML = Workspace.specs.map((tab, si) => {
+    const imgRows = tab.images.map((page, ii) => {
+      const ev = page.evaluated;
+      const pass = ev && page.verdict ? page.verdict.allPass : null;
+      return '<label style="display:flex;align-items:center;gap:8px;padding:5px 8px 5px 28px;cursor:pointer;border-radius:5px"'
+        +' >'
+        +'<input type="checkbox" class="eval-img-cb" data-si="'+si+'" data-ii="'+ii+'"'
+        +' onchange="_evalSelUpdateCount()" checked style="width:13px;height:13px;cursor:pointer;flex-shrink:0">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:10px;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escapeHtml(page.name)+'</div>'
+        +'<div style="font-size:8px;color:var(--dim)">'+page.pores.length+' pores</div>'
+        +'</div>'
+        +(ev ? '<span style="font-size:8px;font-weight:700;color:'+(pass?'var(--g)':'var(--red)')+'">'+( pass?'PASS':'FAIL')+'</span>'
+              : '<span style="font-size:8px;color:var(--dim)">-</span>')
+        +'</label>';
+    }).join('');
+    const tv = tab.verdict;
+    return '<div style="margin-bottom:8px;border:1px solid var(--bd);border-radius:8px;overflow:hidden">'
+      +'<label style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--c3);cursor:pointer;border-bottom:1px solid var(--bd)">'
+      +'<input type="checkbox" class="eval-spec-cb" data-si="'+si+'" onchange="_evalSelSpecToggle(this,'+si+')" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0">'
+      +'<div style="flex:1">'
+      +'<div style="font-size:11px;font-weight:700;color:var(--tx)">'+escapeHtml(tab.name)+'</div>'
+      +'<div style="font-size:8px;color:var(--dim)">Part: '+escapeHtml(tab.spec.pno||'-')+' · Zone: '+escapeHtml(tab.spec.zone||'-')+' · '+tab.images.length+' image(s)</div>'
+      +'</div>'
+      +(tv&&tv.allPass!=null ? '<span style="font-size:9px;font-weight:700;color:'+(tv.allPass?'var(--g)':'var(--red)')+'">'+( tv.allPass?'PASS':'FAIL')+'</span>' : '')
+      +'</label>'
+      +'<div style="background:var(--c2)">'+imgRows+'</div>'
+      +'</div>';
+  }).join('');
+  _evalSelUpdateCount();
+  const all = document.getElementById('eval-sel-all');
+  if(all) all.checked = true;
+}
+function _evalSelSpecToggle(cb, si){
+  document.querySelectorAll('.eval-img-cb[data-si="'+si+'"]').forEach(el => el.checked = cb.checked);
+  _evalSelUpdateCount();
+}
+function _evalSelToggleAll(checked){
+  document.querySelectorAll('.eval-img-cb, .eval-spec-cb').forEach(el => el.checked = checked);
+  _evalSelUpdateCount();
+}
+function _evalSelUpdateCount(){
+  const total = document.querySelectorAll('.eval-img-cb').length;
+  const selected = document.querySelectorAll('.eval-img-cb:checked').length;
+  const el = document.getElementById('eval-sel-count');
+  if(el) el.textContent = selected+' / '+total+' images selected';
+  const master = document.getElementById('eval-sel-all');
+  if(master){
+    if(selected === total){ master.checked=true; master.indeterminate=false; }
+    else if(selected === 0){ master.checked=false; master.indeterminate=false; }
+    else{ master.indeterminate=true; }
+  }
+}
+function runSelectedEval(mode){
+  closeEvalSelector();
+  const selectedImages = {};
+  document.querySelectorAll('.eval-img-cb:checked').forEach(cb => {
+    const si = +cb.dataset.si, ii = +cb.dataset.ii;
+    if(!selectedImages[si]) selectedImages[si] = [];
+    selectedImages[si].push(ii);
+  });
+  if(!Object.keys(selectedImages).length){ toast('No images selected','warn'); return; }
+  persistActiveResults();
+  let totalSpecs=0, passedSpecs=0;
+  const evalledSpecIndices = [];
+  Object.keys(selectedImages).forEach(siStr => {
+    const si = +siStr, imgIndices = selectedImages[si];
+    const tab = Workspace.specs[si]; if(!tab) return;
+    let tabAllPass=true, tabPassedImages=0;
+    imgIndices.forEach(ii => {
+      const page = tab.images[ii]; if(!page) return;
+      const pores = JSON.parse(JSON.stringify(page.pores||[]));
+      const metrics = getImagePageMetrics(page, tab.spec);
+      const data = runEvaluationLocal(pores, tab.spec, metrics.wallH, metrics.datum, metrics.offset);
+      page.verdict = { allPass:data.all_pass, checks:data.checks, pct:data.pct,
+        maxPhi:data.max_phi, gapD:data.gap_data, hTriggered:data.h_triggered,
+        nTriggered:data.n_triggered, hrZ:data.hr_zone, hkZ:data.hk_zone,
+        eff:Array(data.eff_pores).fill({}) };
+      page.evaluated = true;
+      page.pores.forEach((p,i)=>{ if(data.updated_pores[i]) p.zone=data.updated_pores[i].zone; });
+      if(data.all_pass) tabPassedImages++; else tabAllPass=false;
+    });
+    tab.verdict = { allPass:tabAllPass, tabPassedImages, tabTotalImages:imgIndices.length };
+    totalSpecs++; if(tabAllPass) passedSpecs++;
+    evalledSpecIndices.push({ si, imgIndices });
+  });
+  const allPass = passedSpecs === totalSpecs;
+  HPDC_STATE.set('lastVerdict', allPass?'ACCEPT':'REJECT','Tool 01');
+  updateHomeVerdictBadge(); setPlatformBadge('porosity');
+  window._evalledSpecIndices = evalledSpecIndices;
+  nav('verdict');
+  renderVerdictTabs(evalledSpecIndices);
+  if(evalledSpecIndices.length>0){
+    const first=evalledSpecIndices[0];
+    showVerdictForTab(first.si, first.imgIndices[0]);
+  }
+  toast(totalSpecs+' spec(s): '+passedSpecs+' PASS, '+(totalSpecs-passedSpecs)+' FAIL', allPass?'ok':'warn');
+  if(mode==='export') setTimeout(()=>downloadPDF(),600);
+}
+// ═══════════════════════════════════════════════════════════════════
+// VERDICT PAGE MULTI-TAB
+// ═══════════════════════════════════════════════════════════════════
+function renderVerdictTabs(evalledSpecIndices){
+  const specInner=document.getElementById('v-spec-tabs-inner');
+  const specStrip=document.getElementById('v-spec-tabs');
+  if(!specInner||!specStrip) return;
+  specInner.innerHTML = evalledSpecIndices.map((entry,idx)=>{
+    const tab=Workspace.specs[entry.si];
+    const pass=tab.verdict?tab.verdict.allPass:null;
+    const badge=pass===true?' ✓':pass===false?' ✗':'';
+    const bc=pass===true?'var(--g)':'var(--red)';
+    return '<button id="v-spec-tab-'+entry.si+'" onclick="switchVerdictSpec('+idx+','+entry.si+')"'
+      +' style="padding:5px 12px 7px;border:none;cursor:pointer;border-radius:6px 6px 0 0;'
+      +'font-size:10px;font-weight:700;white-space:nowrap;'
+      +'background:'+(idx===0?'var(--c0)':'var(--c3)')+';'
+      +'color:'+(idx===0?'var(--tx)':'var(--dim)')+';'
+      +'border-bottom:'+(idx===0?'2px solid var(--primary)':'2px solid transparent')+'">'+escapeHtml(tab.name)
+      +(pass!==null?'<span style="color:'+bc+'">'+badge+'</span>':'')+'</button>';
+  }).join('');
+  specStrip.style.display='block';
+  if(evalledSpecIndices.length>0) _buildImageTabs(evalledSpecIndices[0]);
+}
+function _buildImageTabs(entry){
+  const imgInner=document.getElementById('v-image-tabs-inner');
+  const imgStrip=document.getElementById('v-image-tabs');
+  if(!imgInner||!imgStrip) return;
+  const tab=Workspace.specs[entry.si];
+  imgInner.innerHTML = entry.imgIndices.map((ii,idx)=>{
+    const page=tab.images[ii];
+    const pass=page&&page.verdict?page.verdict.allPass:null;
+    const badge=pass===true?' ✓':pass===false?' ✗':'';
+    const bc=pass===true?'var(--g)':'var(--red)';
+    return '<button id="v-img-tab-'+entry.si+'-'+ii+'" onclick="switchVerdictImage('+entry.si+','+ii+','+idx+')"'
+      +' style="padding:4px 10px 6px;border:none;cursor:pointer;border-radius:5px 5px 0 0;'
+      +'font-size:9px;font-weight:600;white-space:nowrap;'
+      +'background:'+(idx===0?'var(--c0)':'var(--c2)')+';'
+      +'color:'+(idx===0?'var(--tx)':'var(--dim)')+';'
+      +'border-bottom:'+(idx===0?'2px solid var(--primary)':'2px solid transparent')+'">'+escapeHtml((page&&page.name)||'Image '+(ii+1))
+      +(pass!==null?'<span style="color:'+bc+'">'+badge+'</span>':'')+'</button>';
+  }).join('');
+  imgStrip.style.display='block';
+}
+function switchVerdictSpec(idx,si){
+  const all=window._evalledSpecIndices||[];
+  all.forEach(e=>{
+    const el=document.getElementById('v-spec-tab-'+e.si);
+    if(el){el.style.background='var(--c3)';el.style.color='var(--dim)';el.style.borderBottom='2px solid transparent';}
+  });
+  const ae=document.getElementById('v-spec-tab-'+si);
+  if(ae){ae.style.background='var(--c0)';ae.style.color='var(--tx)';ae.style.borderBottom='2px solid var(--primary)';}
+  const entry=all.find(e=>e.si===si);
+  if(entry){_buildImageTabs(entry);if(entry.imgIndices.length>0) showVerdictForTab(si,entry.imgIndices[0]);}
+}
+function switchVerdictImage(si,ii,idx){
+  const entry=(window._evalledSpecIndices||[]).find(e=>e.si===si);
+  if(!entry) return;
+  entry.imgIndices.forEach(i=>{
+    const el=document.getElementById('v-img-tab-'+si+'-'+i);
+    if(el){el.style.background='var(--c2)';el.style.color='var(--dim)';el.style.borderBottom='2px solid transparent';}
+  });
+  const ae=document.getElementById('v-img-tab-'+si+'-'+ii);
+  if(ae){ae.style.background='var(--c0)';ae.style.color='var(--tx)';ae.style.borderBottom='2px solid var(--primary)';}
+  showVerdictForTab(si,ii);
+}
+function showVerdictForTab(si,ii){
+  const tab=Workspace.specs[si]; if(!tab) return;
+  const page=tab.images[ii]; if(!page||!page.verdict) return;
+  const sv=S.spec,sv2=S.verdict,se=S.evaluated;
+  S.spec=tab.spec; S.verdict=page.verdict; S.evaluated=true;
+  renderVerdict();
+  S.spec=sv; S.verdict=sv2; S.evaluated=se;
+}
+
 function submitEvaluation(){
   const btn = document.getElementById('btn-eval');
+  if(btn){ btn.disabled=true; btn.textContent='Evaluating…'; }
   try {
-    runEvaluation();
+    // Evaluate ALL spec tabs and their image pages
+    evaluateAllSpecs();
+    // Build the full list for multi-tab rendering
+    const allEntries = Workspace.specs.map((tab, si) => ({
+      si, imgIndices: tab.images.map((_, ii) => ii)
+    }));
+    window._evalledSpecIndices = allEntries;
     nav('verdict');
+    renderVerdictTabs(allEntries);
+    if(allEntries.length > 0 && allEntries[0].imgIndices.length > 0){
+      showVerdictForTab(allEntries[0].si, allEntries[0].imgIndices[0]);
+    }
   } catch(e){
-    toast('Evaluation error — check spec settings','err');
+    toast('Evaluation error — ' + e.message,'err');
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent='Evaluate →'; }
   }
 }
 
 function runEvaluation(){
-  const data = runEvaluationLocal(AP(), S.spec, getEffectiveWallH());
-  
-  // Sync any zone changes back
-  if (data.updated_pores) {
-      data.updated_pores.forEach((up, i) => {
-          const _apArr=AP(); if(_apArr[i]) _apArr[i].zone = up.zone;
-      });
+  const hasDatum = S.datumRect && S.datumRect.w > 0;
+
+  // DATUM RESULT: pores within datum square (or all pores if no datum)
+  const evalPores = getPoresForEvaluation(AP());
+  const data = runEvaluationLocal(evalPores, S.spec, getEffectiveWallH(), null, activeImagePage().imgOffsetMm || 0);
+
+  // FULL IMAGE RESULT: always all pores, full image area (only meaningful when datum exists)
+  let dataFull = null;
+  if(hasDatum){
+    // Full image datum = actual image area (bypass S.datumRect by temporarily nulling it)
+    const savedDatum = S.datumRect;
+    S.datumRect = null; // temporarily remove so getEffectiveDatum returns full image area
+    const fullDatum = getEffectiveDatum();
+    S.datumRect = savedDatum; // restore
+    dataFull = runEvaluationLocal([...AP()], S.spec, getEffectiveWallH(), fullDatum);
+  }
+
+  // Sync zone changes back
+  if(data.updated_pores){
+    data.updated_pores.forEach((up,i)=>{ const a=AP(); if(a[i]) a[i].zone=up.zone; });
   }
 
   const allPass = data.all_pass;
   S.verdict = {
-      allPass,
-      checks: data.checks,
-      pct: data.pct,
-      maxPhi: data.max_phi,
-      gapD: data.gap_data,
-      hTriggered: data.h_triggered,
-      nTriggered: data.n_triggered,
-      hrZ: data.hr_zone,
-      hkZ: data.hk_zone,
-      eff: Array(data.eff_pores).fill({}) // Mock array length for UI
+    allPass,
+    hasDatum,
+    datumArea: getEffectiveDatum(),
+    // Datum result
+    checks: data.checks, pct: data.pct, maxPhi: data.max_phi,
+    gapD: data.gap_data, hTriggered: data.h_triggered, nTriggered: data.n_triggered,
+    hrZ: data.hr_zone, hkZ: data.hk_zone, eff: Array(data.eff_pores).fill({}),
+    poresInDatum: evalPores.length,
+    // Full image result (only when datum drawn)
+    full: dataFull ? {
+      allPass: dataFull.all_pass, checks: dataFull.checks, pct: dataFull.pct,
+      maxPhi: dataFull.max_phi, gapD: dataFull.gap_data,
+      eff: Array(dataFull.eff_pores).fill({}), poreCount: AP().length
+    } : null
   };
   S.evaluated = true;
   persistActiveResults();
@@ -3442,27 +4570,8 @@ function downloadPDF(){
   refreshWorkspaceUI();
 }
 
-function renderVerdict(){
-  if(!S.evaluated||!S.verdict){ drawGauge(0,S.spec.pct||5); return; }
-  const v=S.verdict;
-  const lim=S.spec;
-  const hero=document.getElementById('v-hero');
-  
-  const vbig=document.getElementById('v-big');
-  vbig.textContent=v.allPass?'ACCEPT':'REJECT';
-  vbig.style.color=v.allPass?'var(--g)':'var(--red)';
-  document.getElementById('v-sub').textContent=v.allPass?
-    'Part meets all VW50093 porosity requirements':
-    `${v.checks.filter(c=>!c.pass).length} parameter(s) outside specification`;
-  // Chips
-  document.getElementById('v-chips').innerHTML=v.checks.map(c=>
-    `<span class="v-chip" style="background:${c.pass?'var(--ga)':'var(--ra)'};color:${c.pass?'var(--g)':'var(--red)'};border:1px solid ${c.pass?'rgba(0,232,162,.25)':'rgba(255,61,61,.25)'}">${c.par}: ${c.pass?'✓':'✗'}</span>`
-  ).join('');
-  // Pass count
-  const passed=v.checks.filter(c=>c.pass).length;
-  document.getElementById('v-pass-count').textContent=passed+'/'+v.checks.length+' passed';
-  // Checks list
-  document.getElementById('v-checks').innerHTML=v.checks.map(c=>`
+function _renderChecksHTML(checks){
+  return checks.map(c=>`
     <div class="chk-row">
       <div class="chk-ico ${c.pass?'ci-p':'ci-f'}">${c.pass?'✓':'✗'}</div>
       <div>
@@ -3474,16 +4583,71 @@ function renderVerdict(){
         <div class="chk-limit">${c.limit}</div>
       </div>
     </div>`).join('');
-  // Gauge
-  drawGauge(v.pct,lim.pct);
-  // Zone SVG
+}
+
+function _renderChipsHTML(checks){
+  return checks.map(c=>
+    `<span class="v-chip" style="background:${c.pass?'var(--ga)':'var(--ra)'};color:${c.pass?'var(--g)':'var(--red)'};border:1px solid ${c.pass?'rgba(0,232,162,.25)':'rgba(255,61,61,.25)'}">${c.par}: ${c.pass?'✓':'✗'}</span>`
+  ).join('');
+}
+
+function renderVerdict(){
+  if(!S.evaluated||!S.verdict){ drawGauge(0,S.spec.pct||5); return; }
+  const v=S.verdict;
+  const lim=S.spec;
+
+  // PRIMARY verdict (datum-filtered or full)
+  document.getElementById('v-big').textContent=v.allPass?'ACCEPT':'REJECT';
+  document.getElementById('v-big').style.color=v.allPass?'var(--g)':'var(--red)';
+
+  const failCount=v.checks.filter(c=>!c.pass).length;
+  const subTxt = v.hasDatum
+    ? (v.allPass?'Datum zone meets all requirements':failCount+' parameter(s) outside spec in datum zone')
+    : (v.allPass?'Part meets all VW50093 porosity requirements':failCount+' parameter(s) outside specification');
+  document.getElementById('v-sub').textContent=subTxt;
+
+  // Chips & count — show DATUM zone chips
+  document.getElementById('v-chips').innerHTML=_renderChipsHTML(v.checks);
+  const passed=v.checks.filter(c=>c.pass).length;
+  document.getElementById('v-pass-count').textContent=passed+'/'+v.checks.length+' passed'+(v.hasDatum?' (datum zone)':'');
+
+  // CHECKS — dual panel when datum exists
+  if(v.hasDatum && v.full){
+    document.getElementById('v-checks').innerHTML=`
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--amb);margin-bottom:8px;padding:5px 10px;background:rgba(255,173,0,.08);border-radius:6px;border-left:3px solid var(--amb)">
+            □ DATUM ZONE — ${v.poresInDatum} pores · ${v.datumArea.toFixed(1)} mm²
+            <span style="float:right;font-weight:800;color:${v.allPass?'var(--g)':'var(--red)'}">${v.allPass?'PASS':'FAIL'}</span>
+          </div>
+          ${_renderChecksHTML(v.checks)}
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--blu);margin-bottom:8px;padding:5px 10px;background:rgba(0,150,255,.06);border-radius:6px;border-left:3px solid var(--blu)">
+            ⬜ FULL IMAGE — ${v.full.poreCount} pores · ${(()=>{const s=S.datumRect;S.datumRect=null;const d=getEffectiveDatum();S.datumRect=s;return d;})().toFixed(1)} mm²
+            <span style="float:right;font-weight:800;color:${v.full.allPass?'var(--g)':'var(--red)'}">${v.full.allPass?'PASS':'FAIL'}</span>
+          </div>
+          ${_renderChecksHTML(v.full.checks)}
+        </div>
+      </div>`;
+  } else {
+    document.getElementById('v-checks').innerHTML=_renderChecksHTML(v.checks);
+  }
+
+  // Gauge always shows DATUM (primary) porosity
+  drawGauge(v.pct, lim.pct||5);
   drawVerdictZone();
+
   // Summary
   const summRows=[
     ['Part No.',lim.pno||'—'],['Zone',lim.zone||'—'],['Revision',lim.rev||'—'],
     ['Inspector',lim.insp||'—'],['Method',{visual:'Visual/Optical',section:'Section Cut',xray:'X-Ray/DR',ct:'CT Scan 3D'}[lim.method]||'—'],
-    ['Total pores',AP().length],['Effective pores',v.eff.length],
-    ['Wall thickness',(S.imgMode?getEffectiveWallH().toFixed(1):lim.t)+' mm'],['Datum area',getEffectiveDatum().toFixed(1)+' mm²'+(S.imgMode?' (image)':'')],
+    ['Total pores',AP().length],
+    ...(v.hasDatum?[['Pores in datum',v.poresInDatum]]:[] ),
+    ['Effective pores',v.eff.length],
+    ['Wall thickness',(S.imgMode?getEffectiveWallH().toFixed(1):lim.t)+' mm'],
+    ['Datum area',v.datumArea.toFixed(1)+' mm²'+(v.hasDatum?' (square □)':(S.imgMode?' (image)':''))],
+    ...(v.hasDatum&&v.full?[['Full image %',v.full.pct.toFixed(2)+'%  ('+v.full.poreCount+' pores)']]:[] ),
     ['Date',new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})],
   ];
   document.getElementById('v-summary').innerHTML=summRows.map(([l,val])=>
@@ -3491,7 +4655,7 @@ function renderVerdict(){
       <div style="font-size:11px;color:var(--muted)">${l}</div>
       <div style="font-size:11px;font-weight:600;color:var(--tx);font-variant-numeric:tabular-nums">${val}</div>
     </div>`).join('');
-  // Method note
+
   const MCAP={
     visual:'<strong>Visual/Optical method:</strong> Single polished section at Rz=0. Direct measurement of %, Φ, U, A, H, N. HR/HK zone assignment requires precise sectioning at zone boundary — if section is not at exact t/3 boundary, zone data may be approximate. Destructive method.',
     section:'<strong>Section Cut (CNC):</strong> Controlled machining exposes exact inspection plane. Zone boundaries (HR = outer t/3, HK = central t/3) must be scribed before inspection. Best zone accuracy for all HR/HK/NR/NK conditions. Full VW50093 compliance. Destructive method.',
@@ -3499,7 +4663,7 @@ function renderVerdict(){
     ct:'<strong>CT Scan 3D:</strong> All parameters fully determinable. HR/HK/NR/NK zones auto-assigned from 3D pore position. Pore volume, sphericity, and spatial coordinates available. Non-destructive — part survives for further testing. Gold standard for PPAP and new design qualification.'
   };
   document.getElementById('v-method-title').textContent='Method Capability — '+{visual:'Visual',section:'Section Cut',xray:'X-Ray',ct:'CT Scan'}[lim.method];
-  document.getElementById('v-method-note').innerHTML=`<p style="font-size:12px;color:var(--muted);line-height:1.65">${MCAP[lim.method]}</p>`;
+  document.getElementById('v-method-note').innerHTML=`<p style="font-size:12px;color:var(--muted);line-height:1.65">${MCAP[lim.method]||''}</p>`;
 }
 
 // ═══════════════════════════════════════════════════
@@ -3634,6 +4798,68 @@ function drawVerdictZone(){
     });
   }
   svg.innerHTML=out;
+
+  // Update full image pore count label
+  const fullLbl=document.getElementById('v-full-pore-count');
+  if(fullLbl) fullLbl.textContent=AP().length+' pores total';
+
+  // ── Datum-cropped canvas view ───────────────────────────────────────────────
+  const datumCard=document.getElementById('v-datum-card');
+  const datumCanvas=document.getElementById('v-datum-canvas');
+  const dr=S.datumRect;
+  if(!dr || dr.w<=0 || !S.imgState.image || !S.imgState.scalePxPerMm || !datumCanvas){
+    if(datumCard) datumCard.style.display='none';
+    return;
+  }
+  datumCard.style.display='';
+  const img=S.imgState.image;
+  const sc=S.imgState.scalePxPerMm; // canvas px per mm (calibrated)
+  const fitSc=S.imgState.fitScale||1;
+  const natPxMm=sc/fitSc; // natural image px per mm
+  // Datum in natural image pixels
+  const sx=dr.x*natPxMm, sy=dr.y*natPxMm;
+  const sw=dr.w*natPxMm, sh=dr.h*natPxMm;
+  const cW=400, cH=Math.round(cW*(sh/sw));
+  datumCanvas.width=cW; datumCanvas.height=cH;
+  const dc=datumCanvas.getContext('2d');
+  dc.fillStyle='#111'; dc.fillRect(0,0,cW,cH);
+  // Draw cropped image region
+  try{ dc.drawImage(img, sx,sy,sw,sh, 0,0,cW,cH); } catch(e){}
+  // Draw datum pores as overlays
+  const datumPores=getPoresForEvaluation(AP());
+  dc.font='bold 10px sans-serif'; dc.textAlign='center';
+  datumPores.forEach(p=>{
+    const px=((p.x-dr.x)/dr.w)*cW;
+    const py=((p.y-dr.y)/dr.h)*cH;
+    const pr=Math.max(4,((p.dia/2)/dr.w)*cW);
+    const ign=S.spec.u>0&&p.dia<S.spec.u;
+    const fail=!ign&&p.dia>S.spec.phi;
+    const col=ign?'rgba(140,140,140,.7)':fail?'#ff3d3d':p.zone==='hr'?'#ffad00':p.zone==='hk'?'#9b6bff':'#00e8a2';
+    // Contour or circle
+    if(p._contour&&p._contour.length>=4){
+      dc.beginPath();
+      const scX=cW/dr.w, scY=cH/dr.h;
+      p._contour.forEach(([dx,dy],i)=>{
+        const cx2=px+dx*scX, cy2=py+dy*scY;
+        i===0?dc.moveTo(cx2,cy2):dc.lineTo(cx2,cy2);
+      });
+      dc.closePath();
+      dc.strokeStyle=col; dc.lineWidth=1.5;
+      dc.fillStyle=col.replace(')',',0.2)').replace('rgba','rgba').replace('rgb(','rgba(').replace(/#([0-9a-f]{6})/i,(_,h)=>{const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return `rgba(${r},${g},${b},0.2)`;});
+      dc.fill(); dc.stroke();
+    } else {
+      dc.beginPath(); dc.arc(px,py,pr,0,Math.PI*2);
+      dc.fillStyle=col.replace('#','').length===6?`rgba(${parseInt(col.slice(1,3),16)},${parseInt(col.slice(3,5),16)},${parseInt(col.slice(5,7),16)},0.25)`:col;
+      dc.fill(); dc.strokeStyle=col; dc.lineWidth=1.5; dc.stroke();
+    }
+    if(pr>8){ dc.fillStyle='#fff'; dc.fillText(p.dia.toFixed(1),px,py+3.5); }
+  });
+  // Datum border overlay
+  dc.strokeStyle='rgba(255,173,0,.9)'; dc.lineWidth=3; dc.setLineDash([8,5]);
+  dc.strokeRect(2,2,cW-4,cH-4); dc.setLineDash([]);
+  // Pore count label
+  const dtLbl=document.getElementById('v-datum-pore-count');
+  if(dtLbl) dtLbl.textContent=datumPores.length+' pores in datum · '+dr.w.toFixed(1)+'×'+dr.h.toFixed(1)+'mm';
 }
 
 // ═══════════════════════════════════════════════════
@@ -3729,12 +4955,13 @@ function switchCanvasMode(mode){
   S.selectedId = null; // clear cross-mode selection
   const tb=document.getElementById('img-toolbar');
   if(tb) tb.classList.add('show');
-  if(S.tool==='datum') setTool('place');
+  if(S.tool==='datum') setTool('select');
   updateSpecSummaryUI();
   updateImageControlsUI();
   updateImgHint();
   updatePoreRegistry(); // show the correct mode's pore list
   showEditPanel();      // hide edit panel if no selection
+  refreshImgOffsetUI(); // show image offset panel
   drawCanvas();
 }
 
@@ -3763,31 +4990,54 @@ function imgToolActivate(tool){
   S.imgState.scaleDrawing=false; S.imgState.cropDrawing=false;
   S.imgState.scaleLine=null; S.imgState.scaleRect=null; S.imgState.cropRect=null;
   document.getElementById('btn-applycrop').style.display='none';
+  document.getElementById('btn-cancelcrop').style.display='none';
   updateImgHint(); drawCanvas();
 }
 
 function loadImageFile(evt){
+  try {
   const file=evt.target.files[0]; if(!file) return;
+  console.log(`[PVI] Loading image: ${file.name} (${(file.size/1024).toFixed(0)}KB)`);
+  if(!file.type.startsWith('image/')){
+    toast('Only image files are supported (PNG, JPG, TIFF)','error');
+    console.error('[PVI] Invalid file type:', file.type);
+    return;
+  }
   const reader=new FileReader();
+  reader.onerror = (e) => { console.error('[PVI] FileReader error:', e); toast('Failed to read file','error'); };
   reader.onload=e=>{
     const img=new Image();
+    img.onerror = () => { console.error('[PVI] Image decode failed for:', file.name); toast('Image could not be decoded','error'); };
     img.onload=()=>{
+      console.log(`[PVI] Image loaded: ${img.naturalWidth}×${img.naturalHeight}px`);
       pushHistory();
-      S.imgState.image=img;
-      S.imgState.cacheValid=false;
-      S.imgState.scalePxPerMm=null; S.imgState.scaleLine=null;
-      S.imgState.scaleRect=null; S.imgState.cropRect=null; S.imgState.imgTool=null;
+      // Reset ALL image state cleanly before setting new image
+      S.imgState = Object.assign(S.imgState, {
+        image: img,
+        cacheValid: false,
+        scalePxPerMm: null, scaleLine: null, scaleRect: null,
+        cropRect: null, imgTool: null,
+        offscreen: null, fitScale: null,
+        imgX: null, imgY: null, imgW: null, imgH: null
+      });
       document.getElementById('img-scale-info').style.display='none';
       activeImagePage().name = file.name.replace(/\.[^.]+$/,'').slice(0,24) || activeImagePage().name;
-      document.getElementById('img-overlay-info').textContent=
-        `${file.name}  ·  ${img.naturalWidth}×${img.naturalHeight}px`;
+      const infoEl = document.getElementById('img-overlay-info');
+      if(infoEl) infoEl.textContent = `${file.name}  ·  ${img.naturalWidth}×${img.naturalHeight}px`;
       renderImageTabs();
-      updateImgHint(); drawCanvas();
+      updateImgHint();
+      // Ensure canvas is ready before drawing
+      if(!mctx || S.cv.W < 1){ initCanvas(); } else { drawCanvas(); }
+      refreshImgOffsetUI();
     };
     img.src=e.target.result;
   };
   reader.readAsDataURL(file);
   evt.target.value='';
+  } catch(err) {
+    console.error('[PVI] loadImageFile error:', err);
+    toast('Error loading image: ' + err.message, 'error');
+  }
 }
 
 // ── Scale calibration via drag ────────────────────────────────────────────
@@ -3800,16 +5050,51 @@ function showScaleInput(){
   const overlay=document.getElementById('scale-input-overlay');
   const wrap=document.getElementById('canvas-wrap');
   const wr=wrap.getBoundingClientRect();
-  const mx=Math.min((sl.x1+sl.x2)/2, wr.width-310);
-  const my=Math.min(Math.max((sl.y1+sl.y2)/2+20, 20), wr.height-150);
+  const mx=Math.min((sl.x1+sl.x2)/2, wr.width-340);
+  const my=Math.min(Math.max((sl.y1+sl.y2)/2+20, 20), wr.height-200);
   overlay.style.left=Math.max(8,mx)+'px';
   overlay.style.top=my+'px';
   overlay.style.display='block';
+  // Line angle info
+  const dx=sl.x2-sl.x1, dy=sl.y2-sl.y1;
+  const angleDeg=Math.abs(Math.atan2(dy,dx)*180/Math.PI);
+  const isHoriz=angleDeg<15||angleDeg>165;
+  const lineTip=isHoriz?'(horizontal line ✓)':angleDeg>75&&angleDeg<105?'(vertical line ✓)':`(diagonal ${angleDeg.toFixed(0)}°)`;
   document.getElementById('scale-px-info').textContent=
-    `Line: ${pxLen.toFixed(1)} px — enter the REAL length of this line in mm`;
+    `Line: ${pxLen.toFixed(1)} px ${lineTip} — enter the REAL length of this line in mm`;
   overlay.dataset.pxLen=pxLen;
   const inp=document.getElementById('scale-mm-input');
   inp.value=''; inp.focus();
+  // Hide preview until typing
+  const prev=document.getElementById('scale-dim-preview');
+  if(prev) prev.style.display='none';
+}
+
+// Live dimension preview while typing mm value
+function _scalePreview(val){
+  const mm=parseFloat(val);
+  const overlay=document.getElementById('scale-input-overlay');
+  const pxLen=parseFloat(overlay.dataset.pxLen);
+  const prev=document.getElementById('scale-dim-preview');
+  const wh=document.getElementById('scale-preview-wh');
+  if(!prev||!wh) return;
+  if(!mm||mm<=0||!pxLen){ prev.style.display='none'; return; }
+  const pxPerMm=pxLen/mm;
+  // Canvas dimensions
+  const canvas=document.getElementById('main-canvas');
+  if(!canvas){ prev.style.display='none'; return; }
+  const imgW=S.imgState.image?S.imgState.image.naturalWidth:canvas.width;
+  const imgH=S.imgState.image?S.imgState.image.naturalHeight:canvas.height;
+  const fitSc=S.imgState.fitScale||1;
+  const natPxPerMm=pxPerMm/fitSc;
+  const widthMm=(imgW/natPxPerMm).toFixed(1);
+  const heightMm=(imgH/natPxPerMm).toFixed(1);
+  // Sanity: flag if >500mm (likely wrong)
+  const sane=parseFloat(widthMm)<500&&parseFloat(heightMm)<500&&parseFloat(widthMm)>0.5;
+  wh.textContent=`${widthMm} × ${heightMm} mm`;
+  wh.style.color=sane?'var(--g)':'var(--red)';
+  if(!sane) wh.textContent+=` ⚠ Seems too ${parseFloat(widthMm)>500?'large':'small'} — check your mm value`;
+  prev.style.display='block';
 }
 
 function confirmScale(){
@@ -3819,13 +5104,29 @@ function confirmScale(){
   if(!mm||mm<=0||!pxLen){ cancelScale(); return; }
   overlay.style.display='none';
   pushHistory();
-  S.imgState.scalePxPerMm = pxLen / mm;  // px per mm — simple ratio
-  S.imgState.scaleLine = null;            // clear line after calibration
+  S.imgState.scalePxPerMm = pxLen / mm;  // px per mm — Euclidean (works for any line direction)
+  S.imgState.scaleLine = null;
   S.imgState.imgTool=null;
   const btn=document.getElementById('btn-scale-tool');
   if(btn) btn.classList.remove('img-tool-on');
   showScaleInfo();
+  _updateScaleDisplay();
   updateImgHint(); drawCanvas();
+  // Show sanity toast with image dimensions
+  const canvas=document.getElementById('main-canvas');
+  if(canvas&&S.imgState.image){
+    const fitSc=S.imgState.fitScale||1;
+    const natPxPerMm=S.imgState.scalePxPerMm/fitSc;
+    const wMm=(S.imgState.image.naturalWidth/natPxPerMm).toFixed(1);
+    const hMm=(S.imgState.image.naturalHeight/natPxPerMm).toFixed(1);
+    const sane=parseFloat(wMm)<500&&parseFloat(hMm)<500&&parseFloat(wMm)>0.5;
+    toast(
+      sane
+        ? `Scale set ✓ — Image = ${wMm} × ${hMm} mm (${S.imgState.scalePxPerMm.toFixed(1)} px/mm)`
+        : `⚠ Scale may be wrong — Image = ${wMm} × ${hMm} mm. Try a different mm value.`,
+      sane?'info':'warn'
+    );
+  }
 }
 
 function cancelScale(){
@@ -3834,6 +5135,7 @@ function cancelScale(){
   S.imgState.imgTool=null;
   const btn=document.getElementById('btn-scale-tool');
   if(btn) btn.classList.remove('img-tool-on');
+  _updateScaleDisplay();
   updateImgHint(); drawCanvas();
 }
 
@@ -3842,6 +5144,16 @@ function showScaleInfo(){
   const info=document.getElementById('img-scale-info');
   info.style.display='inline-flex';
   info.textContent=`Scale: ${(1/ppm).toFixed(4)} mm/px  ·  ${ppm.toFixed(2)} px/mm`;
+}
+
+// ── Crop cancel ───────────────────────────────────────────────────────────
+function cancelCrop(){
+  S.imgState.cropRect=null; S.imgState.cropDrawing=false;
+  document.getElementById('btn-applycrop').style.display='none';
+  document.getElementById('btn-cancelcrop').style.display='none';
+  // Keep crop tool active so user can redraw a new selection
+  drawCanvas();
+  toast('Crop selection cleared — draw a new area or click ✂️ Crop again to exit', 'info');
 }
 
 // ── Crop ──────────────────────────────────────────────────────────────────
@@ -3863,6 +5175,7 @@ function applyCrop(){
     S.imgState.cropRect=null; S.imgState.imgTool=null;
     S.imgState.scalePxPerMm=null; S.imgState.scaleLine=null; S.imgState.scaleRect=null;
     document.getElementById('btn-applycrop').style.display='none';
+    document.getElementById('btn-cancelcrop').style.display='none';
     document.getElementById('btn-crop').classList.remove('img-tool-on');
     document.getElementById('img-scale-info').style.display='none';
     S.imgState.imgOffsetX=0; S.imgState.imgOffsetY=0;
@@ -3962,7 +5275,15 @@ function handleImageToolMouseup(p){
   }
   if(it==='crop' && S.imgState.cropDrawing){
     S.imgState.cropDrawing=false;
-    document.getElementById('btn-applycrop').style.display='inline-flex';
+    if(Math.abs(S.imgState.cropRect.w)>10 && Math.abs(S.imgState.cropRect.h)>10){
+      document.getElementById('btn-applycrop').style.display='inline-flex';
+      document.getElementById('btn-cancelcrop').style.display='inline-flex';
+    } else {
+      // Too small — auto-cancel
+      S.imgState.cropRect=null;
+      document.getElementById('btn-applycrop').style.display='none';
+      document.getElementById('btn-cancelcrop').style.display='none';
+    }
     drawCanvas(); return true;
   }
   return false;
@@ -3980,9 +5301,13 @@ function handleImageModeClick(canvasX, canvasY){
   return false;
 }
 
+let _resizeTimer = null;
 window.addEventListener('resize',()=>{
   if(document.getElementById('pg-meas').classList.contains('on')){
-    evtsBound=false; initCanvas();
+    clearTimeout(_resizeTimer);
+    // Only resize canvas — do NOT reset evtsBound or rebind events
+    // Rebinding events with anonymous closures would stack duplicate listeners
+    _resizeTimer = setTimeout(()=>{ resizeCanvas(); }, 150);
   }
 });
 
@@ -4284,6 +5609,54 @@ function _classifyDetectedPore(blob){
 }
 
 // ── Main auto-detect entry point ─────────────────────────────────────────────
+// ── Auto-detect: preset configurations ───────────────────────────────────────
+function setDetectPreset(name){
+  const presets={
+    // threshold, minDia, aspect, blur, close, curve
+    fine:     {thr:60, minD:0.05, asp:5,  blur:1, close:1, curve:24},
+    balanced: {thr:50, minD:0.10, asp:6,  blur:1, close:2, curve:32},
+    coarse:   {thr:40, minD:0.50, asp:4,  blur:2, close:3, curve:20},
+  };
+  const p=presets[name]; if(!p) return;
+  const set=(id,val,dispId,fmt)=>{ const el=document.getElementById(id); if(el){el.value=val; const d=document.getElementById(dispId); if(d)d.textContent=fmt?fmt(val):val;} };
+  set('detect-threshold',p.thr,'detect-sens-val',v=>v+(v==50?' (Auto)':v>50?' +'+( v-50):' '+(v-50)));
+  set('detect-min-dia',p.minD,'detect-min-dia-val',v=>parseFloat(v).toFixed(2)+'mm');
+  set('detect-aspect',p.asp,'detect-aspect-val');
+  set('detect-blur',p.blur,'detect-blur-val');
+  set('detect-close',p.close,'detect-close-val');
+  set('detect-curve',p.curve,'detect-curve-val');
+  toast('Preset: '+name.charAt(0).toUpperCase()+name.slice(1)+' (Threshold '+p.thr+', Min Φ '+p.minD+'mm)');
+}
+
+function toggleDetectAdvanced(){
+  const panel=document.getElementById('detect-advanced');
+  const btn=document.getElementById('btn-adv-toggle');
+  if(!panel) return;
+  const show=panel.style.display==='none'||panel.style.display==='';
+  panel.style.display=show?'block':'none';
+  if(btn) btn.style.background=show?'var(--c4)':'';
+}
+
+function _resetAdvancedDefaults(){
+  const defs={aspect:6,blur:1,close:2,curve:32};
+  // Sliders
+  ['aspect','blur','close','curve'].forEach(k=>{
+    const sl=document.getElementById('detect-'+k);
+    const vl=document.getElementById('detect-'+k+'-val');
+    const pip=document.getElementById('adv-'+k+'-pip');
+    if(sl){ sl.value=defs[k]; }
+    if(vl){ vl.textContent=defs[k]; }
+    // Update pip position
+    if(pip){
+      if(k==='aspect') pip.style.left=((defs[k]-2)/10*100)+'%';
+      else if(k==='blur') pip.style.left=(defs[k]/3*100)+'%';
+      else if(k==='close') pip.style.left=(defs[k]/5*100)+'%';
+      else if(k==='curve') pip.style.left=((defs[k]-12)/68*100)+'%';
+    }
+  });
+  toast('Advanced parameters reset to defaults','info');
+}
+
 function autoDetectPores(){
   if(!S.imgState.image){toast('Upload an image first','warn');return;}
   if(!S.imgState.scalePxPerMm){toast('Set Scale first — draw a reference line','warn');return;}
@@ -4298,7 +5671,9 @@ function autoDetectPores(){
       const fitSc=S.imgState.fitScale||1;          // display px per native px
       const natPxPerMm=dispPxPerMm/fitSc;          // native image px / mm  ← KEY
 
-      const minDiaMm=Math.max(0.05,S.spec.u||0.1);
+      // Min size from the dedicated Min Φ slider (overrides U for detection)
+      const sliderMinDia=+(document.getElementById('detect-min-dia')?.value||0.1);
+      const minDiaMm=Math.max(0.05, sliderMinDia);
       // No aggressive upper cap — large structural pores can be >>phi
       const maxDiaMm=Math.max(20, (S.spec.phi||1.5)*20);
 
@@ -4406,8 +5781,16 @@ function autoDetectPores(){
         added++;
       });
 
+      // Filter pores outside the datum square if one is drawn
+      if(S.datumRect && S.datumRect.w > 0){
+        const dr=S.datumRect;
+        const before=AP().length;
+        setAP(AP().filter(p=> p.x>=dr.x && p.x<=(dr.x+dr.w) && p.y>=dr.y && p.y<=(dr.y+dr.h)));
+        const removed=before-AP().length;
+        if(removed>0) toast(`ℹ️ ${removed} pore${removed>1?'s':''} outside datum square excluded`);
+      }
       drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
-      toast(`✅ ${added} pore${added>1?'s':''} detected · ${gasCount} gas · ${shrinkCount} shrink`);
+      toast(`✅ ${added} pore${added>1?'s':''} detected · ${gasCount} gas · ${shrinkCount} shrink · Otsu=${globalOtsu}`);
     }catch(e){
       toast('Detection error: '+e.message,'err');
       console.error(e);
@@ -4421,3 +5804,4 @@ function autoDetectPores(){
 </script>
 </body>
 </html>
+
