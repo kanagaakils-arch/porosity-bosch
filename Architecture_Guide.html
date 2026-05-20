@@ -132,18 +132,121 @@ sequenceDiagram
 
         <!-- Data Pipeline Detail -->
         <section class="glass-card space-y-4">
-            <h2 class="text-2xl font-bold gradient-text">3. Step-by-Step Data Pipeline</h2>
-            <div class="space-y-4 text-slate-300">
-                <p><strong>Step 1: Calibration & Extraction</strong><br> User traces pores on the frontend Canvas. The Custom JS CV converts these pixel shapes into real-world millimeters using the user's scale calibration. </p>
-                <p><strong>Step 2: Serialization</strong><br> The frontend bundles the VW50093 limits (e.g., Max Φ, Max Area %) and an array of every pore's (X, Y, Diameter) into a clean JSON string.</p>
-                <p><strong>Step 3: Network Transfer</strong><br> The JSON string is sent via a native JS <code>fetch()</code> POST request to the FastAPI backend.</p>
-                <p><strong>Step 4: Mathematical Evaluation</strong><br> The backend calculates complex spatial relationships (like edge-to-edge distance for the "Looseness" H-condition and "Packing" N-condition) using standard Python math.</p>
-                <p><strong>Step 5: Verdict Generation</strong><br> The backend returns a new JSON object detailing exactly which checks Passed/Failed. The frontend parses this to update the UI dashboards and indicators.</p>
+            <h2 class="text-2xl font-bold gradient-text">3. The Computer Vision Pipeline</h2>
+            <div class="space-y-6 text-slate-300">
+                <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                    <h3 class="font-bold text-white mb-2">Step 1: Client-Side Image Processing (Automatic Detection)</h3>
+                    <p class="text-sm mb-3">Before evaluation, the browser executes a 4-stage CV pipeline using raw pixel data from the Canvas API:</p>
+                    <ol class="text-sm space-y-2 list-decimal ml-4">
+                        <li><strong>Preprocessing:</strong> The image is converted to grayscale to reduce dimensionality. A 3x3 Gaussian filter is applied to remove high-frequency noise/artifacts.</li>
+                        <li><strong>Otsu's Binarization:</strong> The algorithm calculates an optimal global threshold by maximizing inter-class variance, separating dark pores from the lighter metal background.</li>
+                        <li><strong>Blob Analysis:</strong> A Connected Component Labeling (CCL) algorithm identifies contiguous black pixel clusters. For each cluster, it calculates the <code>Bounding Box</code>, <code>Centroid</code>, and <code>Area</code>.</li>
+                        <li><strong>Geometric Calculation:</strong> Using the user-defined calibration (pixels/mm), the engine converts pixel area to mm² and derives the <strong>Equivalent Diameter (Φ)</strong>.</li>
+                    </ol>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                        <h3 class="font-bold text-white mb-2">Step 2: Serialization & Transfer</h3>
+                        <p class="text-sm">The frontend bundles the VW50093 limits and the detected pores array into a JSON payload sent via <code>fetch()</code> POST to the FastAPI backend.</p>
+                    </div>
+                    <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                        <h3 class="font-bold text-white mb-2">Step 3: Server-Side Evaluation</h3>
+                        <p class="text-sm">The backend calculates spatial relationships (edge-to-edge distances) for "Packing" (N) and "Looseness" (H) conditions across different functional zones.</p>
+                    </div>
+                </div>
+
+                <div class="bg-emerald-900/10 p-4 rounded-xl border border-emerald-500/20">
+                    <h3 class="font-bold text-emerald-400 mb-2">Step 4: Verdict & PDF Export</h3>
+                    <p class="text-sm">The results are rendered onto the UI dashboard. If requested, the <code>ReportLab</code> engine generates a high-resolution PDF with pixel-perfect overlays and a full audit trail.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Repository Structure -->
+        <section class="glass-card space-y-4">
+            <h2 class="text-2xl font-bold gradient-text">4. Repository Structure</h2>
+            <p class="text-slate-300">The project is organized into a clear separation of concerns, ensuring maintainability and scalability.</p>
+            <div class="bg-slate-900 p-4 rounded-lg font-mono text-sm text-sky-400 border border-slate-800">
+pvi_web/<br>
+├── core/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Algorithmic Engine (VW50093)<br>
+│&nbsp;&nbsp;&nbsp;├── calculations.py&nbsp;# Spatial math & grading logic<br>
+│&nbsp;&nbsp;&nbsp;├── exporter.py&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# PDF generation (ReportLab)<br>
+│&nbsp;&nbsp;&nbsp;└── models.py&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Data validation (Pydantic)<br>
+├── routers/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# API Endpoints<br>
+│&nbsp;&nbsp;&nbsp;└── porosity.py&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Evaluation & Export routes<br>
+├── static/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Frontend SPA<br>
+│&nbsp;&nbsp;&nbsp;├── js/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Canvas CV & Logic<br>
+│&nbsp;&nbsp;&nbsp;├── css/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Tailwind styles<br>
+│&nbsp;&nbsp;&nbsp;└── index.html&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# UI Entrypoint<br>
+├── server.py&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# FastAPI Server Entry<br>
+├── requirements.txt&nbsp;&nbsp;&nbsp;&nbsp;# Python dependencies<br>
+├── Dockerfile&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Container config<br>
+└── render.yaml&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Cloud deployment spec
+            </div>
+        </section>
+
+        <!-- API Specification -->
+        <section class="glass-card space-y-4">
+            <h2 class="text-2xl font-bold gradient-text">5. API Specification</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-700">
+                            <th class="py-2 text-slate-400 font-medium">Endpoint</th>
+                            <th class="py-2 text-slate-400 font-medium">Method</th>
+                            <th class="py-2 text-slate-400 font-medium">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-slate-300">
+                        <tr class="border-b border-slate-800/50">
+                            <td class="py-3 font-mono text-sky-400 text-sm">/api/porosity/evaluate</td>
+                            <td class="py-3"><span class="bg-blue-900/50 text-blue-300 px-2 py-1 rounded text-xs font-bold">POST</span></td>
+                            <td class="py-3">Validates pore data against VW50093 manufacturing standards.</td>
+                        </tr>
+                        <tr class="border-b border-slate-800/50">
+                            <td class="py-3 font-mono text-sky-400 text-sm">/api/porosity/export-pdf</td>
+                            <td class="py-3"><span class="bg-blue-900/50 text-blue-300 px-2 py-1 rounded text-xs font-bold">POST</span></td>
+                            <td class="py-3">Generates a professional PDF report with overlays and metrics.</td>
+                        </tr>
+                        <tr>
+                            <td class="py-3 font-mono text-sky-400 text-sm">/static/index.html</td>
+                            <td class="py-3"><span class="bg-emerald-900/50 text-emerald-300 px-2 py-1 rounded text-xs font-bold">GET</span></td>
+                            <td class="py-3">Serves the main inspection tool interface.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Deployment Guide -->
+        <section class="glass-card space-y-4">
+            <h2 class="text-2xl font-bold gradient-text">6. Deployment & Production</h2>
+            <div class="grid md:grid-cols-2 gap-4">
+                <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                    <h3 class="font-bold text-white mb-2">Local Development</h3>
+                    <code class="text-xs text-emerald-400 block bg-black/30 p-2 rounded">
+                        pip install -r requirements.txt<br>
+                        python server.py --port 8000
+                    </code>
+                </div>
+                <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                    <h3 class="font-bold text-white mb-2">Docker Production</h3>
+                    <code class="text-xs text-sky-400 block bg-black/30 p-2 rounded">
+                        docker build -t pvi-web .<br>
+                        docker run -p 8000:8000 pvi-web
+                    </code>
+                </div>
+            </div>
+            <div class="bg-indigo-900/20 p-4 rounded-xl border border-indigo-500/30">
+                <h3 class="font-bold text-indigo-300 mb-2">🚀 Cloud Hosting (Render)</h3>
+                <p class="text-sm text-slate-400">The tool is optimized for Render using the included <code>render.yaml</code>. The backend uses the Python runtime while the frontend is served as static files via FastAPI.</p>
             </div>
         </section>
         
-        <footer class="text-center text-slate-500 text-sm pb-8">
-            Generated for Bosch Porosity Inspector Architecture Overview
+        <footer class="text-center text-slate-500 text-sm pb-8 space-y-2">
+            <p>Bosch Porosity Inspector (PVI Web) &bull; Technical Architecture Guide</p>
+            <p class="text-xs opacity-50">Industrial Manufacturing Suite &copy; 2026</p>
         </footer>
     </div>
 </body>
