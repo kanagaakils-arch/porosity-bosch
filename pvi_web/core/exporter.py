@@ -215,7 +215,7 @@ def _checks_table(checks, st):
     return t
 
 
-def _zone_map_drawing(pores, spec, wall_h_mm):
+def _zone_map_drawing(pores, spec, wall_h_mm, exclusion_zones=None, datum_rect=None):
     """Precision cross-section zone map as a ReportLab Drawing."""
     dw, dh = CONTENT_W, 200
     d = Drawing(dw, dh)
@@ -291,10 +291,47 @@ def _zone_map_drawing(pores, spec, wall_h_mm):
         dia   = p.get('dia', 0.5)
         zone  = p.get('zone', 'hr')
 
+        # Check if excluded by exclusion zones
+        is_excl = False
+        if exclusion_zones:
+            for z in exclusion_zones:
+                z_dict = z if isinstance(z, dict) else z.model_dump()
+                if z_dict.get('type') == 'rect':
+                    zx, zy = z_dict.get('x', 0.0), z_dict.get('y', 0.0)
+                    zw, zh = z_dict.get('w', 0.0), z_dict.get('h', 0.0)
+                    if zx <= raw_x <= (zx + zw) and zy <= raw_y <= (zy + zh):
+                        is_excl = True
+                        break
+                elif z_dict.get('type') == 'circle':
+                    cx, cy = z_dict.get('cx', 0.0), z_dict.get('cy', 0.0)
+                    r = z_dict.get('r', 0.0)
+                    dx = raw_x - cx
+                    dy = raw_y - cy
+                    if (dx*dx + dy*dy) <= r*r:
+                        is_excl = True
+                        break
+
+        # Check if outside datum rect
+        is_out_datum = False
+        dr_dict = datum_rect if isinstance(datum_rect, dict) else (datum_rect.model_dump() if datum_rect else None)
+        if dr_dict and dr_dict.get('w', 0) > 0:
+            is_out_datum = not (dr_dict.get('x', 0) <= raw_x <= (dr_dict.get('x', 0) + dr_dict.get('w', 0)) and dr_dict.get('y', 0) <= raw_y <= (dr_dict.get('y', 0) + dr_dict.get('h', 0)))
+
         # Map mm → SVG units (ReportLab Y=0 at bottom)
         svg_x = wx + (raw_x / w_w_mm) * ww
         svg_y = wy + wh - (raw_y / w_h_mm) * wh  # flip Y
         r     = max(3, min(16, (dia / w_h_mm) * wh * 0.5))
+
+        if is_excl or is_out_datum:
+            # Draw as faint dashed circle with an '✕' marker inside
+            d.add(Circle(svg_x, svg_y, r,
+                         fillColor=colors.HexColor('#f9f9f9'),
+                         strokeColor=C_IGN, strokeWidth=0.8,
+                         strokeDashArray=[2,2], opacity=0.5))
+            d.add(String(svg_x, svg_y-2.5, "✕",
+                         fontSize=max(6, min(10, r*1.2)), fontName='Helvetica',
+                         fillColor=C_DIM, textAnchor='middle', opacity=0.6))
+            continue
 
         ign  = u_thresh > 0 and dia < u_thresh
         fail = not ign and dia > phi_lim
@@ -340,7 +377,13 @@ def _zone_map_drawing(pores, spec, wall_h_mm):
     return d
 
 
-def generate_pdf(pores: list, spec: dict, wall_h_mm: float) -> bytes:
+def generate_pdf(
+    pores: list,
+    spec: dict,
+    wall_h_mm: float,
+    exclusion_zones: Optional[list] = None,
+    datum_rect: Optional[dict] = None
+) -> bytes:
     """Generate a professional A4 PDF report and return bytes."""
     # Pydantic models → plain dicts for exporter (calculations handles models)
     from .models import PoreModel, SpecModel
@@ -348,7 +391,7 @@ def generate_pdf(pores: list, spec: dict, wall_h_mm: float) -> bytes:
     spec_model  = SpecModel(**spec) if isinstance(spec, dict) else spec
     spec_dict   = spec if isinstance(spec, dict) else spec.model_dump()
 
-    res = run_evaluation(pore_models, spec_model, wall_h_mm)
+    res = run_evaluation(pore_models, spec_model, wall_h_mm, exclusion_zones, datum_rect)
     all_pass = res['all_pass']
 
     # Update pores with computed zones
@@ -416,7 +459,42 @@ def generate_pdf(pores: list, spec: dict, wall_h_mm: float) -> bytes:
         ('VALIGN',       (0,0),(-1,-1), 'MIDDLE'),
     ]))
     elems.append(ts)
-    elems.append(Spacer(1, 18))
+    elems.append(Spacer(1, 12))
+
+    # ── Porosity Comparison (when exclusion zones applied) ───────────────────
+    if res.get('has_excl_zone'):
+        elems.append(Paragraph("POROSITY COMPARISON (EXCLUSION ZONES APPLIED)", st['section']))
+        elems.append(_section_hr())
+        
+        comp_data = [
+            [
+                Paragraph("COMPLETE POROSITY (RAW)", st['label']),
+                Paragraph("NET POROSITY (EXCL. ZONE)", st['label'])
+            ],
+            [
+                Paragraph(f"<b>{res['raw_pct']:.2f}%</b>", ParagraphStyle('rv', fontSize=13, fontName='Helvetica-Bold', textColor=C_DARK, alignment=TA_CENTER)),
+                Paragraph(f"<b>{res['net_pct']:.2f}%</b>", ParagraphStyle('nv', fontSize=13, fontName='Helvetica-Bold', textColor=C_PASS if pct <= spec_model.pct else C_FAIL, alignment=TA_CENTER))
+            ],
+            [
+                Paragraph(f"{res['raw_pore_count']} pores  ·  {res['raw_datum']:.2f} mm² datum", st['small']),
+                Paragraph(f"{res['net_pore_count']} pores  ·  {res['net_datum']:.2f} mm² datum", st['small'])
+            ]
+        ]
+        comp_table = Table(comp_data, colWidths=[CONTENT_W/2, CONTENT_W/2])
+        comp_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), C_BG),
+            ('GRID', (0,0), (-1,-1), 0.3, C_BORDER),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 6),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ]))
+        elems.append(comp_table)
+        
+        excl_note = f"* Exclusion zones defined: {res['excl_zone_count']} zone(s) · Pores excluded: {res['excl_masked_pores']} of {res['total_pores_before_excl']}"
+        elems.append(Spacer(1, 3))
+        elems.append(Paragraph(excl_note, st['small']))
+        elems.append(Spacer(1, 12))
 
     # ── Parameter Evaluation ────────────────────────────────────────────────
     elems.append(Paragraph("PARAMETER EVALUATION", st['section']))
@@ -427,7 +505,7 @@ def generate_pdf(pores: list, spec: dict, wall_h_mm: float) -> bytes:
     # ── Cross-Section Zone Map ───────────────────────────────────────────────
     elems.append(Paragraph("CROSS-SECTION — ZONE MAP", st['section']))
     elems.append(_section_hr())
-    elems.append(_zone_map_drawing(pore_dicts, spec_dict, wall_h_mm))
+    elems.append(_zone_map_drawing(pore_dicts, spec_dict, wall_h_mm, exclusion_zones, datum_rect))
     elems.append(Spacer(1, 18))
 
     # ── Method Capability ────────────────────────────────────────────────────

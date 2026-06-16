@@ -31,10 +31,28 @@ class PoreModel(BaseModel):
     type: str = 'gas'
     zone: str = 'hr'
 
+class ExclusionZoneModel(BaseModel):
+    type: Literal["rect", "circle"]
+    x: Optional[float] = None
+    y: Optional[float] = None
+    w: Optional[float] = None
+    h: Optional[float] = None
+    cx: Optional[float] = None
+    cy: Optional[float] = None
+    r: Optional[float] = None
+
+class DatumRectModel(BaseModel):
+    x: float
+    y: float
+    w: float
+    h: float
+
 class EvalRequest(BaseModel):
     spec: SpecModel
     pores: List[PoreModel]
     wall_h_mm: float
+    exclusion_zones: Optional[List[ExclusionZoneModel]] = None
+    datum_rect: Optional[DatumRectModel] = None
 
 
 class DefectCellModel(BaseModel):

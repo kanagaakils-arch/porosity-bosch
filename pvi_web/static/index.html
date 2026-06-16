@@ -5047,23 +5047,51 @@ function runSelectedEval(mode){
     let tabAllPass=true, tabPassedImages=0;
     imgIndices.forEach(ii => {
       const page = tab.images[ii]; if(!page) return;
+      
+      // ── NET (excl. zone filtered) evaluation ──
       let pores = JSON.parse(JSON.stringify(page.pores||[]));
-      if((page.exclusionZones || []).length > 0) pores = _filterExclZones(pores, page);
+      const exclZonesCount = (page.exclusionZones || []).length;
+      if(exclZonesCount > 0) pores = _filterExclZones(pores, page);
       const pageDatum = (page.datumRect && page.datumRect.w > 0) ? page.datumRect : null;
       if(pageDatum) pores = pores.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
       const metrics = getImagePageMetrics(page, tab.spec);
       const evalDatum = _evaluationDatumArea(page, metrics, pageDatum);
       const data = runEvaluationLocal(pores, tab.spec, metrics.wallH, evalDatum, metrics.offset);
-      page.verdict = { allPass:data.all_pass, checks:data.checks, pct:data.pct,
-        maxPhi:data.max_phi, gapD:data.gap_data, hTriggered:data.h_triggered,
-        nTriggered:data.n_triggered, hrZ:data.hr_zone, hkZ:data.hk_zone,
-        eff:Array(data.eff_pores).fill({}) };
+
+      // ── RAW (all pores, NO exclusion zone filter) ──
+      let poresRaw = JSON.parse(JSON.stringify(page.pores || []));
+      if(pageDatum) poresRaw = poresRaw.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
+      const rawDatumBase = pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : (metrics.datum || (tab.spec.datum||100));
+      const rawData = runEvaluationLocal(poresRaw, tab.spec, metrics.wallH, rawDatumBase, metrics.offset || 0);
+
+      const _rawPoreCount = (page.pores || []).length;
+      const _exclCount2 = _rawPoreCount - (exclZonesCount > 0 ? _filterExclZones([...(page.pores||[])], page).length : _rawPoreCount);
+
+      page.verdict = {
+        allPass: data.all_pass, checks: data.checks, pct: data.pct,
+        maxPhi: data.max_phi, gapD: data.gap_data,
+        hTriggered: data.h_triggered, nTriggered: data.n_triggered,
+        hrZ: data.hr_zone, hkZ: data.hk_zone,
+        eff: Array(data.eff_pores).fill({}),
+        exclZoneCount: exclZonesCount,
+        exclMaskedPores: _exclCount2,
+        totalPoresBeforeExcl: _rawPoreCount,
+        rawPct: rawData.pct,
+        rawPoreCount: poresRaw.length,
+        rawDatum: rawDatumBase,
+        netPct: data.pct,
+        netPoreCount: pores.length,
+        netDatum: evalDatum,
+        hasExclZone: exclZonesCount > 0
+      };
       page.evaluated = true;
+
       const updatedMap = new Map();
-  data.updated_pores.forEach(up => { if(up.id) updatedMap.set(up.id, up.zone); });
-  page.pores.forEach((p,i)=>{ 
-    if(updatedMap.has(p.id)) p.zone=updatedMap.get(p.id);
-  });
+      data.updated_pores.forEach(up => { if(up.id) updatedMap.set(up.id, up.zone); });
+      page.pores.forEach((p,i)=>{ 
+        if(updatedMap.has(p.id)) p.zone=updatedMap.get(p.id);
+        else p.zone = 'hr'; // fallback
+      });
       if(data.all_pass) tabPassedImages++; else tabAllPass=false;
     });
     tab.verdict = { allPass:tabAllPass, tabPassedImages, tabTotalImages:imgIndices.length };
@@ -5292,25 +5320,92 @@ function renderReportImage(page, spec, metrics){
   const natPxMm=page.imgState.scalePxPerMm && page.imgState.fitScale ? page.imgState.scalePxPerMm/page.imgState.fitScale : null;
   const sx=natPxMm ? natPxMm*scale : w/(metrics.wallW||20);
   const sy=natPxMm ? natPxMm*scale : h/(metrics.wallH||spec.t||6);
+  const pageDatum = (page.datumRect && page.datumRect.w > 0) ? page.datumRect : null;
+
+  // 1. Draw Datum Rectangle
+  if(pageDatum){
+    const dx = pageDatum.x*sx, dy = pageDatum.y*sy, dw = pageDatum.w*sx, dh = pageDatum.h*sy;
+    ctx.fillStyle='rgba(255,173,0,.06)'; ctx.fillRect(dx,dy,dw,dh);
+    ctx.setLineDash([5,3]); ctx.strokeStyle='rgba(255,173,0,.75)'; ctx.lineWidth=1.5;
+    ctx.strokeRect(dx,dy,dw,dh); ctx.setLineDash([]);
+    // Corner ticks
+    const tk=6;
+    ctx.strokeStyle='rgba(255,173,0,.9)'; ctx.lineWidth=1.5;
+    [[dx,dy],[dx+dw,dy],[dx,dy+dh],[dx+dw,dy+dh]].forEach(([cx2,cy2])=>{
+      ctx.beginPath(); ctx.moveTo(cx2,cy2+Math.sign(cy2-dy-dh/2)*tk); ctx.lineTo(cx2,cy2); ctx.lineTo(cx2+Math.sign(cx2-dx-dw/2)*tk,cy2); ctx.stroke();
+    });
+    ctx.fillStyle='rgba(255,173,0,.95)'; ctx.font='bold 9px Arial'; ctx.textAlign='left'; ctx.textBaseline='bottom';
+    ctx.fillText('DATUM □', dx+4, dy-3);
+  }
+
+  // 2. Draw Exclusion Zones
+  const ez = page.exclusionZones || [];
+  if(ez.length){
+    ctx.save();
+    ez.forEach((z, zi)=>{
+      const zx = z.x*sx, zy = z.y*sy, zw = z.w*sx, zh = z.h*sy;
+      ctx.fillStyle='rgba(239,68,68,.06)'; ctx.fillRect(zx,zy,zw,zh);
+      ctx.setLineDash([4,2]); ctx.strokeStyle='rgba(239,68,68,.6)'; ctx.lineWidth=1.2;
+      ctx.strokeRect(zx,zy,zw,zh); ctx.setLineDash([]);
+      // Diagonal stripes
+      ctx.strokeStyle='rgba(239,68,68,.12)'; ctx.lineWidth=0.5;
+      for(let d=-Math.max(zw,zh); d<Math.max(zw,zh)*2; d+=8){
+        ctx.beginPath(); ctx.moveTo(zx+d,zy); ctx.lineTo(zx+d-zh,zy+zh); ctx.stroke();
+      }
+      ctx.fillStyle='rgba(239,68,68,.85)'; ctx.font='bold 8px Arial';
+      ctx.textAlign='left'; ctx.textBaseline='top';
+      ctx.fillText('EXCL #'+(zi+1), zx+3, zy+2);
+    });
+    ctx.restore();
+  }
+
+  // 3. Draw Pores
   page.pores.forEach(p=>{
     const x=p.x*sx, y=p.y*sy, r=Math.max(3,(p.dia/2)*((sx+sy)/2));
     const ignored=spec.u>0&&p.dia<spec.u;
     const fail=!ignored&&p.dia>spec.phi;
-    const col=ignored?'#777':fail?'#d92d20':p.zone==='hk'?'#6f42c1':'#0b7285';
+    const isExcluded = _poreInExclZone(p, page);
+
     ctx.save();
-    if(p._contour && p._contour.length>=4){
-      ctx.beginPath();
-      p._contour.forEach(([dx,dy],i)=>{
-        const px=x+dx*sx, py=y+dy*sy;
-        if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
-      });
-      ctx.closePath();
-      ctx.fillStyle=fail?'rgba(217,45,32,.24)':'rgba(11,114,133,.18)';
-      ctx.strokeStyle=col; ctx.lineWidth=2; ctx.fill(); ctx.stroke();
+    if(isExcluded){
+      // Faint grey for excluded pores
+      ctx.globalAlpha = 0.32;
+      ctx.fillStyle='rgba(100,100,100,0.18)';
+      ctx.strokeStyle='#999'; ctx.lineWidth=1.5; ctx.setLineDash([3,3]);
+      
+      if(p._contour && p._contour.length>=4){
+        ctx.beginPath();
+        p._contour.forEach(([dx,dy],i)=>{
+          const px=x+dx*sx, py=y+dy*sy;
+          if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+        });
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+      } else {
+        ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      
+      // X marker
+      ctx.fillStyle='#888'; ctx.font=`bold ${Math.max(8,Math.min(12,r*.6))}px Arial`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('✕', x, y);
     } else {
-      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
-      ctx.fillStyle=fail?'rgba(217,45,32,.24)':'rgba(11,114,133,.18)';
-      ctx.strokeStyle=col; ctx.lineWidth=2; ctx.fill(); ctx.stroke();
+      // Normal pore drawing
+      const col=ignored?'#777':fail?'#d92d20':p.zone==='hk'?'#6f42c1':'#0b7285';
+      if(p._contour && p._contour.length>=4){
+        ctx.beginPath();
+        p._contour.forEach(([dx,dy],i)=>{
+          const px=x+dx*sx, py=y+dy*sy;
+          if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+        });
+        ctx.closePath();
+        ctx.fillStyle=fail?'rgba(217,45,32,.24)':'rgba(11,114,133,.18)';
+        ctx.strokeStyle=col; ctx.lineWidth=2; ctx.fill(); ctx.stroke();
+      } else {
+        ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+        ctx.fillStyle=fail?'rgba(217,45,32,.24)':'rgba(11,114,133,.18)';
+        ctx.strokeStyle=col; ctx.lineWidth=2; ctx.fill(); ctx.stroke();
+      }
     }
     ctx.restore();
   });
@@ -5319,6 +5414,7 @@ function renderReportImage(page, spec, metrics){
 
 function renderReportZoneMap(page, spec, metrics){
   const pores=page.pores||[];
+  const pageDatum = (page.datumRect && page.datumRect.w > 0) ? page.datumRect : null;
   const W=520,H=260,wx=35,wy=18,ww=430,wh=210,t3=wh/3;
   let out=`<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg">`;
   out+=`<rect width="${W}" height="${H}" fill="#fff"/>`;
@@ -5337,39 +5433,119 @@ function renderReportZoneMap(page, spec, metrics){
     const r=Math.max(3,Math.min(18,(p.dia/Math.max(metrics.wallH,.01))*wh/2));
     const ignored=spec.u>0&&p.dia<spec.u;
     const fail=!ignored&&p.dia>spec.phi;
-    const col=ignored?'#777':fail?'#d92d20':p.zone==='hk'?'#6f42c1':'#0b7285';
-    out+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${fail?'rgba(217,45,32,.25)':'rgba(11,114,133,.18)'}" stroke="${col}" stroke-width="1.3"/>`;
+    const isExcluded = _poreInExclZone(p, page);
+    const isOutsideDatum = pageDatum && (p.x < pageDatum.x || p.x > pageDatum.x + pageDatum.w || p.y < pageDatum.y || p.y > pageDatum.y + pageDatum.h);
+
+    if(isExcluded){
+      out+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="rgba(100,100,100,0.06)" stroke="#999" stroke-width="1" stroke-dasharray="2 2" opacity="0.5"/>`;
+      out+=`<text x="${x.toFixed(1)}" y="${(y+0.5).toFixed(1)}" fill="#888" font-size="${Math.max(6, Math.min(10, r*1.2)).toFixed(0)}" text-anchor="middle" dominant-baseline="central" opacity="0.6">✕</text>`;
+    } else if(isOutsideDatum){
+      out+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="rgba(180,100,0,0.04)" stroke="#bbb" stroke-width="1" stroke-dasharray="2 2" opacity="0.4"/>`;
+      out+=`<text x="${x.toFixed(1)}" y="${(y+0.5).toFixed(1)}" fill="#999" font-size="${Math.max(6, Math.min(10, r*1.2)).toFixed(0)}" text-anchor="middle" dominant-baseline="central" opacity="0.5">✕</text>`;
+    } else {
+      const col=ignored?'#777':fail?'#d92d20':p.zone==='hk'?'#6f42c1':'#0b7285';
+      out+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${fail?'rgba(217,45,32,.25)':'rgba(11,114,133,.18)'}" stroke="${col}" stroke-width="1.3"/>`;
+    }
   });
   out+='</svg>';
   return out;
 }
 
 function buildImageReportSection(tab, page, spec, specIndex, imageIndex){
-  const metrics=getImagePageMetrics(page,spec);
-  let pores=JSON.parse(JSON.stringify(page.pores||[]));
-  if((page.exclusionZones || []).length > 0) pores = _filterExclZones(pores, page);
+  const metrics = getImagePageMetrics(page, spec);
+  const exclZonesCount = (page.exclusionZones || []).length;
+
+  // ── NET (excl. zone filtered) evaluation ──
+  let pores = JSON.parse(JSON.stringify(page.pores || []));
+  if(exclZonesCount > 0) pores = _filterExclZones(pores, page);
   const pageDatum = (page.datumRect && page.datumRect.w > 0) ? page.datumRect : null;
   if(pageDatum) pores = pores.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
-  const data=runEvaluationLocal(pores,spec,metrics.wallH,metrics.datum,metrics.offset||0);
-  page.verdict={
-    allPass:data.all_pass, checks:data.checks, pct:data.pct, maxPhi:data.max_phi,
-    gapD:data.gap_data, hTriggered:data.h_triggered, nTriggered:data.n_triggered,
-    hrZ:data.hr_zone, hkZ:data.hk_zone, eff:Array(data.eff_pores).fill({})
+  const evalDatum = _evaluationDatumArea(page, metrics, pageDatum);
+  const data = runEvaluationLocal(pores, spec, metrics.wallH, evalDatum, metrics.offset || 0);
+
+  // ── RAW (all pores, NO exclusion zone filter) ──
+  let poresRaw = JSON.parse(JSON.stringify(page.pores || []));
+  if(pageDatum) poresRaw = poresRaw.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
+  const rawDatumBase = pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : (metrics.datum || (spec.datum||100));
+  const rawData = runEvaluationLocal(poresRaw, spec, metrics.wallH, rawDatumBase, metrics.offset || 0);
+
+  const _rawPoreCount = (page.pores || []).length;
+  const _exclCount2 = _rawPoreCount - (exclZonesCount > 0 ? _filterExclZones([...(page.pores||[])], page).length : _rawPoreCount);
+
+  // Sync dual-porosity verdict state back to the page
+  page.verdict = {
+    allPass: data.all_pass, checks: data.checks, pct: data.pct,
+    maxPhi: data.max_phi, gapD: data.gap_data,
+    hTriggered: data.h_triggered, nTriggered: data.n_triggered,
+    hrZ: data.hr_zone, hkZ: data.hk_zone,
+    eff: Array(data.eff_pores).fill({}),
+    exclZoneCount: exclZonesCount,
+    exclMaskedPores: _exclCount2,
+    totalPoresBeforeExcl: _rawPoreCount,
+    rawPct: rawData.pct,
+    rawPoreCount: poresRaw.length,
+    rawDatum: rawDatumBase,
+    netPct: data.pct,
+    netPoreCount: pores.length,
+    netDatum: evalDatum,
+    hasExclZone: exclZonesCount > 0
   };
-  page.evaluated=true;
+  page.evaluated = true;
+
   const updatedMap = new Map();
   data.updated_pores.forEach(up => { if(up.id) updatedMap.set(up.id, up.zone); });
   page.pores.forEach((p,i)=>{ 
     if(updatedMap.has(p.id)) p.zone=updatedMap.get(p.id);
+    else p.zone = 'hr'; // fallback
   });
+
   const rows=data.checks.map(c=>`<tr>
     <td>${escapeHtml(c.n)}</td><td>${escapeHtml(c.meas)}</td><td>${escapeHtml(c.limit)}</td>
     <td class="${c.pass?'pass':'fail'}">${c.pass?'PASS':'FAIL'}</td><td class="detail">${escapeHtml(c.detail)}</td>
   </tr>`).join('');
-  const poreRows=page.pores.length ? page.pores.map((p,i)=>`<tr>
-    <td>${i+1}</td><td>${Number(p.dia||0).toFixed(3)}</td><td>${Number(p.x||0).toFixed(2)}</td>
-    <td>${Number(p.y||0).toFixed(2)}</td><td>${escapeHtml((p.zone||'-').toUpperCase())}</td><td>${escapeHtml(p.type||'gas')}</td>
-  </tr>`).join('') : '<tr><td colspan="6" class="detail">No pores recorded for this image.</td></tr>';
+
+  // Pore Rows with Status
+  const poreRows = page.pores.length ? page.pores.map((p,i)=>{
+    const isExcluded = _poreInExclZone(p, page);
+    const isOutsideDatum = pageDatum && (p.x < pageDatum.x || p.x > pageDatum.x + pageDatum.w || p.y < pageDatum.y || p.y > pageDatum.y + pageDatum.h);
+    let statusStr = '<span class="pass">Active</span>';
+    let rowStyle = '';
+    if(isExcluded){
+      statusStr = '<span class="fail" style="color:#d92d20">Excluded (Zone)</span>';
+      rowStyle = ' style="background:#f9f9f9;text-decoration:line-through;color:#999"';
+    } else if(isOutsideDatum){
+      statusStr = '<span class="fail" style="color:#f76707">Outside Datum</span>';
+      rowStyle = ' style="background:#f9f9f9;text-decoration:line-through;color:#999"';
+    }
+    return `<tr${rowStyle}>
+      <td>${i+1}</td><td>${Number(p.dia||0).toFixed(3)}</td><td>${Number(p.x||0).toFixed(2)}</td>
+      <td>${Number(p.y||0).toFixed(2)}</td><td>${escapeHtml((p.zone||'-').toUpperCase())}</td><td>${escapeHtml(p.type||'gas')}</td>
+      <td>${statusStr}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="7" class="detail">No pores recorded for this image.</td></tr>';
+
+  // Porosity Comparison HTML
+  let compareSection = '';
+  if(exclZonesCount > 0){
+    compareSection = `
+    <h4>Porosity Comparison (Exclusion Zones Applied)</h4>
+    <div style="display:flex;gap:12px;margin:10px 0;width:100%">
+      <div style="flex:1;border:1px solid #ddd;border-radius:6px;padding:10px 12px;background:#fafafa;text-align:center">
+        <div style="font-size:10px;font-weight:bold;color:#666;text-transform:uppercase">⬛ Complete Porosity (Raw)</div>
+        <div style="font-size:16px;font-weight:bold;color:#333;margin-top:3px">${rawData.pct.toFixed(2)}%</div>
+        <div style="font-size:9px;color:#888;margin-top:2px">${poresRaw.length} pores &middot; ${rawDatumBase.toFixed(2)} mm² datum</div>
+      </div>
+      <div style="flex:1;border:1px solid #ddd;border-radius:6px;padding:10px 12px;background:#fafafa;text-align:center">
+        <div style="font-size:10px;font-weight:bold;color:#666;text-transform:uppercase">🚫 Net Porosity (Excl. Zone)</div>
+        <div style="font-size:16px;font-weight:bold;color:#087f5b;margin-top:3px">${data.pct.toFixed(2)}%</div>
+        <div style="font-size:9px;color:#888;margin-top:2px">${pores.length} pores &middot; ${evalDatum.toFixed(2)} mm² datum</div>
+      </div>
+    </div>
+    <div style="font-size:10px;color:#555;margin-bottom:12px">
+      * <b>Exclusion zones defined:</b> ${exclZonesCount} zone(s) · <b>Pores excluded:</b> ${_exclCount2} of ${_rawPoreCount}
+    </div>`;
+  }
+
   const imgUrl=renderReportImage(page,spec,metrics);
   return `<section class="image-section">
     <h3>${specIndex}.${imageIndex} ${escapeHtml(page.name)}</h3>
@@ -5377,14 +5553,15 @@ function buildImageReportSection(tab, page, spec, specIndex, imageIndex){
       <span><b>Verdict:</b> <strong class="${data.all_pass?'pass':'fail'}">${data.all_pass?'ACCEPT':'REJECT'}</strong></span>
       <span><b>Pores:</b> ${page.pores.length}</span>
       <span><b>Effective:</b> ${data.eff_pores}</span>
-      <span><b>Datum:</b> ${metrics.datum.toFixed(1)} mm² ${metrics.calibrated?'(image)':'(spec)'}</span>
+      <span><b>Datum:</b> ${evalDatum.toFixed(1)} mm² ${metrics.calibrated?'(image)':'(spec)'}</span>
       <span><b>Wall H:</b> ${metrics.wallH.toFixed(2)} mm</span>
     </div>
+    ${compareSection}
     ${imgUrl?`<div class="media-row"><div><img src="${imgUrl}" class="report-img"><div class="caption">Annotated pore overlay</div></div><div>${renderReportZoneMap(page,spec,metrics)}<div class="caption">Cross-section zone map</div></div></div>`:''}
     <h4>Compliance Checks</h4>
     <table><thead><tr><th>Parameter</th><th>Measured</th><th>Limit</th><th>Result</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table>
     <h4>Pore Data</h4>
-    <table><thead><tr><th>#</th><th>Φ (mm)</th><th>X (mm)</th><th>Y (mm)</th><th>Zone</th><th>Type</th></tr></thead><tbody>${poreRows}</tbody></table>
+    <table><thead><tr><th>#</th><th>Φ (mm)</th><th>X (mm)</th><th>Y (mm)<th>Zone</th><th>Type</th><th>Status</th></tr></thead><tbody>${poreRows}</tbody></table>
   </section>`;
 }
 
