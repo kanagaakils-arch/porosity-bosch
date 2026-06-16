@@ -418,6 +418,7 @@ select.fi option{background:var(--c2)}
 
 .btn-stack.btn-purple { border-color:#8b5cf6; color:#8b5cf6; }
 .btn-stack.btn-purple:hover { background:#f5f3ff; }
+.btn-stack.on { background:rgba(239,68,68,.12); border-color:#ef4444; }
 
 .btn-hz {
   display:flex; align-items:center; justify-content:center; gap:6px;
@@ -1334,7 +1335,11 @@ select.fi option{background:var(--c2)}
       <span class="tb-lbl" style="color:#ef4444">EXCLUDE:</span>
       <button class="btn-stack" id="btn-excl-rect" onclick="setTool('exclude_rect')" title="Draw exclusion zone rectangle — detected pores inside will be ignored" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
         <span class="btn-stack__icon">🚫</span>
-        <span class="btn-stack__label">Excl. Zone</span>
+        <span class="btn-stack__label">Excl. Rect</span>
+      </button>
+      <button class="btn-stack" id="btn-excl-circle" onclick="setTool('exclude_circle')" title="Draw exclusion zone circle — detected pores inside will be ignored" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
+        <span class="btn-stack__icon">⭕</span>
+        <span class="btn-stack__label">Excl. Circle</span>
       </button>
       <button class="btn-stack" onclick="clearExclusionZones()" title="Remove all exclusion zones" style="color:#ef4444;border-color:rgba(239,68,68,.25)">
         <span class="btn-stack__icon">🔄</span>
@@ -3462,30 +3467,59 @@ function drawCanvas(){
     if(S.imgMode&&_ez.length){
       mctx.save();
       _ez.forEach(function(z,zi){
-        var _p=mmToCanvas(z.x,z.y),_w=z.w*_sc,_h=z.h*_sc;
-        mctx.fillStyle='rgba(239,68,68,.08)'; mctx.fillRect(_p.x,_p.y,_w,_h);
-        mctx.setLineDash([5,3]); mctx.strokeStyle='rgba(239,68,68,.6)'; mctx.lineWidth=1.5;
-        mctx.strokeRect(_p.x,_p.y,_w,_h); mctx.setLineDash([]);
-        mctx.strokeStyle='rgba(239,68,68,.12)'; mctx.lineWidth=0.5;
-        for(var _d=-Math.max(_w,_h);_d<Math.max(_w,_h)*2;_d+=10){
-          mctx.beginPath();mctx.moveTo(_p.x+_d,_p.y);mctx.lineTo(_p.x+_d-_h,_p.y+_h);mctx.stroke();
+        if(z.type==='circle'){
+          var _cp=mmToCanvas(z.cx,z.cy),_r=z.r*_sc;
+          mctx.fillStyle='rgba(239,68,68,.08)';
+          mctx.beginPath(); mctx.arc(_cp.x,_cp.y,_r,0,Math.PI*2); mctx.fill();
+          mctx.setLineDash([5,3]); mctx.strokeStyle='rgba(239,68,68,.6)'; mctx.lineWidth=1.5;
+          mctx.beginPath(); mctx.arc(_cp.x,_cp.y,_r,0,Math.PI*2); mctx.stroke(); mctx.setLineDash([]);
+          mctx.strokeStyle='rgba(239,68,68,.12)'; mctx.lineWidth=0.5;
+          mctx.save();
+          mctx.beginPath(); mctx.arc(_cp.x,_cp.y,_r,0,Math.PI*2); mctx.clip();
+          for(var _d=-_r;_d<_r*2;_d+=10){
+            mctx.beginPath(); mctx.moveTo(_cp.x+_d-_r,_cp.y-_r); mctx.lineTo(_cp.x+_d-_r-_r*2,_cp.y+_r); mctx.stroke();
+          }
+          mctx.restore();
+          mctx.fillStyle='rgba(239,68,68,.85)'; mctx.font='bold 8px system-ui';
+          mctx.textAlign='center'; mctx.textBaseline='middle';
+          mctx.fillText('EXCL #'+(zi+1),_cp.x,_cp.y);
+        } else {
+          var _p=mmToCanvas(z.x,z.y),_w=z.w*_sc,_h=z.h*_sc;
+          mctx.fillStyle='rgba(239,68,68,.08)'; mctx.fillRect(_p.x,_p.y,_w,_h);
+          mctx.setLineDash([5,3]); mctx.strokeStyle='rgba(239,68,68,.6)'; mctx.lineWidth=1.5;
+          mctx.strokeRect(_p.x,_p.y,_w,_h); mctx.setLineDash([]);
+          mctx.strokeStyle='rgba(239,68,68,.12)'; mctx.lineWidth=0.5;
+          for(var _d=-Math.max(_w,_h);_d<Math.max(_w,_h)*2;_d+=10){
+            mctx.beginPath();mctx.moveTo(_p.x+_d,_p.y);mctx.lineTo(_p.x+_d-_h,_p.y+_h);mctx.stroke();
+          }
+          mctx.fillStyle='rgba(239,68,68,.85)'; mctx.font='bold 8px system-ui';
+          mctx.textAlign='left'; mctx.textBaseline='top';
+          mctx.fillText('EXCL #'+(zi+1),_p.x+3,_p.y+2);
         }
-        mctx.fillStyle='rgba(239,68,68,.85)'; mctx.font='bold 8px system-ui';
-        mctx.textAlign='left'; mctx.textBaseline='top';
-        mctx.fillText('EXCL #'+(zi+1),_p.x+3,_p.y+2);
       });
       mctx.restore();
     }
     if(S._exclDraw&&S._exclDraw.active){
-      var _d2=S._exclDraw,_p2=mmToCanvas(_d2.x,_d2.y);
-      var _w2=_d2.w*_sc,_h2=_d2.h*_sc;
       mctx.save();
-      mctx.fillStyle='rgba(239,68,68,.12)'; mctx.fillRect(_p2.x,_p2.y,_w2,_h2);
-      mctx.setLineDash([4,2]); mctx.strokeStyle='rgba(239,68,68,.8)'; mctx.lineWidth=2;
-      mctx.strokeRect(_p2.x,_p2.y,_w2,_h2); mctx.setLineDash([]);
-      mctx.fillStyle='rgba(239,68,68,.9)'; mctx.font='bold 9px system-ui';
-      mctx.textAlign='left'; mctx.textBaseline='bottom';
-      mctx.fillText('Drawing exclusion zone...',_p2.x+4,_p2.y-3);
+      if(S._exclDraw.type==='circle'){
+        var _d2=S._exclDraw,_cp2=mmToCanvas(_d2.cx,_d2.cy),_r2=_d2.r*_sc;
+        mctx.fillStyle='rgba(239,68,68,.12)';
+        mctx.beginPath(); mctx.arc(_cp2.x,_cp2.y,_r2,0,Math.PI*2); mctx.fill();
+        mctx.setLineDash([4,2]); mctx.strokeStyle='rgba(239,68,68,.8)'; mctx.lineWidth=2;
+        mctx.beginPath(); mctx.arc(_cp2.x,_cp2.y,_r2,0,Math.PI*2); mctx.stroke(); mctx.setLineDash([]);
+        mctx.fillStyle='rgba(239,68,68,.9)'; mctx.font='bold 9px system-ui';
+        mctx.textAlign='left'; mctx.textBaseline='bottom';
+        mctx.fillText('Drawing exclusion circle...',_cp2.x+_r2+4,_cp2.y);
+      } else {
+        var _d2=S._exclDraw,_p2=mmToCanvas(_d2.x,_d2.y);
+        var _w2=_d2.w*_sc,_h2=_d2.h*_sc;
+        mctx.fillStyle='rgba(239,68,68,.12)'; mctx.fillRect(_p2.x,_p2.y,_w2,_h2);
+        mctx.setLineDash([4,2]); mctx.strokeStyle='rgba(239,68,68,.8)'; mctx.lineWidth=2;
+        mctx.strokeRect(_p2.x,_p2.y,_w2,_h2); mctx.setLineDash([]);
+        mctx.fillStyle='rgba(239,68,68,.9)'; mctx.font='bold 9px system-ui';
+        mctx.textAlign='left'; mctx.textBaseline='bottom';
+        mctx.fillText('Drawing exclusion zone...',_p2.x+4,_p2.y-3);
+      }
       mctx.restore();
     }
   })();
@@ -3851,7 +3885,10 @@ function bindCanvasEvents(){
       if(!S.measurePt1){ S.measurePt1=mm; drawCanvas(); }
       else { S.measurePt1=null; drawCanvas(); }
     } else if(S.tool==='exclude_rect'){
-      S._exclDraw={active:true,ox:mm.x,oy:mm.y,x:mm.x,y:mm.y,w:0,h:0};
+      S._exclDraw={active:true,type:'rect',ox:mm.x,oy:mm.y,x:mm.x,y:mm.y,w:0,h:0};
+      isPointerDown=true; drawCanvas();
+    } else if(S.tool==='exclude_circle'){
+      S._exclDraw={active:true,type:'circle',ox:mm.x,oy:mm.y,cx:mm.x,cy:mm.y,r:0};
       isPointerDown=true; drawCanvas();
     } else if(S.tool==='datum'){
       // If clicking INSIDE existing datum → move it
@@ -3936,6 +3973,11 @@ function bindCanvasEvents(){
       S._exclDraw.w=Math.abs(_emx); S._exclDraw.h=Math.abs(_emy);
       drawCanvas();
     }
+    if(S.tool==='exclude_circle'&&isPointerDown&&S._exclDraw&&S._exclDraw.active){
+      const dx=mm.x-S._exclDraw.ox, dy=mm.y-S._exclDraw.oy;
+      S._exclDraw.r=Math.sqrt(dx*dx+dy*dy);
+      drawCanvas();
+    }
     if(S.tool==='measure') drawCanvas();
     if(isPointerDown&&S.tool==='datum') drawCanvas();
   });
@@ -3956,6 +3998,18 @@ function bindCanvasEvents(){
         _pu.exclusionZones.push({type:'rect',x:_eu.x,y:_eu.y,w:_eu.w,h:_eu.h});
         S._exclDraw=null; updateExclZoneBadge(); renderExclList();
         toast('Excl. zone #'+_pu.exclusionZones.length+' added ('+_eu.w.toFixed(1)+'×'+_eu.h.toFixed(1)+' mm) — Undo to remove');
+        drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+      }
+    } else if(S.tool==='exclude_circle'&&S._exclDraw&&S._exclDraw.active&&S._exclDraw.r>0.05){
+      var _eu=S._exclDraw,_pu=activeImagePage();
+      if(!_pu){ toast('Load an image first to draw exclusion zones','warn'); S._exclDraw=null; drawCanvas(); }
+      else {
+        // Snapshot history BEFORE adding the zone so Undo can remove it
+        pushHistory();
+        if(!_pu.exclusionZones)_pu.exclusionZones=[];
+        _pu.exclusionZones.push({type:'circle',cx:_eu.cx,cy:_eu.cy,r:_eu.r});
+        S._exclDraw=null; updateExclZoneBadge(); renderExclList();
+        toast('Excl. zone #'+_pu.exclusionZones.length+' added (Circle r='+_eu.r.toFixed(1)+' mm) — Undo to remove');
         drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
       }
     } else if(S._exclDraw){S._exclDraw=null; drawCanvas();}
@@ -4222,19 +4276,29 @@ function setPoreType(t){
 }
 function setTool(t){
   S.tool=t; S.measurePt1=null;
-  ['place','select','measure','datum'].forEach(tt=>{
+  ['place','select','measure','datum','pan'].forEach(tt=>{
     const b=document.getElementById('tool-'+tt);
     if(b) b.classList.toggle('on',tt===t);
   });
-  const hints={place:'Click to place pore · Scroll over pore: resize · Right-click: delete',
+  const exclRect = document.getElementById('btn-excl-rect');
+  if(exclRect) exclRect.classList.toggle('on', t==='exclude_rect');
+  const exclCircle = document.getElementById('btn-excl-circle');
+  if(exclCircle) exclCircle.classList.toggle('on', t==='exclude_circle');
+
+  const hints={
+    place:'Click to place pore · Scroll over pore: resize · Right-click: delete',
     select:'Click pore to select + drag to move · Scroll over pore: resize · Edit panel appears below registry',
     measure:'Click point 1, then point 2 to measure edge-to-edge distance',
-    datum:'Click and drag to define datum area rectangle'};
-  document.getElementById('canvas-hint').textContent=hints[t];
+    datum:'Click and drag to define datum area rectangle',
+    exclude_rect:'Click and drag to define rectangular exclusion zone',
+    exclude_circle:'Click and drag/extend to define circular exclusion zone',
+    pan:'Click and drag to pan the canvas'
+  };
+  document.getElementById('canvas-hint').textContent=hints[t] || '';
   document.getElementById('sb-tool').textContent=t.toUpperCase();
   const wrap=document.getElementById('canvas-wrap');
-  const cursors={place:'crosshair',select:'grab',measure:'crosshair',datum:'cell'};
-  wrap.style.cursor=cursors[t];
+  const cursors={place:'crosshair',select:'grab',measure:'crosshair',datum:'cell',exclude_rect:'crosshair',exclude_circle:'crosshair',pan:'grab'};
+  wrap.style.cursor=cursors[t] || 'default';
   // Hide edit panel when leaving select mode
   if(t!=='select'){ const ep=document.getElementById('pore-edit-panel'); if(ep) ep.style.display='none'; }
 }
@@ -7139,13 +7203,19 @@ function renderExclList(){
       list.innerHTML = '<div style="font-size:9px;color:var(--dim);font-style:italic">No exclusion zones \u2014 use \u{1f6ab} Excl. Zone tool to draw</div>';
       return;
     }
-    list.innerHTML = zones.map((z, i) =>
-      '<div class="excl-list-item">' +
+    list.innerHTML = zones.map((z, i) => {
+      let desc = '';
+      if(z.type === 'circle'){
+        desc = 'Circle r=' + (z.r || 0).toFixed(1) + ' mm';
+      } else {
+        desc = (z.w || 0).toFixed(1) + '\u00d7' + (z.h || 0).toFixed(1) + ' mm';
+      }
+      return '<div class="excl-list-item">' +
         '<span>\u{1f6ab} Zone #' + (i+1) + '</span>' +
-        '<span style="color:var(--dim)">' + z.w.toFixed(1) + '\u00d7' + z.h.toFixed(1) + ' mm</span>' +
+        '<span style="color:var(--dim)">' + desc + '</span>' +
         '<span class="excl-del" onclick="removeExclZone(' + i + ')" title="Remove">\u2715</span>' +
-      '</div>'
-    ).join('');
+      '</div>';
+    }).join('');
   });
 }
 
