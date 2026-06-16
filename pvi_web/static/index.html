@@ -4650,6 +4650,13 @@ function updateLiveMetrics(){
       }
 
       updatePoreRegistry();
+      if (S.evaluated) {
+        evaluateAllSpecs(true);
+        const activePage = activeImagePage();
+        if (activePage) {
+          S.verdict = activePage.verdict;
+        }
+      }
     } catch(e){ /* calculation error — skip */ }
   }, 100);
 }
@@ -4833,7 +4840,7 @@ function runEvaluationLocal(pores, spec, wallH, datumOverride, poreOffset){
 // ══════════════════════════════════════════════════════════
 // EVALUATE ALL SPECS + EXPORT
 // ══════════════════════════════════════════════════════════
-function evaluateAllSpecs(){
+function evaluateAllSpecs(silent){
   // Sync active pores into page before iterating (S.imgPores and page.pores share same ref but be explicit)
   const _activePage2 = activeImagePage();
   if(_activePage2) _activePage2.pores = S.imgPores;
@@ -4940,7 +4947,9 @@ function evaluateAllSpecs(){
   // Update global badge based on active spec
   HPDC_STATE.set('lastVerdict', allPass ? 'ACCEPT' : 'REJECT', 'Tool 01');
   updateHomeVerdictBadge(); setPlatformBadge('porosity');
-  toast(`Evaluated ${totalSpecs} spec(s): ${passedSpecs} PASS, ${totalSpecs-passedSpecs} FAIL`, allPass?'ok':'warn');
+  if (!silent) {
+    toast(`Evaluated ${totalSpecs} spec(s): ${passedSpecs} PASS, ${totalSpecs-passedSpecs} FAIL`, allPass?'ok':'warn');
+  }
   return { allPass, summary };
 }
 
@@ -7086,7 +7095,7 @@ function removeExclZone(index){
   page.exclusionZones.splice(index, 1);
   updateExclZoneBadge();
   renderExclList();
-  drawCanvas();
+  drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
   toast('\u{1f6ab} Exclusion zone removed');
 }
 </script>
