@@ -4651,14 +4651,73 @@ function updateLiveMetrics(){
 
       updatePoreRegistry();
       if (S.evaluated) {
-        evaluateAllSpecs(true);
-        const activePage = activeImagePage();
-        if (activePage) {
-          S.verdict = activePage.verdict;
-        }
+        _silentReEvalActivePage();
       }
     } catch(e){ /* calculation error — skip */ }
   }, 100);
+}
+
+// ── Silent single-page re-evaluation ─────────────────────────────────────────
+// Re-computes page.verdict + S.verdict for the active image page WITHOUT
+// mutating page.pores zones and WITHOUT showing any toast. Calls renderVerdict()
+// live if the Verdict tab is currently visible so results are always in sync.
+function _silentReEvalActivePage(){
+  try {
+    const page = activeImagePage();
+    if(!page || !page.evaluated) return;
+    const tab  = activeSpecTab();
+    const spec = (tab && tab.spec) || S.spec;
+    const metrics = getImagePageMetrics(page, spec);
+    const exclZonesCount = (page.exclusionZones || []).length;
+
+    // ── NET pores (excl-zone-filtered + datum-filtered) ──
+    let pores = [...(page.pores || [])];
+    if(exclZonesCount > 0) pores = _filterExclZones(pores, page);
+    const pageDatum = (page.datumRect && page.datumRect.w > 0) ? page.datumRect : null;
+    if(pageDatum) pores = pores.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
+    const evalDatum = _evaluationDatumArea(page, metrics, pageDatum);
+    const data = runEvaluationLocal(pores, spec, metrics.wallH, evalDatum, metrics.offset || 0);
+
+    // ── RAW pores (no excl-zone filter — informational) ──
+    let poresRaw = [...(page.pores || [])];
+    if(pageDatum) poresRaw = poresRaw.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
+    const rawDatumBase = pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : (metrics.datum || (spec.datum||100));
+    const rawData = runEvaluationLocal(poresRaw, spec, metrics.wallH, rawDatumBase, metrics.offset || 0);
+
+    const _rawPoreCount = (page.pores || []).length;
+    const _exclCount = _rawPoreCount - (exclZonesCount > 0 ? _filterExclZones([...(page.pores||[])], page).length : _rawPoreCount);
+
+    // Build new verdict — does NOT touch page.pores zones
+    page.verdict = {
+      allPass: data.all_pass, checks: data.checks, pct: data.pct,
+      maxPhi: data.max_phi, gapD: data.gap_data,
+      hTriggered: data.h_triggered, nTriggered: data.n_triggered,
+      hrZ: data.hr_zone, hkZ: data.hk_zone,
+      eff: Array(data.eff_pores).fill({}),
+      exclZoneCount: exclZonesCount,
+      exclMaskedPores: _exclCount,
+      totalPoresBeforeExcl: _rawPoreCount,
+      rawPct: rawData.pct,
+      rawPoreCount: poresRaw.length,
+      rawDatum: rawDatumBase,
+      netPct: data.pct,
+      netPoreCount: pores.length,
+      netDatum: evalDatum,
+      hasExclZone: exclZonesCount > 0
+    };
+    S.verdict = page.verdict;
+    S.evaluated = true;
+
+    // Re-render verdict live if the Verdict page is already open
+    const vpg = document.getElementById('pg-verdict');
+    if(vpg && vpg.style.display !== 'none' && vpg.style.opacity !== '0') {
+      renderVerdict();
+    }
+
+    // Sync global badge
+    HPDC_STATE.set('lastVerdict', data.all_pass ? 'ACCEPT' : 'REJECT', 'Tool 01');
+    updateHomeVerdictBadge(); setPlatformBadge('porosity');
+  } catch(e){ /* silent — skip */ }
 }
 
 
@@ -4896,8 +4955,9 @@ function evaluateAllSpecs(silent){
       const updatedMap = new Map();
       data.updated_pores.forEach(up => { if(up.id) updatedMap.set(up.id, up.zone); });
       page.pores.forEach((p) => {
+        // Only update zone for pores that were actually in the evaluation set.
+        // Do NOT overwrite zones for excluded/datum-filtered pores — they keep their existing zone.
         if(updatedMap.has(p.id)) p.zone = updatedMap.get(p.id);
-        else p.zone = 'hr'; // fallback for excluded/datum-filtered pores
       });
       tabTotalImages++;
       if(data.all_pass) tabPassedImages++; else tabAllPass = false;
