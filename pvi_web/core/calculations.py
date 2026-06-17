@@ -173,10 +173,9 @@ def run_evaluation(
     x_vals = [p.x for p in pores] if pores else []
     wall_w = max(max(x_vals) * 1.2 if x_vals else 20.0, 20.0)
     
-    # Calculate net datum area (subtracting exclusion zones)
+    # Calculate net datum area (exclusion zone area is NOT subtracted from the datum area)
     base_datum = dr_dict.get('w', 0) * dr_dict.get('h', 0) if (dr_dict and dr_dict.get('w', 0) > 0) else spec.datum
-    excl_area = exclusion_area_for_datum(exclusion_zones, dr_dict, wall_w, wall_h_mm)
-    net_datum_area = max(base_datum - excl_area, 0.01)
+    net_datum_area = max(base_datum, 0.01)
 
     # Run net evaluation using net_datum_area
     spec_net = spec.model_copy(update={'datum': net_datum_area})

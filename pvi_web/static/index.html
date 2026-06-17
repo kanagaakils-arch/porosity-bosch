@@ -4535,8 +4535,7 @@ function _exclusionAreaForDatum(page, datumRect, wallW, wallH){
 
 function _evaluationDatumArea(page, metrics, datumRect){
   const base=Math.max(metrics?.datum || 0, 0.01);
-  const excl=_exclusionAreaForDatum(page, datumRect || metrics?.datumRect, metrics?.wallW, metrics?.wallH);
-  return +Math.max(base - excl, 0.01).toFixed(2);
+  return +Math.max(base, 0.01).toFixed(2);
 }
 
 // Returns only pores within datum square (or all pores if no datum drawn),
