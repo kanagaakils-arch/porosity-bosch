@@ -2812,7 +2812,8 @@ function setMethod(m){
   document.querySelectorAll('.method-opt').forEach(el=>{
     el.classList.toggle('on',el.dataset.m===m);
   });
-  document.getElementById('method-note').textContent=MNOTES[m];
+  const noteEl = document.getElementById('method-note');
+  if(noteEl) noteEl.textContent=MNOTES[m];
 }
 setMethod('visual_machined');
 
