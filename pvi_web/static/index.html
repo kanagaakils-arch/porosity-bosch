@@ -7116,6 +7116,11 @@ function autoDetectPores(){
       }
 
       pushHistory();
+      // ── Clear previously auto-detected pores before re-run ──────────────
+      // Keep manually-added pores (no _detectMeta) and discard any pore that
+      // came from a previous auto-detection so we get a clean fresh result.
+      setAP(AP().filter(p => !p._detectMeta));
+
       let added=0, gasCount=0, shrinkCount=0;
       finalBlobs.forEach(b=>{
         const xMm=+(b.cx/dsNatPxMm).toFixed(3);
