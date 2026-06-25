@@ -1032,28 +1032,7 @@ select.fi option{background:var(--c2)}
             </div>
           </div>
         </div>
-        <!-- Method -->
-        <div class="card">
-          <div class="card-h"><div class="card-title">Inspection Method</div></div>
-          <div class="card-body">
-            <div class="method-grid" id="method-grid">
-              <div class="method-opt on" data-m="visual_machined" onclick="setMethod('visual_machined')">
-                <div class="mo-icon">🔬</div><div class="mo-name">Visual (Machined)</div><div class="mo-std">Section cut · Rz=0</div>
-              </div>
-              <div class="method-opt" data-m="visual_cast" onclick="setMethod('visual_cast')">
-                <div class="mo-icon">🔍</div><div class="mo-name">Visual (As-Cast)</div><div class="mo-std">Direct surface · No Rz</div>
-              </div>
-              <div class="method-opt" data-m="xray" onclick="setMethod('xray')">
-                <div class="mo-icon">📡</div><div class="mo-name">X-Ray / DR</div><div class="mo-std">&nbsp;</div>
-              </div>
-              <div class="method-opt" data-m="ct" onclick="setMethod('ct')">
-                <div class="mo-icon">🧊</div><div class="mo-name">CT Scan 3D</div><div class="mo-std">&nbsp;</div>
-              </div>
-            </div>
-            <div id="method-note" style="margin-top:10px;font-size:11px;color:var(--muted);
-              padding:8px 10px;background:var(--c3);border-radius:var(--r);border-left:2px solid var(--g);line-height:1.5">Polished metallographic section cut at Rz=0. Measure pores at 10×–200× magnification. HR/HK zones require precise sectioning at exact zone boundaries. Destructive.</div>
-          </div>
-        </div>
+
       </div>
       <div class="gcol">
         <!-- Limits -->
@@ -2962,6 +2941,11 @@ function saveSpec(){
   s.u    = +document.getElementById('sp-u').value||0.2;
   s.t    = +document.getElementById('sp-t').value||6;
   s.datum= +document.getElementById('sp-datum').value||100;
+  // Type-specific limits — persist only when the field has a value
+  const _gPhi = document.getElementById('sp-phi-gas');     s.phi_gas    = _gPhi    && _gPhi.value    !== '' ? +_gPhi.value    : null;
+  const _sPhi = document.getElementById('sp-phi-shrink');  s.phi_shrink = _sPhi    && _sPhi.value    !== '' ? +_sPhi.value    : null;
+  const _gPct = document.getElementById('sp-pct-gas');     s.pct_gas    = _gPct    && _gPct.value    !== '' ? +_gPct.value    : null;
+  const _sPct = document.getElementById('sp-pct-shrink');  s.pct_shrink = _sPct    && _sPct.value    !== '' ? +_sPct.value    : null;
   s.h=getv('tg-h'); s.n=getv('tg-n');
   s.hr=getv('tg-hr'); s.nr=getv('tg-nr');
   s.hk=getv('tg-hk'); s.nk=getv('tg-nk');
@@ -5714,8 +5698,9 @@ function downloadPDF(){
         <div><b>Zone:</b> ${escapeHtml(spec.zone||'-')}</div>
         <div><b>Revision:</b> ${escapeHtml(spec.rev||'-')}</div>
         <div><b>Inspector:</b> ${escapeHtml(spec.insp||'-')}</div>
-        <div><b>Limits:</b> % ≤${spec.pct||5}, Φ ≤${spec.phi||1.5} mm, A ${spec.a||2}, U ${spec.u||0} mm</div>
-        <div><b>H/N:</b> H${spec.h||0}/N${spec.n||0}, HR${spec.hr||0}/NR${spec.nr||0}, HK${spec.hk||1}/NK${spec.nk||1}</div>
+        <div><b>Limits:</b> % ≤${spec.pct||5}, Φ ≤${spec.phi||1.5} mm, A ${spec.a||2}, U ${spec.u||0} mm${spec.phi_gas!=null?' | Gas Φ ≤'+spec.phi_gas+'mm':''}${spec.pct_gas!=null?' Gas %≤'+spec.pct_gas:''}${spec.phi_shrink!=null?' | Shrink Φ ≤'+spec.phi_shrink+'mm':''}${spec.pct_shrink!=null?' Shrink %≤'+spec.pct_shrink:''}</div>
+        <div><b>H/N Zones:</b> H${spec.h||0}/N${spec.n||0}, HR${spec.hr||0}/NR${spec.nr||0}, HK${spec.hk||1}/NK${spec.nk||1}</div>
+        <div><b>Method:</b> ${ {'visual_machined':'Visual (Machined)','visual_cast':'Visual (As-Cast)','xray':'X-Ray / DR','ct':'CT Scan 3D'}[spec.method] || spec.method || '—' }</div>
       </div>
       ${imageSections}
     </section>`;
@@ -5913,9 +5898,19 @@ function renderVerdict(){
   const _exclZN = v.exclZoneCount || 0;
   const _exclMN = v.exclMaskedPores || 0;
   const _totalRaw = v.totalPoresBeforeExcl !== undefined ? v.totalPoresBeforeExcl : AP().length;
+  const _mLabel={'visual_machined':'Visual (Machined)','visual_cast':'Visual (As-Cast)','xray':'X-Ray / DR','ct':'CT Scan 3D'};
   const summRows=[
-    ['Part No.',lim.pno||'—'],['Zone',lim.zone||'—'],['Revision',lim.rev||'—'],
-    ['Inspector',lim.insp||'—'],['Method',{visual:'Visual/Optical',section:'Section Cut',xray:'X-Ray/DR',ct:'CT Scan 3D'}[lim.method]||'—'],
+    ['Part No.',lim.pno||'—'],['Zone / Feature',lim.zone||'—'],['Drawing Rev.',lim.rev||'—'],
+    ['Inspector',lim.insp||'—'],
+    ['Method',_mLabel[lim.method]||lim.method||'—'],
+    ['Limits — % / Φ / A / U', `≤${lim.pct||5}% / ≤${lim.phi||1.5}mm / A${lim.a||2} / U${lim.u||0}mm`],
+    ...(lim.phi_gas!=null||lim.pct_gas!=null?[['Gas limits', `${lim.phi_gas!=null?'Φ≤'+lim.phi_gas+'mm':'—'} / ${lim.pct_gas!=null?'%≤'+lim.pct_gas+'%':'—'}`]]:[] ),
+    ...(lim.phi_shrink!=null||lim.pct_shrink!=null?[['Shrink limits', `${lim.phi_shrink!=null?'Φ≤'+lim.phi_shrink+'mm':'—'} / ${lim.pct_shrink!=null?'%≤'+lim.pct_shrink+'%':'—'}`]]:[] ),
+    ['H / N zones', `H${lim.h||0} / N${lim.n||0}`],
+    ['HR / NR (outer ⅓)', (lim.hr||0)===2?'N/A':`HR${lim.hr||0} / NR${lim.nr||0}`],
+    ['HK / NK (central ⅓)', (lim.hk||0)===2?'N/A':`HK${lim.hk||1} / NK${lim.nk||1}`],
+    ['Wall thickness t', (S.imgMode?getEffectiveWallH().toFixed(1):lim.t)+' mm'],
+    ['Datum area', v.datumArea.toFixed(1)+' mm²'+(v.hasDatum?' (square □)':(S.imgMode?' (image)':''))],
     ['Total pores detected', _totalRaw],
     ...(_exclZN>0?[['Excl. zones applied', _exclZN+' zone'+((_exclZN>1)?'s':'')+' · −'+_exclMN+' pores masked']]:[] ),
     ['Pores evaluated', _totalRaw - _exclMN],
@@ -5923,8 +5918,6 @@ function renderVerdict(){
     ...(_exclZN>0 && v.netPct!=null ? [['Net porosity (excl. zone)', (typeof v.netPct==='number'?v.netPct.toFixed(2)+'%':'—')+' ('+(v.netPoreCount||0)+' pores)']]:[] ),
     ...(v.hasDatum?[['Pores in datum',v.poresInDatum]]:[] ),
     ['Effective pores',v.eff.length],
-    ['Wall thickness',(S.imgMode?getEffectiveWallH().toFixed(1):lim.t)+' mm'],
-    ['Datum area',v.datumArea.toFixed(1)+' mm²'+(v.hasDatum?' (square □)':(S.imgMode?' (image)':''))],
     ...(v.hasDatum&&v.full?[['Full image %',v.full.pct.toFixed(2)+'%  ('+v.full.poreCount+' pores)']]:[] ),
     ['Date',new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})],
   ];
@@ -5935,13 +5928,14 @@ function renderVerdict(){
     </div>`).join('');
 
   const MCAP={
-    visual:'<strong>Visual/Optical method:</strong> Single polished section at Rz=0. Direct measurement of %, Φ, U, A, H, N. HR/HK zone assignment requires precise sectioning at zone boundary — if section is not at exact t/3 boundary, zone data may be approximate. Destructive method.',
-    section:'<strong>Section Cut (CNC):</strong> Controlled machining exposes exact inspection plane. Zone boundaries (HR = outer t/3, HK = central t/3) must be scribed before inspection. Best zone accuracy for all HR/HK/NR/NK conditions. Full VW50093 compliance. Destructive method.',
+    visual_machined:'<strong>Visual / Machined section:</strong> Polished metallographic section cut at Rz=0. Direct measurement of %, Φ, U, A, H, N. HR/HK zone assignment requires precise sectioning at exact zone boundaries. Destructive method.',
+    visual_cast:'<strong>Visual / As-Cast surface:</strong> Direct visual inspection of the as-cast surface without machining. No Rz requirement. Best for general surface evaluation. HR/HK depth zones cannot be determined. Non-destructive.',
     xray:'<strong>X-Ray / Digital Radiography:</strong> Internal porosity visible but wall-zone depth (HR/HK/NR/NK) cannot be determined from 2D projection. Reported % is projected area estimate. If zone conditions are specified on the drawing, supplement with section cut or CT scan.',
     ct:'<strong>CT Scan 3D:</strong> All parameters fully determinable. HR/HK/NR/NK zones auto-assigned from 3D pore position. Pore volume, sphericity, and spatial coordinates available. Non-destructive — part survives for further testing. Gold standard for PPAP and new design qualification.'
   };
-  document.getElementById('v-method-title').textContent='Method Capability — '+{visual:'Visual',section:'Section Cut',xray:'X-Ray',ct:'CT Scan'}[lim.method];
-  document.getElementById('v-method-note').innerHTML=`<p style="font-size:12px;color:var(--muted);line-height:1.65">${MCAP[lim.method]||''}</p>`;
+  const _methodLabel={'visual_machined':'Visual (Machined)','visual_cast':'Visual (As-Cast)','xray':'X-Ray / DR','ct':'CT Scan 3D'};
+  document.getElementById('v-method-title').textContent='Method Capability — '+(_methodLabel[lim.method]||lim.method||'—');
+  document.getElementById('v-method-note').innerHTML=`<p style="font-size:12px;color:var(--muted);line-height:1.65">${MCAP[lim.method]||'No method recorded.'}</p>`;
 }
 
 // ═══════════════════════════════════════════════════
