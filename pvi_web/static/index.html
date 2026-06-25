@@ -1906,6 +1906,15 @@ select.fi option{background:var(--c2)}
       </div>
     </div>
 
+    <!-- ── Datum & Exclusion Analysis — dedicated section ── -->
+    <div class="card" id="v-datum-excl-section" style="display:none;margin-top:14px">
+      <div class="card-h">
+        <div class="card-title">□ Datum &amp; Exclusion Analysis</div>
+        <div id="v-datum-excl-badge" style="margin-left:auto;display:flex;gap:6px;align-items:center"></div>
+      </div>
+      <div class="card-body" id="v-datum-excl-body" style="padding:14px 16px"></div>
+    </div>
+
     <!-- Summary -->
     <div class="g2" style="gap:14px;margin-top:14px">
       <div class="card">
@@ -5641,25 +5650,60 @@ function buildImageReportSection(tab, page, spec, specIndex, imageIndex){
     </tr>`;
   }).join('') : '<tr><td colspan="7" class="detail">No pores recorded for this image.</td></tr>';
 
-  // Porosity Comparison HTML
-  let compareSection = '';
-  if(exclZonesCount > 0){
-    compareSection = `
-    <h4>Porosity Comparison (Exclusion Zones Applied)</h4>
-    <div style="display:flex;gap:12px;margin:10px 0;width:100%">
-      <div style="flex:1;border:1px solid #ddd;border-radius:6px;padding:10px 12px;background:#fafafa;text-align:center">
-        <div style="font-size:10px;font-weight:bold;color:#666;text-transform:uppercase">⬛ Complete Porosity (Raw)</div>
-        <div style="font-size:16px;font-weight:bold;color:#333;margin-top:3px">${rawData.pct.toFixed(2)}%</div>
-        <div style="font-size:9px;color:#888;margin-top:2px">${poresRaw.length} pores &middot; ${rawDatumBase.toFixed(2)} mm² datum</div>
+  // ── Datum & Exclusion Analysis section (PDF) ─────────────────────────────
+  const _datumType    = pageDatum ? 'Drawn □ (measured square)' : (metrics.calibrated ? 'Full image (calibrated)' : 'Spec default');
+  const _datumArea2   = evalDatum.toFixed(2);
+  const _rawDatumArea = rawDatumBase.toFixed(2);
+  const _hasExclOrDatum = exclZonesCount > 0 || !!pageDatum;
+
+  let datumExclSection = '';
+  if(_hasExclOrDatum){
+    const _limPct2    = spec.pct || 5;
+    const _rawOk2     = rawData.pct <= _limPct2;
+    const _netOk2     = data.pct   <= _limPct2;
+    const _delta2     = (rawData.pct - data.pct).toFixed(2);
+    const _deltaSign2 = (rawData.pct - data.pct) > 0 ? '▼' : (rawData.pct - data.pct) < 0 ? '▲' : '≈';
+    const _poresInDatum = pageDatum
+      ? page.pores.filter(p => p.x>=pageDatum.x && p.x<=(pageDatum.x+pageDatum.w) && p.y>=pageDatum.y && p.y<=(pageDatum.y+pageDatum.h)).length
+      : page.pores.length;
+    datumExclSection = `
+    <h4 style="border-left:3px solid #b45309;padding-left:8px;color:#b45309;margin-top:16px">□ Datum &amp; Exclusion Analysis</h4>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0 14px">
+      <!-- Datum Panel -->
+      <div style="border:1.5px solid #f59f00;border-radius:7px;padding:12px 14px;background:#fffbf0">
+        <div style="font-weight:800;font-size:10px;color:#b45309;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">□ Datum Zone</div>
+        <table style="width:100%;font-size:10px;border-collapse:collapse">
+          <tr><td style="color:#666;padding:3px 0;width:45%">Type</td><td style="font-weight:600;color:#111">${_datumType}</td></tr>
+          <tr><td style="color:#666;padding:3px 0">Datum Area</td><td style="font-weight:600;color:#111">${_datumArea2} mm²</td></tr>
+          ${pageDatum ? `<tr><td style="color:#666;padding:3px 0">Datum dimensions</td><td style="font-weight:600;color:#111">${pageDatum.w.toFixed(2)} × ${pageDatum.h.toFixed(2)} mm</td></tr>` : ''}
+          <tr><td style="color:#666;padding:3px 0">Pores in datum</td><td style="font-weight:600;color:#111">${_poresInDatum}</td></tr>
+          <tr><td style="color:#666;padding:3px 0">Porosity (datum)</td>
+            <td style="font-weight:800;font-size:13px;color:${_netOk2?'#087f5b':'#c92a2a'}">${data.pct.toFixed(2)}%
+              <span style="font-size:9px;font-weight:600;padding:1px 5px;border-radius:8px;background:${_netOk2?'#d3f9d8':'#ffe3e3'};color:${_netOk2?'#2f9e44':'#c92a2a'}">${_netOk2?'PASS':'FAIL'} ≤${_limPct2}%</span>
+            </td>
+          </tr>
+        </table>
       </div>
-      <div style="flex:1;border:1px solid #ddd;border-radius:6px;padding:10px 12px;background:#fafafa;text-align:center">
-        <div style="font-size:10px;font-weight:bold;color:#666;text-transform:uppercase">🚫 Net Porosity (Excl. Zone)</div>
-        <div style="font-size:16px;font-weight:bold;color:#087f5b;margin-top:3px">${data.pct.toFixed(2)}%</div>
-        <div style="font-size:9px;color:#888;margin-top:2px">${pores.length} pores &middot; ${evalDatum.toFixed(2)} mm² datum</div>
+      <!-- Exclusion Panel -->
+      <div style="border:1.5px solid ${exclZonesCount>0?'#fa5252':'#dee2e6'};border-radius:7px;padding:12px 14px;background:${exclZonesCount>0?'#fff5f5':'#f8f9fa'}">
+        <div style="font-weight:800;font-size:10px;color:${exclZonesCount>0?'#c92a2a':'#868e96'};text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">🚫 Exclusion Zones</div>
+        ${exclZonesCount > 0 ? `
+        <table style="width:100%;font-size:10px;border-collapse:collapse">
+          <tr><td style="color:#666;padding:3px 0;width:45%">Zones defined</td><td style="font-weight:600;color:#c92a2a">${exclZonesCount} zone${exclZonesCount!==1?'s':''}</td></tr>
+          <tr><td style="color:#666;padding:3px 0">Pores masked</td><td style="font-weight:600;color:#c92a2a">${_exclCount2} of ${_rawPoreCount}</td></tr>
+          <tr><td style="color:#666;padding:3px 0">Before (Raw %)</td>
+            <td style="font-weight:800;font-size:12px;color:${_rawOk2?'#087f5b':'#c92a2a'}">${rawData.pct.toFixed(2)}%
+              <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:${_rawOk2?'#d3f9d8':'#ffe3e3'};color:${_rawOk2?'#2f9e44':'#c92a2a'}">${_rawOk2?'PASS':'FAIL'}</span>
+            </td>
+          </tr>
+          <tr><td style="color:#666;padding:3px 0">After (Net %)</td>
+            <td style="font-weight:800;font-size:12px;color:${_netOk2?'#087f5b':'#c92a2a'}">${data.pct.toFixed(2)}%
+              <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:${_netOk2?'#d3f9d8':'#ffe3e3'};color:${_netOk2?'#2f9e44':'#c92a2a'}">${_netOk2?'PASS':'FAIL'}</span>
+            </td>
+          </tr>
+          <tr><td style="color:#666;padding:3px 0">Δ Impact</td><td style="font-weight:700;color:${(rawData.pct-data.pct)>0?'#087f5b':'#c92a2a'}">${_deltaSign2} ${Math.abs(rawData.pct - data.pct).toFixed(2)}% ${(rawData.pct-data.pct)>=0?'reduction':'increase'}</td></tr>
+        </table>` : `<div style="font-size:10px;color:#868e96;padding:16px 0;text-align:center">No exclusion zones defined for this image</div>`}
       </div>
-    </div>
-    <div style="font-size:10px;color:#555;margin-bottom:12px">
-      * <b>Exclusion zones defined:</b> ${exclZonesCount} zone(s) · <b>Pores excluded:</b> ${_exclCount2} of ${_rawPoreCount}
     </div>`;
   }
 
@@ -5673,10 +5717,10 @@ function buildImageReportSection(tab, page, spec, specIndex, imageIndex){
       <span><b>Datum:</b> ${evalDatum.toFixed(1)} mm² ${metrics.calibrated?'(image)':'(spec)'}</span>
       <span><b>Wall H:</b> ${metrics.wallH.toFixed(2)} mm</span>
     </div>
-    ${compareSection}
     ${imgUrl?`<div class="media-row"><div><img src="${imgUrl}" class="report-img"><div class="caption">Annotated pore overlay</div></div><div>${renderReportZoneMap(page,spec,metrics)}<div class="caption">Cross-section zone map</div></div></div>`:''}
     <h4>Compliance Checks</h4>
     <table><thead><tr><th>Parameter</th><th>Measured</th><th>Limit</th><th>Result</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table>
+    ${datumExclSection}
     <h4>Pore Data</h4>
     <table><thead><tr><th>#</th><th>Φ (mm)</th><th>X (mm)</th><th>Y (mm)<th>Zone</th><th>Type</th><th>Status</th></tr></thead><tbody>${poreRows}</tbody></table>
   </section>`;
@@ -5800,100 +5844,16 @@ function renderVerdict(){
     document.getElementById('v-checks').innerHTML=_renderChecksHTML(v.checks);
   }
 
-  // ── POROSITY COMPARISON — injected directly into checks section ──────────
-  // Always append when exclusion zones were applied (guaranteed to render)
-  (function(){
-    const _hasZ = (v.exclZoneCount||0) > 0 || v.hasExclZone;
-    if(!_hasZ) return;
-    const _vc = document.getElementById('v-checks');
-    if(!_vc) return;
-    const _rawP  = (typeof v.rawPct  === 'number') ? v.rawPct  : v.pct;
-    const _netP  = (typeof v.netPct  === 'number') ? v.netPct  : v.pct;
-    const _rawN  = (typeof v.rawPoreCount === 'number') ? v.rawPoreCount : (v.totalPoresBeforeExcl||0);
-    const _netN  = (typeof v.netPoreCount === 'number') ? v.netPoreCount : (_rawN - (v.exclMaskedPores||0));
-    const _rawD  = (typeof v.rawDatum === 'number') ? v.rawDatum.toFixed(1) : (v.datumArea||0).toFixed(1);
-    const _netD  = (typeof v.netDatum === 'number') ? v.netDatum.toFixed(1) : (v.datumArea||0).toFixed(1);
-    const _excZ  = v.exclZoneCount || 0;
-    const _excM  = v.exclMaskedPores || 0;
-    const _lim   = lim.pct || 5;
-    const _rawOk = _rawP <= _lim;
-    const _netOk = _netP <= _lim;
-    const div = document.createElement('div');
-    div.style.cssText='margin-top:16px;border-top:1px solid rgba(255,255,255,.07);padding-top:14px';
-    div.innerHTML=`
-      <div style="font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">
-        Porosity Comparison
-        <span style="margin-left:8px;font-size:9px;background:rgba(255,61,61,.12);color:var(--red);padding:2px 7px;border-radius:20px;font-weight:600;text-transform:none">
-          ${_excZ} excl. zone${_excZ>1?'s':''} &middot; ${_excM} pores masked
-        </span>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div style="border-radius:10px;padding:13px 15px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.09)">
-          <div style="font-size:8.5px;font-weight:800;color:var(--dim);letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px">Complete Image (Raw)</div>
-          <div style="font-size:8.5px;color:var(--dim);opacity:.7;margin-bottom:8px">All ${_rawN} pores &middot; No excl. zone &middot; Datum ${_rawD}&thinsp;mm&sup2;</div>
-          <div style="font-size:26px;font-weight:800;color:${_rawOk?'var(--g)':'var(--red)'};font-variant-numeric:tabular-nums;line-height:1">${_rawP.toFixed(2)}<span style="font-size:13px;font-weight:600">%</span></div>
-          <div style="margin-top:5px;display:inline-block;font-size:8.5px;padding:2px 7px;border-radius:10px;background:${_rawOk?'rgba(0,232,162,.1)':'rgba(255,61,61,.1)'};color:${_rawOk?'var(--g)':'var(--red)'}">
-            ${_rawOk?'&#x2713; Within limit':'&#x2715; EXCEEDS'} &le;${_lim}%
-          </div>
-        </div>
-        <div style="border-radius:10px;padding:13px 15px;background:rgba(255,61,61,.04);border:1px solid rgba(255,61,61,.15)">
-          <div style="font-size:8.5px;font-weight:800;color:var(--dim);letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px">Excl. Zone Porosity (Net)</div>
-          <div style="font-size:8.5px;color:var(--dim);opacity:.7;margin-bottom:8px">${_netN} pores evaluated &middot; ${_excM} masked &middot; Datum ${_netD}&thinsp;mm&sup2;</div>
-          <div style="font-size:26px;font-weight:800;color:${_netOk?'var(--g)':'var(--red)'};font-variant-numeric:tabular-nums;line-height:1">${_netP.toFixed(2)}<span style="font-size:13px;font-weight:600">%</span></div>
-          <div style="margin-top:5px;display:inline-block;font-size:8.5px;padding:2px 7px;border-radius:10px;background:${_netOk?'rgba(0,232,162,.1)':'rgba(255,61,61,.1)'};color:${_netOk?'var(--g)':'var(--red)'}">
-            ${_netOk?'&#x2713; Within limit':'&#x2715; EXCEEDS'} &le;${_lim}%
-          </div>
-        </div>
-      </div>`;
-    _vc.appendChild(div);
-  })();
-
-
   // Gauge always shows DATUM (primary) porosity
   drawGauge(v.pct, lim.pct||5);
   drawVerdictZone();
 
-  // ── Porosity Comparison Card (always shown when excl zones exist) ───────
+  // ── Hide old porosity-compare card (replaced by dedicated section below) ──
   const _compCard = document.getElementById('v-porosity-compare');
-  if(_compCard){
-    const _hasZ = !!(v.hasExclZone) || (v.exclZoneCount || 0) > 0;
-    if(_hasZ){
-      const _rawP  = (typeof v.rawPct  === 'number') ? v.rawPct  : v.pct;
-      const _netP  = (typeof v.netPct  === 'number') ? v.netPct  : v.pct;
-      const _rawN  = (typeof v.rawPoreCount === 'number') ? v.rawPoreCount : (v.totalPoresBeforeExcl||0);
-      const _netN  = (typeof v.netPoreCount === 'number') ? v.netPoreCount : (v.totalPoresBeforeExcl||0) - (v.exclMaskedPores||0);
-      const _rawD  = (typeof v.rawDatum === 'number') ? v.rawDatum.toFixed(1) : (v.datumArea||0).toFixed(1);
-      const _netD  = (typeof v.netDatum === 'number') ? v.netDatum.toFixed(1) : (v.datumArea||0).toFixed(1);
-      const _excZ  = v.exclZoneCount || 0;
-      const _excM  = v.exclMaskedPores || 0;
-      const _limPct = lim.pct || 5;
-      const _rawOk = _rawP <= _limPct;
-      const _netOk = _netP <= _limPct;
-      _compCard.style.display = 'block';
-      _compCard.innerHTML = `
-        <div style="font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;gap:8px">
-          <span style="color:var(--red)">&#x1f6ab;</span> Porosity Comparison
-          <span style="font-size:9px;background:rgba(255,61,61,.12);color:var(--red);padding:2px 8px;border-radius:20px;font-weight:600">${_excZ} Excl. Zone${_excZ>1?'s':''} &middot; ${_excM} pores masked</span>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div style="border-radius:10px;padding:14px 16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09)">
-            <div style="font-size:9px;font-weight:800;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px">&#x2b1b; Complete Porosity (Raw)</div>
-            <div style="font-size:9px;color:var(--dim);margin-bottom:10px">All ${_rawN} pores &middot; No excl. zone &middot; ${_rawD}&thinsp;mm&sup2;</div>
-            <div style="font-size:28px;font-weight:800;color:${_rawOk?'var(--g)':'var(--red)'};font-variant-numeric:tabular-nums;line-height:1.1">${_rawP.toFixed(2)}<span style="font-size:14px">%</span></div>
-            <div style="margin-top:6px;font-size:9px;padding:3px 8px;border-radius:12px;display:inline-block;background:${_rawOk?'rgba(0,232,162,.1)':'rgba(255,61,61,.1)'};color:${_rawOk?'var(--g)':'var(--red)'}">${_rawOk?'&#x2713; Within':'&#x2715; EXCEEDS'} &le;${_limPct}%</div>
-          </div>
-          <div style="border-radius:10px;padding:14px 16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09)">
-            <div style="font-size:9px;font-weight:800;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px">&#x1f6ab; Net Porosity (Excl. Zone)</div>
-            <div style="font-size:9px;color:var(--dim);margin-bottom:10px">${_netN} pores evaluated &middot; ${_excM} masked &middot; ${_netD}&thinsp;mm&sup2;</div>
-            <div style="font-size:28px;font-weight:800;color:${_netOk?'var(--g)':'var(--red)'};font-variant-numeric:tabular-nums;line-height:1.1">${_netP.toFixed(2)}<span style="font-size:14px">%</span></div>
-            <div style="margin-top:6px;font-size:9px;padding:3px 8px;border-radius:12px;display:inline-block;background:${_netOk?'rgba(0,232,162,.1)':'rgba(255,61,61,.1)'};color:${_netOk?'var(--g)':'var(--red)'}">${_netOk?'&#x2713; Within':'&#x2715; EXCEEDS'} &le;${_limPct}%</div>
-          </div>
-        </div>`;
-    } else {
-      _compCard.style.display = 'none';
-      _compCard.innerHTML = '';
-    }
-  }
+  if(_compCard){ _compCard.style.display='none'; _compCard.innerHTML=''; }
+
+  // ── Render dedicated Datum & Exclusion Analysis section ───────────────────
+  _renderDatumExclSection(v, lim);
 
   // Summary
   const _exclZN = v.exclZoneCount || 0;
@@ -5911,21 +5871,14 @@ function renderVerdict(){
     ['HR / NR (outer ⅓)', (lim.hr||0)===2?'N/A':`HR${lim.hr||0} / NR${lim.nr||0}`],
     ['HK / NK (central ⅓)', (lim.hk||0)===2?'N/A':`HK${lim.hk||1} / NK${lim.nk||1}`],
     ['Wall thickness t', (S.imgMode?getEffectiveWallH().toFixed(1):lim.t)+' mm'],
-    ['Datum area', v.datumArea.toFixed(1)+' mm²'+(v.hasDatum?' (square □)':(S.imgMode?' (image)':''))],
     ['Total pores detected', _totalRaw],
-    ...(_exclZN>0?[['Excl. zones applied', _exclZN+' zone'+((_exclZN>1)?'s':'')+' · −'+_exclMN+' pores masked']]:[] ),
-    ['Pores evaluated', _totalRaw - _exclMN],
-    ...(_exclZN>0 && v.rawPct!=null ? [['Complete porosity (raw)', (typeof v.rawPct==='number'?v.rawPct.toFixed(2)+'%':'—')+' ('+(_totalRaw)+' pores)']]:[] ),
-    ...(_exclZN>0 && v.netPct!=null ? [['Net porosity (excl. zone)', (typeof v.netPct==='number'?v.netPct.toFixed(2)+'%':'—')+' ('+(v.netPoreCount||0)+' pores)']]:[] ),
-    ...(v.hasDatum?[['Pores in datum',v.poresInDatum]]:[] ),
     ['Effective pores',v.eff.length],
-    ...(v.hasDatum&&v.full?[['Full image %',v.full.pct.toFixed(2)+'%  ('+v.full.poreCount+' pores)']]:[] ),
     ['Date',new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})],
   ];
   document.getElementById('v-summary').innerHTML=summRows.map(([l,val])=>
     `<div class="chk-row" style="grid-template-columns:130px 1fr;padding:6px 0">
-      <div style="font-size:11px;color:${l.startsWith('Excl')?'var(--red)':'var(--muted)'}">${l}</div>
-      <div style="font-size:11px;font-weight:600;color:${l.startsWith('Excl')?'var(--red)':'var(--tx)'};font-variant-numeric:tabular-nums">${val}</div>
+      <div style="font-size:11px;color:var(--muted)">${l}</div>
+      <div style="font-size:11px;font-weight:600;color:var(--tx);font-variant-numeric:tabular-nums">${val}</div>
     </div>`).join('');
 
   const MCAP={
@@ -5937,6 +5890,146 @@ function renderVerdict(){
   const _methodLabel={'visual_machined':'Visual (Machined)','visual_cast':'Visual (As-Cast)','xray':'X-Ray / DR','ct':'CT Scan 3D'};
   document.getElementById('v-method-title').textContent='Method Capability — '+(_methodLabel[lim.method]||lim.method||'—');
   document.getElementById('v-method-note').innerHTML=`<p style="font-size:12px;color:var(--muted);line-height:1.65">${MCAP[lim.method]||'No method recorded.'}</p>`;
+}
+
+// ═══════════════════════════════════════════════════
+// DATUM & EXCLUSION ZONE — DEDICATED SECTION RENDERER
+// ═══════════════════════════════════════════════════
+function _renderDatumExclSection(v, lim){
+  const sec  = document.getElementById('v-datum-excl-section');
+  const body = document.getElementById('v-datum-excl-body');
+  const badge= document.getElementById('v-datum-excl-badge');
+  if(!sec || !body) return;
+
+  const hasDatum = v.hasDatum;
+  const hasExcl  = (v.exclZoneCount||0) > 0 || v.hasExclZone;
+
+  // Hide section entirely when nothing is active
+  if(!hasDatum && !hasExcl){
+    sec.style.display='none';
+    return;
+  }
+  sec.style.display='block';
+
+  // ── Badge pills ──────────────────────────────────────────────────────────
+  const badgeParts=[];
+  if(hasDatum) badgeParts.push(`<span style="font-size:9px;padding:2px 8px;border-radius:12px;background:rgba(255,173,0,.15);color:var(--amb);font-weight:700;border:1px solid rgba(255,173,0,.3)">□ Datum active</span>`);
+  if(hasExcl)  badgeParts.push(`<span style="font-size:9px;padding:2px 8px;border-radius:12px;background:rgba(239,68,68,.12);color:#ef4444;font-weight:700;border:1px solid rgba(239,68,68,.25)">🚫 ${v.exclZoneCount||0} Excl. Zone${(v.exclZoneCount||0)!==1?'s':''}</span>`);
+  badge.innerHTML = badgeParts.join('');
+
+  // ── Shared values ────────────────────────────────────────────────────────
+  const limPct   = lim.pct || 5;
+  const rawPct   = typeof v.rawPct  ==='number' ? v.rawPct  : v.pct;
+  const netPct   = typeof v.netPct  ==='number' ? v.netPct  : v.pct;
+  const rawN     = typeof v.rawPoreCount==='number' ? v.rawPoreCount : (v.totalPoresBeforeExcl||0);
+  const netN     = typeof v.netPoreCount==='number' ? v.netPoreCount : rawN-(v.exclMaskedPores||0);
+  const rawD     = typeof v.rawDatum==='number'  ? v.rawDatum.toFixed(2) : (v.datumArea||0).toFixed(2);
+  const netD     = typeof v.netDatum==='number'  ? v.netDatum.toFixed(2) : (v.datumArea||0).toFixed(2);
+  const exclZN   = v.exclZoneCount||0;
+  const exclMN   = v.exclMaskedPores||0;
+  const datumArea= v.datumArea||0;
+  const datumType= hasDatum ? 'Drawn □ (measured)' : 'Full image (calibrated)';
+
+  // Helper: status chip
+  const chip = (ok, lim) => `<span style="display:inline-block;font-size:9px;padding:2px 8px;border-radius:10px;background:${ok?'rgba(0,232,162,.12)':'rgba(255,61,61,.12)'};color:${ok?'var(--g)':'var(--red)'};font-weight:700">${ok?'✓ ≤':'✗ >'} ${lim}%</span>`;
+
+  // ── Left panel: DATUM ────────────────────────────────────────────────────
+  const datumPanel = `
+    <div style="background:rgba(255,173,0,.05);border:1px solid rgba(255,173,0,.2);border-radius:10px;padding:16px">
+      <div style="font-size:10px;font-weight:800;color:var(--amb);letter-spacing:.07em;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+        <span style="font-size:14px">□</span> Datum Zone
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div>
+          <div style="font-size:9px;color:var(--dim);margin-bottom:2px">Type</div>
+          <div style="font-size:11px;font-weight:600;color:var(--tx)">${datumType}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--dim);margin-bottom:2px">Area</div>
+          <div style="font-size:11px;font-weight:600;color:var(--tx)">${datumArea.toFixed(2)} mm²</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--dim);margin-bottom:2px">Pores in Datum</div>
+          <div style="font-size:11px;font-weight:600;color:var(--tx)">${hasDatum ? (v.poresInDatum||0) : netN}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--dim);margin-bottom:2px">Full Image</div>
+          <div style="font-size:11px;font-weight:600;color:var(--tx)">${hasDatum&&v.full ? v.full.poreCount+' pores' : '—'}</div>
+        </div>
+      </div>
+      <!-- Porosity in datum -->
+      <div style="border-top:1px solid rgba(255,173,0,.15);padding-top:10px">
+        <div style="font-size:9px;color:var(--dim);margin-bottom:4px">Porosity (Datum zone)</div>
+        <div style="font-size:28px;font-weight:800;color:${v.pct<=limPct?'var(--g)':'var(--red)'};font-variant-numeric:tabular-nums;line-height:1">${v.pct.toFixed(2)}<span style="font-size:14px">%</span></div>
+        <div style="margin-top:5px">${chip(v.pct<=limPct, limPct)}</div>
+      </div>
+      ${hasDatum&&v.full ? `
+      <div style="border-top:1px solid rgba(255,173,0,.15);padding-top:10px;margin-top:10px">
+        <div style="font-size:9px;color:var(--dim);margin-bottom:4px">Porosity (Full image)</div>
+        <div style="font-size:22px;font-weight:800;color:${v.full.pct<=limPct?'var(--g)':'var(--red)'};font-variant-numeric:tabular-nums;line-height:1">${v.full.pct.toFixed(2)}<span style="font-size:12px">%</span></div>
+        <div style="margin-top:5px">${chip(v.full.pct<=limPct, limPct)}</div>
+      </div>` : ''}
+    </div>`;
+
+  // ── Right panel: EXCLUSION ZONES ─────────────────────────────────────────
+  let exclPanel = '';
+  if(hasExcl){
+    const rawOk = rawPct <= limPct;
+    const netOk = netPct <= limPct;
+    const delta  = (rawPct - netPct).toFixed(2);
+    const deltaSign = (rawPct - netPct) > 0 ? '▼' : (rawPct - netPct) < 0 ? '▲' : '≈';
+    const deltaColor = (rawPct - netPct) > 0 ? 'var(--g)' : 'var(--red)';
+    exclPanel = `
+    <div style="background:rgba(239,68,68,.04);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:16px">
+      <div style="font-size:10px;font-weight:800;color:#ef4444;letter-spacing:.07em;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+        <span style="font-size:14px">🚫</span> Exclusion Zones
+        <span style="margin-left:auto;font-size:9px;background:rgba(239,68,68,.12);color:#ef4444;padding:2px 8px;border-radius:10px;font-weight:700">${exclZN} zone${exclZN!==1?'s':''}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div>
+          <div style="font-size:9px;color:var(--dim);margin-bottom:2px">Pores Masked</div>
+          <div style="font-size:20px;font-weight:800;color:#ef4444;line-height:1">${exclMN}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--dim);margin-bottom:2px">Pores Evaluated</div>
+          <div style="font-size:20px;font-weight:800;color:var(--tx);line-height:1">${netN}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--dim);margin-bottom:2px">Total (Before Excl.)</div>
+          <div style="font-size:11px;font-weight:600;color:var(--tx)">${rawN} pores · ${rawD} mm²</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--dim);margin-bottom:2px">After Excl.</div>
+          <div style="font-size:11px;font-weight:600;color:var(--tx)">${netN} pores · ${netD} mm²</div>
+        </div>
+      </div>
+      <!-- Before / After porosity -->
+      <div style="border-top:1px solid rgba(239,68,68,.15);padding-top:10px;display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center">
+        <div style="text-align:center">
+          <div style="font-size:8.5px;color:var(--dim);text-transform:uppercase;font-weight:700;margin-bottom:4px">Before (Raw)</div>
+          <div style="font-size:22px;font-weight:800;color:${rawOk?'var(--g)':'var(--red)'};font-variant-numeric:tabular-nums;line-height:1">${rawPct.toFixed(2)}<span style="font-size:12px">%</span></div>
+          <div style="margin-top:4px">${chip(rawOk, limPct)}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:18px;color:${deltaColor};font-weight:700">${deltaSign}</div>
+          <div style="font-size:9px;color:${deltaColor};font-weight:700">${delta}%</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:8.5px;color:var(--dim);text-transform:uppercase;font-weight:700;margin-bottom:4px">After (Net)</div>
+          <div style="font-size:22px;font-weight:800;color:${netOk?'var(--g)':'var(--red)'};font-variant-numeric:tabular-nums;line-height:1">${netPct.toFixed(2)}<span style="font-size:12px">%</span></div>
+          <div style="margin-top:4px">${chip(netOk, limPct)}</div>
+        </div>
+      </div>
+    </div>`;
+  } else {
+    exclPanel = `
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:120px">
+      <div style="font-size:22px;opacity:.3">🚫</div>
+      <div style="font-size:11px;color:var(--dim);font-weight:500;text-align:center">No exclusion zones defined<br><span style="font-size:10px;opacity:.7">Use the 🚫 Excl. Rect / Circle tools in the toolbar</span></div>
+    </div>`;
+  }
+
+  body.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">${datumPanel}${exclPanel}</div>`;
 }
 
 // ═══════════════════════════════════════════════════
