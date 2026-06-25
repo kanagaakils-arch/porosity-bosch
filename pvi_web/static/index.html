@@ -907,9 +907,6 @@ select.fi option{background:var(--c2)}
         <span class="nb-n">03</span><span class="nb-txt">Verdict</span>
         <span class="nb-badge nbb-idle" id="bve">PENDING</span>
       </button>
-      <button class="nb" id="nb-presets" onclick="nav('presets')">
-        <span class="nb-n">04</span><span class="nb-txt">Custom Presets</span>
-      </button>
       <div class="sb-section-lbl">Reference</div>
       <button class="nb" id="nb-ref" onclick="nav('ref')">
         <span class="nb-n">≡</span><span class="nb-txt">Quick Ref</span>
@@ -1017,14 +1014,46 @@ select.fi option{background:var(--c2)}
     </div>
   </div>
   <div class="spec-scroll scrollable" id="spec-scroll">
-    <!-- Presets moved to Custom Presets tab -->
+    <!-- Specification Presets Card (Full Width at the Top) -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-h">
+        <div class="card-title">Specification Presets</div>
+      </div>
+      <div class="card-body" style="display:flex;gap:20px;align-items:start;flex-wrap:wrap">
+        <div style="flex:1;min-width:280px">
+          <div style="font-size:10px;font-weight:700;color:var(--dim);margin-bottom:6px;letter-spacing:0.5px">STANDARD PRESETS</div>
+          <div class="preset-row" style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn btn-sec btn-sm" onclick="applyPreset('seal')" style="padding:4px 8px;font-size:11px">◈ Sealing Face</button>
+            <button class="btn btn-sec btn-sm" onclick="applyPreset('struct')" style="padding:4px 8px;font-size:11px">◈ Structural Wall</button>
+            <button class="btn btn-sec btn-sm" onclick="applyPreset('bearing')" style="padding:4px 8px;font-size:11px">◈ Bearing Bore</button>
+            <button class="btn btn-sec btn-sm" onclick="applyPreset('jacket')" style="padding:4px 8px;font-size:11px">◈ Water Jacket</button>
+          </div>
+        </div>
+        <div style="flex:1;min-width:280px">
+          <div style="font-size:10px;font-weight:700;color:var(--dim);margin-bottom:6px;letter-spacing:0.5px">USER LIBRARY</div>
+          <div id="user-presets-list-spec" style="display:flex;gap:6px;flex-wrap:wrap;">
+            <div style="font-size:10px;color:var(--dim);">No custom presets saved.</div>
+          </div>
+        </div>
+        <div style="min-width:280px;display:flex;gap:6px;align-items:center;border-left:1px dashed var(--bd2);padding-left:20px;">
+          <div style="display:flex;flex-direction:column;gap:4px;flex:1">
+            <div style="font-size:10px;font-weight:700;color:var(--dim);letter-spacing:0.5px">SAVE CURRENT SPEC AS PRESET</div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="text" class="fi" id="lib-name-spec" placeholder="New Preset Name" style="font-size:11px;padding:5px 8px;flex:1">
+              <button class="btn btn-pri btn-sm" onclick="saveCustomPresetSpec()" style="padding:5px 10px;font-size:11px;white-space:nowrap">Save Active Spec</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="g2" style="gap:16px;align-items:start">
       <div class="gcol">
         <!-- Part ID -->
-        <div class="card">
+        <div class="card" style="margin-bottom:12px;">
           <div class="card-h"><div class="card-title">Part Identification</div></div>
           <div class="card-body">
-            <div class="g2">
+            <div class="g2" style="grid-template-columns:1fr 1fr;">
               <div class="fi-item"><div class="fl">Part Number</div><input class="fi" id="sp-pno" placeholder="e.g. HSG-STAT-001" type="text"></div>
               <div class="fi-item"><div class="fl">Zone / Feature</div><input class="fi" id="sp-zone" placeholder="e.g. Sealing groove A" type="text"></div>
               <div class="fi-item"><div class="fl">Drawing Revision</div><input class="fi" id="sp-rev" placeholder="Rev C" type="text"></div>
@@ -1033,78 +1062,11 @@ select.fi option{background:var(--c2)}
           </div>
         </div>
 
-      </div>
-      <div class="gcol">
-        <!-- Limits -->
-        <div class="card">
-          <div class="card-h"><div class="card-title">Acceptance Limits</div></div>
-          <div class="card-body">
-            <div class="g2">
-              <div class="fi-item">
-                <div class="fl">Max pore area (%)</div>
-                <div class="fi-wrap"><input class="fi" id="sp-pct" type="number" value="5" min="1" step="1"><span class="fi-unit">%</span></div>
-                <div class="fh">Min 1% · ≤4: integer · ≥5: step 5</div>
-              </div>
-              <div class="fi-item">
-                <div class="fl">Max pore Φ</div>
-                <div class="fi-wrap"><input class="fi" id="sp-phi" type="number" value="1.5" min="0.5" step="0.5"><span class="fi-unit">mm</span></div>
-                <div class="fh">Steps of 0.5 mm · min 0.5 mm</div>
-              </div>
-              <div class="fi-item">
-                <div class="fl">Spacing coeff. A</div>
-                <div class="fi-wrap"><input class="fi" id="sp-a" type="number" value="2" min="1" step="1"></div>
-                <div class="fh">Min gap = A × Φ_smaller</div>
-              </div>
-              <!-- Type-specific limits -->
-              <div class="fi-item" style="grid-column:1/-1;border-top:1px dashed var(--bd2);padding-top:8px;margin-top:2px">
-                <div class="fl" style="font-weight:600;color:var(--tx)">Gas pore limits <span style="font-weight:400;color:var(--dim)">(leave blank = use global)</span></div>
-              </div>
-              <div class="fi-item">
-                <div class="fl">Gas max Φ</div>
-                <div class="fi-wrap"><input class="fi" id="sp-phi-gas" type="number" min="0.1" step="0.5" placeholder="—"><span class="fi-unit">mm</span></div>
-                <div class="fh">Override max Φ for gas pores only</div>
-              </div>
-              <div class="fi-item">
-                <div class="fl">Gas max area</div>
-                <div class="fi-wrap"><input class="fi" id="sp-pct-gas" type="number" min="0.1" step="1" placeholder="—"><span class="fi-unit">%</span></div>
-                <div class="fh">Override porosity % for gas pores only</div>
-              </div>
-              <div class="fi-item" style="grid-column:1/-1">
-                <div class="fl" style="font-weight:600;color:var(--tx)">Shrink pore limits</div>
-              </div>
-              <div class="fi-item">
-                <div class="fl">Shrink max Φ</div>
-                <div class="fi-wrap"><input class="fi" id="sp-phi-shrink" type="number" min="0.1" step="0.5" placeholder="—"><span class="fi-unit">mm</span></div>
-                <div class="fh">Override max Φ for shrinkage pores only</div>
-              </div>
-              <div class="fi-item">
-                <div class="fl">Shrink max area</div>
-                <div class="fi-wrap"><input class="fi" id="sp-pct-shrink" type="number" min="0.1" step="1" placeholder="—"><span class="fi-unit">%</span></div>
-                <div class="fh">Override porosity % for shrinkage pores only</div>
-              </div>
-              <div class="fi-item">
-                <div class="fl">Ignore threshold U</div>
-                <div class="fi-wrap"><input class="fi" id="sp-u" type="number" value="0.2" min="0" step="0.1"><span class="fi-unit">mm</span></div>
-                <div class="fh">0 = not specified · machined only</div>
-              </div>
-              <div class="fi-item">
-                <div class="fl">Wall thickness t</div>
-                <div class="fi-wrap"><input class="fi" id="sp-t" type="number" value="6" min="1" step="0.5"><span class="fi-unit">mm</span></div>
-                <div class="fh">HR = outer t/3 · HK = central t/3</div>
-              </div>
-              <div class="fi-item">
-                <div class="fl">Datum area</div>
-                <div class="fi-wrap"><input class="fi" id="sp-datum" type="number" value="100" min="1" step="1"><span class="fi-unit">mm²</span></div>
-                <div class="fh">Reference □/△/○ from drawing</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- H/N conditions -->
-        <div class="card">
+        <!-- Zone Conditions -->
+        <div class="card" style="margin-bottom:12px;">
           <div class="card-h"><div class="card-title">Zone Conditions — H · HR · HK · N · NR · NK</div></div>
           <div class="card-body">
-            <div class="g2">
+            <div class="g2" style="grid-template-columns:1fr 1fr;">
               <div class="fi-item">
                 <div class="fl">H (full surface)</div>
                 <div class="tgl-group" id="tg-h">
@@ -1150,6 +1112,80 @@ select.fi option{background:var(--c2)}
                   <div class="tgl-opt on" onclick="tog('tg-nk',1,this)">NK1</div>
                   <div class="tgl-opt" onclick="tog('tg-nk',2,this)">N/A</div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Type-Specific Overrides -->
+        <div class="card">
+          <div class="card-h"><div class="card-title">Type-Specific Overrides</div></div>
+          <div class="card-body">
+            <div style="font-size:10px;font-weight:700;color:var(--dim);margin-bottom:8px;letter-spacing:0.5px">GAS PORE LIMITS (LEAVE BLANK = USE GLOBAL)</div>
+            <div class="g2" style="grid-template-columns:1fr 1fr;margin-bottom:12px;">
+              <div class="fi-item">
+                <div class="fl">Gas max Φ</div>
+                <div class="fi-wrap"><input class="fi" id="sp-phi-gas" type="number" min="0.1" step="0.5" placeholder="—"><span class="fi-unit">mm</span></div>
+                <div class="fh">Override max Φ for gas pores only</div>
+              </div>
+              <div class="fi-item">
+                <div class="fl">Gas max area</div>
+                <div class="fi-wrap"><input class="fi" id="sp-pct-gas" type="number" min="0.1" step="1" placeholder="—"><span class="fi-unit">%</span></div>
+                <div class="fh">Override porosity % for gas pores only</div>
+              </div>
+            </div>
+            <div style="font-size:10px;font-weight:700;color:var(--dim);margin-bottom:8px;letter-spacing:0.5px">SHRINKAGE PORE LIMITS</div>
+            <div class="g2" style="grid-template-columns:1fr 1fr;">
+              <div class="fi-item">
+                <div class="fl">Shrink max Φ</div>
+                <div class="fi-wrap"><input class="fi" id="sp-phi-shrink" type="number" min="0.1" step="0.5" placeholder="—"><span class="fi-unit">mm</span></div>
+                <div class="fh">Override max Φ for shrinkage pores only</div>
+              </div>
+              <div class="fi-item">
+                <div class="fl">Shrink max area</div>
+                <div class="fi-wrap"><input class="fi" id="sp-pct-shrink" type="number" min="0.1" step="1" placeholder="—"><span class="fi-unit">%</span></div>
+                <div class="fh">Override porosity % for shrinkage pores only</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gcol">
+        <!-- Limits -->
+        <div class="card">
+          <div class="card-h"><div class="card-title">Acceptance Limits</div></div>
+          <div class="card-body">
+            <div class="g2" style="grid-template-columns:1fr 1fr;gap:12px 16px;">
+              <div class="fi-item">
+                <div class="fl">Max pore area (%)</div>
+                <div class="fi-wrap"><input class="fi" id="sp-pct" type="number" value="5" min="1" step="1"><span class="fi-unit">%</span></div>
+                <div class="fh">Min 1% · ≤4: integer · ≥5: step 5</div>
+              </div>
+              <div class="fi-item">
+                <div class="fl">Max pore Φ</div>
+                <div class="fi-wrap"><input class="fi" id="sp-phi" type="number" value="1.5" min="0.5" step="0.5"><span class="fi-unit">mm</span></div>
+                <div class="fh">Steps of 0.5 mm · min 0.5 mm</div>
+              </div>
+              <div class="fi-item">
+                <div class="fl">Spacing coeff. A</div>
+                <div class="fi-wrap"><input class="fi" id="sp-a" type="number" value="2" min="1" step="1"></div>
+                <div class="fh">Min gap = A × Φ_smaller</div>
+              </div>
+              <div class="fi-item">
+                <div class="fl">Ignore threshold U</div>
+                <div class="fi-wrap"><input class="fi" id="sp-u" type="number" value="0.2" min="0" step="0.1"><span class="fi-unit">mm</span></div>
+                <div class="fh">0 = not specified · machined only</div>
+              </div>
+              <div class="fi-item">
+                <div class="fl">Wall thickness t</div>
+                <div class="fi-wrap"><input class="fi" id="sp-t" type="number" value="6" min="1" step="0.5"><span class="fi-unit">mm</span></div>
+                <div class="fh">HR = outer t/3 · HK = central t/3</div>
+              </div>
+              <div class="fi-item">
+                <div class="fl">Datum area</div>
+                <div class="fi-wrap"><input class="fi" id="sp-datum" type="number" value="100" min="1" step="1"><span class="fi-unit">mm²</span></div>
+                <div class="fh">Reference □/△/○ from drawing</div>
               </div>
             </div>
           </div>
@@ -1569,7 +1605,6 @@ select.fi option{background:var(--c2)}
     <div class="tb-group" style="margin-left:auto">
       <button class="btn-hz" onclick="undoPore()" id="btn-undo" disabled="" title="Undo last action">↩ Undo</button>
       <button class="btn-hz" onclick="redoPore()" id="btn-redo" disabled="" title="Redo">↪ Redo</button>
-      <button class="btn-hz" onclick="loadSamplePores()" title="Load sample pore set for testing">⊕ Sample</button>
       <button class="btn-hz" onclick="clearAllPores()" style="color:#ef4444" title="Clear all pores">✕ Clear</button>
     </div>
   </div>
@@ -1929,55 +1964,7 @@ select.fi option{background:var(--c2)}
   </div>
 </div>
 
-<!-- ─── PRESETS PAGE ─── -->
-<div class="page" id="pg-presets" style="display: none; opacity: 0; pointer-events: none;">
-  <div class="ph">
-    <div class="ph-tag">04</div><div class="ph-divider"></div>
-    <div class="ph-title">Custom Presets</div>
-    <div class="ph-sub">Load standard limits quickly</div>
-  </div>
-  <div class="spec-scroll scrollable">
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-h"><div class="card-title">Quick Standard Presets</div></div>
-      <div class="card-body">
-        
-      <div class="preset-row">
-        <div class="preset-chip" onclick="nav('spec'); setTimeout(() =&gt; applyPreset('seal'), 100)">◈ Sealing face</div>
-        <div class="preset-chip" onclick="nav('spec'); setTimeout(() =&gt; applyPreset('struct'), 100)">◈ Structural wall</div>
-        <div class="preset-chip" onclick="nav('spec'); setTimeout(() =&gt; applyPreset('bearing'), 100)">◈ Bearing bore</div>
-        <div class="preset-chip" onclick="nav('spec'); setTimeout(() =&gt; applyPreset('jacket'), 100)">◈ Water jacket</div>
-      </div>
-    
-      </div>
-    </div>
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-h"><div class="card-title">Create New Preset in Library</div></div>
-      <div class="card-body">
-        <div style="display:flex;gap:8px;margin-bottom:12px;">
-          <input type="text" class="fi" id="lib-name" placeholder="Preset Name (e.g. Client B Specs)" style="flex:1">
-          <button class="btn btn-sec btn-sm" onclick="saveCustomPreset()">Save Active Spec</button>
-        </div>
-        
-        <div class="g2" style="background:var(--c0);padding:10px;border-radius:var(--r);border:1px solid var(--bd);">
-          <div class="fi-item"><div class="fl">Max pore area (%)</div><input class="fi" id="lib-pct" type="number" value="5"></div>
-          <div class="fi-item"><div class="fl">Max pore Φ (mm)</div><input class="fi" id="lib-phi" type="number" value="1.5"></div>
-          <div class="fi-item"><div class="fl">Spacing coeff. A</div><input class="fi" id="lib-a" type="number" value="2"></div>
-          <div class="fi-item"><div class="fl">Ignore threshold U</div><input class="fi" id="lib-u" type="number" value="0.2"></div>
-          <div class="fi-item"><div class="fl">Wall thickness t</div><input class="fi" id="lib-t" type="number" value="6"></div>
-          <div class="fi-item"><div class="fl">Datum area</div><input class="fi" id="lib-datum" type="number" value="100"></div>
-        </div>
-        <button class="btn btn-pri" onclick="saveLibraryPreset()" style="margin-top:12px;width:100%">Add to Library</button>
-      </div>
-    </div>
 
-    <div class="card">
-      <div class="card-h"><div class="card-title">User Presets Library</div></div>
-      <div class="card-body">
-        <div id="user-presets-list" style="display:flex;flex-direction:column;gap:8px;"><div style="font-size:11px;color:var(--dim);">No custom presets saved.</div></div>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- ─── QUICK REF PAGE ─── -->
 <div class="page" id="pg-ref" style="display: none; opacity: 0; pointer-events: none;">
@@ -2847,18 +2834,18 @@ const PRESETS = {
 };
 let customPresets = JSON.parse(localStorage.getItem('pvi_custom_presets') || '{}');
 
-function saveCustomPreset() {
-  const nameInput = document.getElementById('lib-name');
-  const name = nameInput.value.trim();
+function saveCustomPresetSpec() {
+  const nameInput = document.getElementById('lib-name-spec');
+  const name = nameInput ? nameInput.value.trim() : '';
   if (!name) return;
   
   const p = {
-    pct: +document.getElementById('sp-pct').value||5,
-    phi: +document.getElementById('sp-phi').value||1.5,
-    a:   +document.getElementById('sp-a').value||2,
-    u:   +document.getElementById('sp-u').value||0.2,
-    t:   +document.getElementById('sp-t').value||6,
-    datum: +document.getElementById('sp-datum').value||100,
+    pct: document.getElementById('sp-pct').value !== '' ? +document.getElementById('sp-pct').value : 5,
+    phi: document.getElementById('sp-phi').value !== '' ? +document.getElementById('sp-phi').value : 1.5,
+    a:   document.getElementById('sp-a').value !== '' ? +document.getElementById('sp-a').value : 2,
+    u:   document.getElementById('sp-u').value !== '' ? +document.getElementById('sp-u').value : 0.2,
+    t:   document.getElementById('sp-t').value !== '' ? +document.getElementById('sp-t').value : 6,
+    datum: document.getElementById('sp-datum').value !== '' ? +document.getElementById('sp-datum').value : 100,
     phi_gas:    document.getElementById('sp-phi-gas')?.value    ? +document.getElementById('sp-phi-gas').value    : null,
     phi_shrink: document.getElementById('sp-phi-shrink')?.value ? +document.getElementById('sp-phi-shrink').value : null,
     pct_gas:    document.getElementById('sp-pct-gas')?.value    ? +document.getElementById('sp-pct-gas').value    : null,
@@ -2870,37 +2857,30 @@ function saveCustomPreset() {
   
   customPresets[name] = p;
   localStorage.setItem('pvi_custom_presets', JSON.stringify(customPresets));
-  nameInput.value = '';
-  renderCustomPresets();
-}
-
-function saveLibraryPreset() {
-  const nameInput = document.getElementById('lib-name');
-  const name = nameInput.value.trim();
-  if (!name) return;
-  
-  const p = {
-    pct: +document.getElementById('lib-pct').value||5,
-    phi: +document.getElementById('lib-phi').value||1.5,
-    a:   +document.getElementById('lib-a').value||2,
-    u:   +document.getElementById('lib-u').value||0.2,
-    t:   +document.getElementById('lib-t').value||6,
-    datum: +document.getElementById('lib-datum').value||100,
-    h: 0, n: 0, hr: 0, nr: 0, hk: 1, nk: 1 // Default zone settings
-  };
-  
-  customPresets[name] = p;
-  localStorage.setItem('pvi_custom_presets', JSON.stringify(customPresets));
-  nameInput.value = '';
+  if (nameInput) nameInput.value = '';
   renderCustomPresets();
 }
 
 function applyCustomPreset(k) {
   const p = customPresets[k];
   if (!p) return;
-  ['pct','phi','a','u','t','datum'].forEach(f=>{ const el=document.getElementById('sp-'+f); if(el) el.value=p[f]; });
-  ['h','n','hr','nr','hk','nk'].forEach(f=>{ tog('tg-'+f, p[f], null); });
-  nav('spec');
+  
+  // Load general fields
+  ['pct','phi','a','u','t','datum'].forEach(f=>{ 
+    const el=document.getElementById('sp-'+f); 
+    if(el) el.value=p[f] !== undefined ? p[f] : ''; 
+  });
+  
+  // Load gas/shrink override fields
+  ['phi_gas','pct_gas','phi_shrink','pct_shrink'].forEach(f=>{
+    const el=document.getElementById('sp-'+f.replace('_', '-'));
+    if(el) el.value=p[f] !== undefined && p[f] !== null ? p[f] : '';
+  });
+  
+  // Load toggle zone settings
+  ['h','n','hr','nr','hk','nk'].forEach(f=>{ 
+    if(p[f] !== undefined) tog('tg-'+f, p[f], null); 
+  });
 }
 
 function deleteCustomPreset(k) {
@@ -2910,20 +2890,17 @@ function deleteCustomPreset(k) {
 }
 
 function renderCustomPresets() {
-  const list = document.getElementById('user-presets-list');
+  const list = document.getElementById('user-presets-list-spec');
   if (!list) return;
   const keys = Object.keys(customPresets);
   if (keys.length === 0) {
-    list.innerHTML = '<div style="font-size:11px;color:var(--dim);">No custom presets saved.</div>';
+    list.innerHTML = '<div style="font-size:10px;color:var(--dim);">No custom presets saved.</div>';
     return;
   }
   list.innerHTML = keys.map(k => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid var(--bd);border-radius:var(--r);background:var(--c2);">
-      <div style="font-size:12px;font-weight:600;color:var(--tx);">${k}</div>
-      <div style="display:flex;gap:6px;">
-        <button class="btn btn-sec btn-sm" onclick="applyCustomPreset('${k}')">Load</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteCustomPreset('${k}')">✕</button>
-      </div>
+    <div class="preset-chip-wrapper" style="display:inline-flex;align-items:center;gap:4px;background:var(--c2);border:1px solid var(--bd);border-radius:20px;padding:3px 8px;">
+      <button class="btn-preset-load" onclick="applyCustomPreset('${k}')" style="background:none;border:none;color:var(--tx);font-size:11px;font-weight:600;cursor:pointer;padding:0;display:flex;align-items:center;">◈ ${k}</button>
+      <button class="btn-preset-del" onclick="deleteCustomPreset('${k}')" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:11px;padding:0 2px;margin-left:4px;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--dim)'">✕</button>
     </div>
   `).join('');
 }
@@ -2932,8 +2909,24 @@ renderCustomPresets();
 
 function applyPreset(k){
   const p=PRESETS[k];
-  ['pct','phi','a','u','t','datum'].forEach(f=>{ const el=document.getElementById('sp-'+f); if(el) el.value=p[f]; });
-  ['h','n','hr','nr','hk','nk'].forEach(f=>{ tog('tg-'+f, p[f], null); });
+  if(!p) return;
+  
+  // Load general fields
+  ['pct','phi','a','u','t','datum'].forEach(f=>{ 
+    const el=document.getElementById('sp-'+f); 
+    if(el) el.value=p[f]; 
+  });
+  
+  // Reset overrides to empty
+  ['sp-phi-gas','sp-pct-gas','sp-phi-shrink','sp-pct-shrink'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.value='';
+  });
+  
+  // Load toggle zone settings
+  ['h','n','hr','nr','hk','nk'].forEach(f=>{ 
+    tog('tg-'+f, p[f], null); 
+  });
 }
 
 // ═══════════════════════════════════════════════════
@@ -2945,12 +2938,12 @@ function saveSpec(){
   s.zone = document.getElementById('sp-zone').value||'Zone A';
   s.rev  = document.getElementById('sp-rev').value||'—';
   s.insp = document.getElementById('sp-insp').value||'—';
-  s.pct  = +document.getElementById('sp-pct').value||5;
-  s.phi  = +document.getElementById('sp-phi').value||1.5;
-  s.a    = +document.getElementById('sp-a').value||2;
-  s.u    = +document.getElementById('sp-u').value||0.2;
-  s.t    = +document.getElementById('sp-t').value||6;
-  s.datum= +document.getElementById('sp-datum').value||100;
+  const _pctVal = document.getElementById('sp-pct').value;   s.pct   = _pctVal !== '' ? +_pctVal : 5;
+  const _phiVal = document.getElementById('sp-phi').value;   s.phi   = _phiVal !== '' ? +_phiVal : 1.5;
+  const _aVal   = document.getElementById('sp-a').value;     s.a     = _aVal   !== '' ? +_aVal   : 2;
+  const _uVal   = document.getElementById('sp-u').value;     s.u     = _uVal   !== '' ? +_uVal   : 0.2;
+  const _tVal   = document.getElementById('sp-t').value;     s.t     = _tVal   !== '' ? +_tVal   : 6;
+  const _datVal = document.getElementById('sp-datum').value; s.datum = _datVal !== '' ? +_datVal : 100;
   // Type-specific limits — persist only when the field has a value
   const _gPhi = document.getElementById('sp-phi-gas');     s.phi_gas    = _gPhi    && _gPhi.value    !== '' ? +_gPhi.value    : null;
   const _sPhi = document.getElementById('sp-phi-shrink');  s.phi_shrink = _sPhi    && _sPhi.value    !== '' ? +_sPhi.value    : null;
