@@ -90,20 +90,22 @@ def effective_pores(pores: List[PoreModel], spec: SpecModel) -> List[PoreModel]:
     return [p for p in pores if p.dia >= u] if u > 0 else list(pores)
 
 
-def get_zone(y: float, wall_h_mm: float) -> str:
+def get_zone(y: float, wall_h_mm: float, offset_mm: float = 0.0) -> str:
     """
     VW50093 §2.2 — Wall depth zone assignment.
     HR (outer ⅓): y < t/3  OR  y > 2t/3
     HK (central ⅓): t/3 ≤ y ≤ 2t/3
+    offset_mm: applied for cropped images to map local Y back to wall depth.
     """
+    y_abs = y + offset_mm
     if wall_h_mm <= 0:
         return 'hr'
     t3 = wall_h_mm / 3.0
-    if y < 0 or y > wall_h_mm:
+    if y_abs < 0 or y_abs > wall_h_mm:
         return 'outside'
-    if y < t3:
+    if y_abs < t3:
         return 'hr'
-    if y <= t3 * 2:
+    if y_abs <= t3 * 2:
         return 'hk'
     return 'hr'
 
@@ -157,27 +159,34 @@ def run_evaluation(
     spec: SpecModel,
     wall_h_mm: float,
     exclusion_zones: Optional[list] = None,
-    datum_rect: Optional[dict] = None
+    datum_rect: Optional[dict] = None,
+    pore_offset_mm: float = 0.0,
 ) -> dict:
-    """Full VW50093 compliance evaluation supporting exclusion zones and datum rect."""
-    # Recompute zones from current wall height
+    """Full VW50093 compliance evaluation supporting exclusion zones, datum rect, pore offset,
+    and gas/shrink type-specific limit checks."""
+
+    # Recompute zones from current wall height + offset
     for p in pores:
-        p.zone = get_zone(p.y, wall_h_mm)
+        p.zone = get_zone(p.y, wall_h_mm, pore_offset_mm)
 
     # ── NET (excl. zone filtered) evaluation ──
     net_pores = [p for p in pores if not pore_in_exclusion_zone(p, exclusion_zones)]
     dr_dict = datum_rect if isinstance(datum_rect, dict) else (datum_rect.model_dump() if datum_rect else None)
     if dr_dict and dr_dict.get('w', 0) > 0:
-        net_pores = [p for p in net_pores if dr_dict.get('x', 0) <= p.x <= (dr_dict.get('x', 0) + dr_dict.get('w', 0)) and dr_dict.get('y', 0) <= p.y <= (dr_dict.get('y', 0) + dr_dict.get('h', 0))]
+        net_pores = [
+            p for p in net_pores
+            if dr_dict.get('x', 0) <= p.x <= (dr_dict.get('x', 0) + dr_dict.get('w', 0))
+            and dr_dict.get('y', 0) <= p.y <= (dr_dict.get('y', 0) + dr_dict.get('h', 0))
+        ]
 
     x_vals = [p.x for p in pores] if pores else []
     wall_w = max(max(x_vals) * 1.2 if x_vals else 20.0, 20.0)
-    
-    # Calculate net datum area (exclusion zone area is NOT subtracted from the datum area)
+
+    # Calculate net datum area
     base_datum = dr_dict.get('w', 0) * dr_dict.get('h', 0) if (dr_dict and dr_dict.get('w', 0) > 0) else spec.datum
     net_datum_area = max(base_datum, 0.01)
 
-    # Run net evaluation using net_datum_area
+    # Run net evaluation
     spec_net = spec.model_copy(update={'datum': net_datum_area})
     pct = calc_porosity(net_pores, spec_net)
     max_phi = calc_max_phi(net_pores, spec_net)
@@ -187,8 +196,11 @@ def run_evaluation(
     # ── RAW (all pores, NO exclusion zone filter) ──
     raw_pores = list(pores)
     if dr_dict and dr_dict.get('w', 0) > 0:
-        raw_pores = [p for p in raw_pores if dr_dict.get('x', 0) <= p.x <= (dr_dict.get('x', 0) + dr_dict.get('w', 0)) and dr_dict.get('y', 0) <= p.y <= (dr_dict.get('y', 0) + dr_dict.get('h', 0))]
-    
+        raw_pores = [
+            p for p in raw_pores
+            if dr_dict.get('x', 0) <= p.x <= (dr_dict.get('x', 0) + dr_dict.get('w', 0))
+            and dr_dict.get('y', 0) <= p.y <= (dr_dict.get('y', 0) + dr_dict.get('h', 0))
+        ]
     spec_raw = spec.model_copy(update={'datum': base_datum})
     raw_pct = calc_porosity(raw_pores, spec_raw)
 
@@ -292,8 +304,59 @@ def run_evaluation(
         },
     ]
 
+    # ── Gas-type specific checks ─────────────────────────────────────────────
+    gas_pores  = [p for p in effective_pores(net_pores, spec_net) if (p.type or 'gas') == 'gas']
+    shrink_pores = [p for p in effective_pores(net_pores, spec_net) if p.type == 'shrink']
+
+    if gas_pores:
+        phi_g   = spec_net.phi_gas    if spec_net.phi_gas    is not None else spec_net.phi
+        pct_g   = spec_net.pct_gas    if spec_net.pct_gas    is not None else spec_net.pct
+        max_g   = max(p.dia for p in gas_pores)
+        area_g  = sum(math.pi * (p.dia / 2) ** 2 for p in gas_pores)
+        pct_gv  = area_g / net_datum_area * 100
+        checks.append({
+            'n':      f'Gas Φ max ({len(gas_pores)}p)',
+            'par':    'Φ_G',
+            'pass':   max_g <= phi_g,
+            'meas':   f'{max_g:.3f} mm',
+            'limit':  f'≤{phi_g} mm',
+            'detail': f'{len(gas_pores)} gas pore(s) — largest Φ {max_g:.3f} mm',
+        })
+        checks.append({
+            'n':      'Gas porosity %',
+            'par':    '%_G',
+            'pass':   pct_gv <= pct_g,
+            'meas':   f'{pct_gv:.2f}%',
+            'limit':  f'≤{pct_g}%',
+            'detail': f'Gas area {area_g:.2f} mm² / {net_datum_area:.1f} mm² datum',
+        })
+
+    # ── Shrink-type specific checks ──────────────────────────────────────────
+    if shrink_pores:
+        phi_s   = spec_net.phi_shrink if spec_net.phi_shrink is not None else spec_net.phi
+        pct_s   = spec_net.pct_shrink if spec_net.pct_shrink is not None else spec_net.pct
+        max_s   = max(p.dia for p in shrink_pores)
+        area_s  = sum(math.pi * (p.dia / 2) ** 2 for p in shrink_pores)
+        pct_sv  = area_s / net_datum_area * 100
+        checks.append({
+            'n':      f'Shrink Φ max ({len(shrink_pores)}p)',
+            'par':    'Φ_S',
+            'pass':   max_s <= phi_s,
+            'meas':   f'{max_s:.3f} mm',
+            'limit':  f'≤{phi_s} mm',
+            'detail': f'{len(shrink_pores)} shrink pore(s) — largest Φ {max_s:.3f} mm',
+        })
+        checks.append({
+            'n':      'Shrink porosity %',
+            'par':    '%_S',
+            'pass':   pct_sv <= pct_s,
+            'meas':   f'{pct_sv:.2f}%',
+            'limit':  f'≤{pct_s}%',
+            'detail': f'Shrink area {area_s:.2f} mm² / {net_datum_area:.1f} mm² datum',
+        })
+
     all_pass = all(c['pass'] for c in checks)
-    
+
     # Update zone info on pores
     for p in pores:
         found = False
@@ -327,4 +390,7 @@ def run_evaluation(
         'excl_zone_count': len(exclusion_zones) if exclusion_zones else 0,
         'excl_masked_pores': len(pores) - len(net_pores),
         'total_pores_before_excl': len(pores),
+        'has_datum': dr_dict is not None and dr_dict.get('w', 0) > 0,
+        'datum_area': net_datum_area,
+        'datum_type': 'drawn' if (dr_dict and dr_dict.get('w', 0) > 0) else 'spec',
     }

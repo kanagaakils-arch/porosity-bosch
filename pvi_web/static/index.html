@@ -1868,7 +1868,7 @@ select.fi option{background:var(--c2)}
       <div style="margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:10px">
         <canvas id="gauge-canvas" width="480" height="280"></canvas>
         <button class="btn btn-pri" onclick="downloadPDF()" id="btn-pdf" style="padding:10px 20px;font-size:12px">
-          <span style="margin-right:8px">📄</span> Download Grouped 100-Image PDF
+          <span style="margin-right:8px">📄</span> Download PDF Report (A4)
         </button>
       </div>
     </div>
@@ -4237,6 +4237,12 @@ function loadSamplePores(){
   pushHistory();
   S.pores=[];
   activeSpecTab().drawPores=S.pores;
+  if (!S.imgState.image) {
+    S.cv.wallH = 300;
+    S.cv.wallW = 600;
+    S.cv.scale = 50;
+    S.imgState.scalePxPerMm = 50;
+  }
   const wH=wallHeightMm(), wW=wallWidthMm();
   const t3=wH/3;
   const samples=[
@@ -4254,6 +4260,11 @@ function loadSamplePores(){
   samples.forEach((s,i)=>{
     S.pores.push({id:i, x:s.xRel*wW, y:s.y, dia:s.dia, type:s.type, zone:getPoreZone({y:s.y})});
   });
+  if(S.imgMode){
+    S.imgPores = JSON.parse(JSON.stringify(S.pores));
+    const page = activeImagePage();
+    if(page) page.pores = S.imgPores;
+  }
   drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
   document.getElementById('btn-undo').disabled=false;
 }
@@ -4855,6 +4866,91 @@ function _analyseZone(pores, spec, zone){
   return { h: hTrig, n: nTrig, cluster: maxCluster, pores: n, min_gap: minGapVal };
 }
 
+async function _callApiEvaluate(pores, spec, wallH, exclusionZones, datumRect, poreOffset) {
+  try {
+    const formattedSpec = {
+      pno: spec.pno || 'PART-001',
+      zone: spec.zone || 'Zone A',
+      rev: spec.rev || '—',
+      insp: spec.insp || '—',
+      pct: isNaN(parseFloat(spec.pct)) ? 5.0 : parseFloat(spec.pct),
+      phi: isNaN(parseFloat(spec.phi)) ? 1.5 : parseFloat(spec.phi),
+      a: isNaN(parseFloat(spec.a)) ? 2.0 : parseFloat(spec.a),
+      u: isNaN(parseFloat(spec.u)) ? 0.2 : parseFloat(spec.u),
+      t: isNaN(parseFloat(spec.t)) ? 6.0 : parseFloat(spec.t),
+      datum: isNaN(parseFloat(spec.datum)) ? 100.0 : parseFloat(spec.datum),
+      h: parseInt(spec.h) || 0,
+      n: parseInt(spec.n) || 0,
+      hr: parseInt(spec.hr) || 0,
+      nr: parseInt(spec.nr) || 0,
+      hk: parseInt(spec.hk) || 1,
+      nk: parseInt(spec.nk) || 1,
+      method: spec.method || 'visual_machined',
+      phi_gas: (spec.phi_gas !== undefined && spec.phi_gas !== null && spec.phi_gas !== '' && !isNaN(parseFloat(spec.phi_gas))) ? parseFloat(spec.phi_gas) : null,
+      pct_gas: (spec.pct_gas !== undefined && spec.pct_gas !== null && spec.pct_gas !== '' && !isNaN(parseFloat(spec.pct_gas))) ? parseFloat(spec.pct_gas) : null,
+      phi_shrink: (spec.phi_shrink !== undefined && spec.phi_shrink !== null && spec.phi_shrink !== '' && !isNaN(parseFloat(spec.phi_shrink))) ? parseFloat(spec.phi_shrink) : null,
+      pct_shrink: (spec.pct_shrink !== undefined && spec.pct_shrink !== null && spec.pct_shrink !== '' && !isNaN(parseFloat(spec.pct_shrink))) ? parseFloat(spec.pct_shrink) : null
+    };
+
+    const formattedPores = (pores || []).map(p => ({
+      id: parseInt(p.id),
+      x: parseFloat(p.x),
+      y: parseFloat(p.y),
+      dia: parseFloat(p.dia),
+      type: p.type || 'gas',
+      zone: p.zone || 'hr'
+    }));
+
+    const formattedZones = (exclusionZones || []).map(z => {
+      if (z.type === 'rect') {
+        return {
+          type: 'rect',
+          x: parseFloat(z.x),
+          y: parseFloat(z.y),
+          w: parseFloat(z.w),
+          h: parseFloat(z.h)
+        };
+      } else {
+        return {
+          type: 'circle',
+          cx: parseFloat(z.cx),
+          cy: parseFloat(z.cy),
+          r: parseFloat(z.r)
+        };
+      }
+    });
+
+    const formattedDatum = (datumRect && datumRect.w > 0) ? {
+      x: parseFloat(datumRect.x),
+      y: parseFloat(datumRect.y),
+      w: parseFloat(datumRect.w),
+      h: parseFloat(datumRect.h)
+    } : null;
+
+    const res = await fetch('/api/evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        spec: formattedSpec,
+        pores: formattedPores,
+        wall_h_mm: parseFloat(wallH),
+        exclusion_zones: formattedZones,
+        datum_rect: formattedDatum,
+        pore_offset_mm: parseFloat(poreOffset) || 0.0
+      })
+    });
+    if (!res.ok) {
+      throw new Error(`Server returned status ${res.status}`);
+    }
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.warn("API evaluate failed, falling back to local evaluation:", err);
+    const datumVal = datumRect ? (typeof datumRect === 'number' ? datumRect : +(datumRect.w * datumRect.h).toFixed(2)) : null;
+    return runEvaluationLocal(pores, spec, wallH, datumVal, poreOffset);
+  }
+}
+
 function runEvaluationLocal(pores, spec, wallH, datumOverride, poreOffset){
   // Re-assign zones — offset applied for cropped images
   const _off = poreOffset || 0;
@@ -4956,7 +5052,7 @@ function runEvaluationLocal(pores, spec, wallH, datumOverride, poreOffset){
 // ══════════════════════════════════════════════════════════
 // EVALUATE ALL SPECS + EXPORT
 // ══════════════════════════════════════════════════════════
-function evaluateAllSpecs(silent){
+async function evaluateAllSpecs(silent){
   // Sync active pores into page before iterating (S.imgPores and page.pores share same ref but be explicit)
   const _activePage2 = activeImagePage();
   if(_activePage2) _activePage2.pores = S.imgPores;
@@ -4964,28 +5060,43 @@ function evaluateAllSpecs(silent){
   let totalSpecs = 0, passedSpecs = 0;
   const summary = [];
 
-  Workspace.specs.forEach((tab, si) => {
+  for (let si = 0; si < Workspace.specs.length; si++) {
+    const tab = Workspace.specs[si];
     const spec = tab.spec;
     let tabAllPass = true;
     let tabTotalImages = 0, tabPassedImages = 0;
 
-    tab.images.forEach((page) => {
-      // ── NET (excl. zone filtered) evaluation — used for pass/fail verdict ──
+    for (let ii = 0; ii < tab.images.length; ii++) {
+      const page = tab.images[ii];
+      // ── NET (excl. zone filtered) evaluation ──
       let pores = JSON.parse(JSON.stringify(page.pores || []));
       const exclZonesCount = (page.exclusionZones || []).length;
       if(exclZonesCount > 0) pores = _filterExclZones(pores, page);
-      // Apply datum filter if drawn
       const pageDatum = (page.datumRect && page.datumRect.w > 0) ? page.datumRect : null;
       if(pageDatum) pores = pores.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
       const metrics = getImagePageMetrics(page, spec);
-      const evalDatum = _evaluationDatumArea(page, metrics, pageDatum);
-      const data = runEvaluationLocal(pores, spec, metrics.wallH, evalDatum, metrics.offset || 0);
+      
+      const data = await _callApiEvaluate(
+        pores,
+        spec,
+        metrics.wallH,
+        page.exclusionZones || [],
+        pageDatum,
+        metrics.offset || 0
+      );
 
-      // ── RAW (all pores, NO exclusion zone filter) — informational display ──
+      // ── RAW (all pores, NO exclusion zone filter) ──
       let poresRaw = JSON.parse(JSON.stringify(page.pores || []));
       if(pageDatum) poresRaw = poresRaw.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
       const rawDatumBase = pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : (metrics.datum || (spec.datum||100));
-      const rawData = runEvaluationLocal(poresRaw, spec, metrics.wallH, rawDatumBase, metrics.offset || 0);
+      const rawData = await _callApiEvaluate(
+        poresRaw,
+        spec,
+        metrics.wallH,
+        [],
+        pageDatum,
+        metrics.offset || 0
+      );
 
       const _rawPoreCount = (page.pores || []).length;
       const _exclCount2 = _rawPoreCount - (exclZonesCount > 0 ? _filterExclZones([...(page.pores||[])], page).length : _rawPoreCount);
@@ -5000,25 +5111,25 @@ function evaluateAllSpecs(silent){
         exclMaskedPores: _exclCount2,
         totalPoresBeforeExcl: _rawPoreCount,
         // Dual porosity fields
-        rawPct: rawData.pct,           // Complete porosity — all pores, no excl. zone
-        rawPoreCount: poresRaw.length, // Pores counted in raw calc
-        rawDatum: rawDatumBase,        // Datum area used for raw calc
-        netPct: data.pct,              // Net porosity — after excl. zone masking
-        netPoreCount: pores.length,    // Pores counted in net calc
-        netDatum: evalDatum,           // Datum area used for net calc (excl area subtracted)
+        rawPct: rawData.pct,
+        rawPoreCount: poresRaw.length,
+        rawDatum: rawDatumBase,
+        netPct: data.pct,
+        netPoreCount: pores.length,
+        netDatum: data.net_datum || (pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : metrics.datum || (spec.datum||100)),
         hasExclZone: exclZonesCount > 0
       };
       page.evaluated = true;
       const updatedMap = new Map();
-      data.updated_pores.forEach(up => { if(up.id) updatedMap.set(up.id, up.zone); });
+      if (data.updated_pores) {
+        data.updated_pores.forEach(up => { if(up.id) updatedMap.set(up.id, up.zone); });
+      }
       page.pores.forEach((p) => {
-        // Only update zone for pores that were actually in the evaluation set.
-        // Do NOT overwrite zones for excluded/datum-filtered pores — they keep their existing zone.
         if(updatedMap.has(p.id)) p.zone = updatedMap.get(p.id);
       });
       tabTotalImages++;
       if(data.all_pass) tabPassedImages++; else tabAllPass = false;
-    });
+    }
 
     tab.verdict = { allPass: tabAllPass, tabPassedImages, tabTotalImages };
     totalSpecs++;
@@ -5031,7 +5142,7 @@ function evaluateAllSpecs(silent){
       passedImages: tabPassedImages,
       totalImages: tabTotalImages
     });
-  });
+  }
 
   const allPass = passedSpecs === totalSpecs;
   // Render summary panel
@@ -5070,18 +5181,16 @@ function evaluateAllSpecs(silent){
   return { allPass, summary };
 }
 
-function evaluateAllAndExport(){
+async function evaluateAllAndExport(){
   const btn = document.getElementById('btn-eval-all');
   if(btn){ btn.disabled = true; btn.textContent = '⏳ Evaluating…'; }
   try {
-    evaluateAllSpecs();
+    await evaluateAllSpecs();
     nav('verdict');
-    setTimeout(() => {
-      downloadPDF();
-      if(btn){ btn.disabled=false; btn.textContent='⚡ Eval All'; }
-    }, 400);
+    await downloadPDF();
   } catch(e) {
     toast('Evaluation error: ' + e.message, 'err');
+  } finally {
     if(btn){ btn.disabled=false; btn.textContent='⚡ Eval All'; }
   }
 }
@@ -5155,7 +5264,7 @@ function _evalSelUpdateCount(){
     else{ master.indeterminate=true; }
   }
 }
-function runSelectedEval(mode){
+async function runSelectedEval(mode){
   closeEvalSelector();
   const selectedImages = {};
   document.querySelectorAll('.eval-img-cb:checked').forEach(cb => {
@@ -5167,12 +5276,15 @@ function runSelectedEval(mode){
   persistActiveResults();
   let totalSpecs=0, passedSpecs=0;
   const evalledSpecIndices = [];
-  Object.keys(selectedImages).forEach(siStr => {
+  const siKeys = Object.keys(selectedImages);
+  for (let idx = 0; idx < siKeys.length; idx++) {
+    const siStr = siKeys[idx];
     const si = +siStr, imgIndices = selectedImages[si];
-    const tab = Workspace.specs[si]; if(!tab) return;
+    const tab = Workspace.specs[si]; if(!tab) continue;
     let tabAllPass=true, tabPassedImages=0;
-    imgIndices.forEach(ii => {
-      const page = tab.images[ii]; if(!page) return;
+    for (let j = 0; j < imgIndices.length; j++) {
+      const ii = imgIndices[j];
+      const page = tab.images[ii]; if(!page) continue;
       
       // ── NET (excl. zone filtered) evaluation ──
       let pores = JSON.parse(JSON.stringify(page.pores||[]));
@@ -5181,14 +5293,28 @@ function runSelectedEval(mode){
       const pageDatum = (page.datumRect && page.datumRect.w > 0) ? page.datumRect : null;
       if(pageDatum) pores = pores.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
       const metrics = getImagePageMetrics(page, tab.spec);
-      const evalDatum = _evaluationDatumArea(page, metrics, pageDatum);
-      const data = runEvaluationLocal(pores, tab.spec, metrics.wallH, evalDatum, metrics.offset);
+      
+      const data = await _callApiEvaluate(
+        pores,
+        tab.spec,
+        metrics.wallH,
+        page.exclusionZones || [],
+        pageDatum,
+        metrics.offset || 0
+      );
 
       // ── RAW (all pores, NO exclusion zone filter) ──
       let poresRaw = JSON.parse(JSON.stringify(page.pores || []));
       if(pageDatum) poresRaw = poresRaw.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
       const rawDatumBase = pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : (metrics.datum || (tab.spec.datum||100));
-      const rawData = runEvaluationLocal(poresRaw, tab.spec, metrics.wallH, rawDatumBase, metrics.offset || 0);
+      const rawData = await _callApiEvaluate(
+        poresRaw,
+        tab.spec,
+        metrics.wallH,
+        [],
+        pageDatum,
+        metrics.offset || 0
+      );
 
       const _rawPoreCount = (page.pores || []).length;
       const _exclCount2 = _rawPoreCount - (exclZonesCount > 0 ? _filterExclZones([...(page.pores||[])], page).length : _rawPoreCount);
@@ -5207,23 +5333,25 @@ function runSelectedEval(mode){
         rawDatum: rawDatumBase,
         netPct: data.pct,
         netPoreCount: pores.length,
-        netDatum: evalDatum,
+        netDatum: data.net_datum || (pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : metrics.datum || (tab.spec.datum||100)),
         hasExclZone: exclZonesCount > 0
       };
       page.evaluated = true;
 
       const updatedMap = new Map();
-      data.updated_pores.forEach(up => { if(up.id) updatedMap.set(up.id, up.zone); });
+      if (data.updated_pores) {
+        data.updated_pores.forEach(up => { if(up.id) updatedMap.set(up.id, up.zone); });
+      }
       page.pores.forEach((p,i)=>{ 
         if(updatedMap.has(p.id)) p.zone=updatedMap.get(p.id);
         else p.zone = 'hr'; // fallback
       });
       if(data.all_pass) tabPassedImages++; else tabAllPass=false;
-    });
+    }
     tab.verdict = { allPass:tabAllPass, tabPassedImages, tabTotalImages:imgIndices.length };
     totalSpecs++; if(tabAllPass) passedSpecs++;
     evalledSpecIndices.push({ si, imgIndices });
-  });
+  }
   const allPass = passedSpecs === totalSpecs;
   HPDC_STATE.set('lastVerdict', allPass?'ACCEPT':'REJECT','Tool 01');
   updateHomeVerdictBadge(); setPlatformBadge('porosity');
@@ -5235,7 +5363,7 @@ function runSelectedEval(mode){
     showVerdictForTab(first.si, first.imgIndices[0]);
   }
   toast(totalSpecs+' spec(s): '+passedSpecs+' PASS, '+(totalSpecs-passedSpecs)+' FAIL', allPass?'ok':'warn');
-  if(mode==='export') setTimeout(()=>downloadPDF(),600);
+  if(mode==='export') await downloadPDF();
 }
 // ═══════════════════════════════════════════════════════════════════
 // VERDICT PAGE MULTI-TAB
@@ -5312,12 +5440,12 @@ function showVerdictForTab(si,ii){
   renderVerdict();
 }
 
-function submitEvaluation(){
+async function submitEvaluation(){
   const btn = document.getElementById('btn-eval');
   if(btn){ btn.disabled=true; btn.textContent='Evaluating…'; }
   try {
     // Evaluate ALL spec tabs and their image pages
-    evaluateAllSpecs();
+    await evaluateAllSpecs();
     // Build the full list for multi-tab rendering
     const allEntries = Workspace.specs.map((tab, si) => ({
       si, imgIndices: tab.images.map((_, ii) => ii)
@@ -5726,8 +5854,109 @@ function buildImageReportSection(tab, page, spec, specIndex, imageIndex){
   </section>`;
 }
 
-function downloadPDF(){
+async function downloadPDF() {
   persistActiveResults();
+  
+  const btn = document.getElementById('btn-pdf');
+  const originalText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Generating PDF…';
+  }
+  
+  try {
+    const payloadSpecs = Workspace.specs.map(tab => {
+      return {
+        name: tab.name || 'Specification',
+        spec: {
+          pno: tab.spec.pno || 'PART-001',
+          zone: tab.spec.zone || 'Zone A',
+          rev: tab.spec.rev || '—',
+          insp: tab.spec.insp || '—',
+          pct: isNaN(parseFloat(tab.spec.pct)) ? 5.0 : parseFloat(tab.spec.pct),
+          phi: isNaN(parseFloat(tab.spec.phi)) ? 1.5 : parseFloat(tab.spec.phi),
+          a: isNaN(parseFloat(tab.spec.a)) ? 2.0 : parseFloat(tab.spec.a),
+          u: isNaN(parseFloat(tab.spec.u)) ? 0.2 : parseFloat(tab.spec.u),
+          t: isNaN(parseFloat(tab.spec.t)) ? 6.0 : parseFloat(tab.spec.t),
+          datum: isNaN(parseFloat(tab.spec.datum)) ? 100.0 : parseFloat(tab.spec.datum),
+          h: parseInt(tab.spec.h) || 0,
+          n: parseInt(tab.spec.n) || 0,
+          hr: parseInt(tab.spec.hr) || 0,
+          nr: parseInt(tab.spec.nr) || 0,
+          hk: parseInt(tab.spec.hk) || 1,
+          nk: parseInt(tab.spec.nk) || 1,
+          method: tab.spec.method || 'visual_machined',
+          phi_gas: (tab.spec.phi_gas !== undefined && tab.spec.phi_gas !== null && tab.spec.phi_gas !== '' && !isNaN(parseFloat(tab.spec.phi_gas))) ? parseFloat(tab.spec.phi_gas) : null,
+          pct_gas: (tab.spec.pct_gas !== undefined && tab.spec.pct_gas !== null && tab.spec.pct_gas !== '' && !isNaN(parseFloat(tab.spec.pct_gas))) ? parseFloat(tab.spec.pct_gas) : null,
+          phi_shrink: (tab.spec.phi_shrink !== undefined && tab.spec.phi_shrink !== null && tab.spec.phi_shrink !== '' && !isNaN(parseFloat(tab.spec.phi_shrink))) ? parseFloat(tab.spec.phi_shrink) : null,
+          pct_shrink: (tab.spec.pct_shrink !== undefined && tab.spec.pct_shrink !== null && tab.spec.pct_shrink !== '' && !isNaN(parseFloat(tab.spec.pct_shrink))) ? parseFloat(tab.spec.pct_shrink) : null
+        },
+        images: tab.images.map(img => {
+          const metrics = getImagePageMetrics(img, tab.spec);
+          return {
+            name: img.name || 'Image',
+            pores: (img.pores || []).map(p => ({
+              id: parseInt(p.id),
+              x: parseFloat(p.x),
+              y: parseFloat(p.y),
+              dia: parseFloat(p.dia),
+              type: p.type || 'gas',
+              zone: p.zone || 'hr'
+            })),
+            wall_h_mm: parseFloat(metrics.wallH),
+            exclusion_zones: (img.exclusionZones || []).map(z => {
+              if (z.type === 'rect') {
+                return { type: 'rect', x: parseFloat(z.x), y: parseFloat(z.y), w: parseFloat(z.w), h: parseFloat(z.h) };
+              } else {
+                return { type: 'circle', cx: parseFloat(z.cx), cy: parseFloat(z.cy), r: parseFloat(z.r) };
+              }
+            }),
+            datum_rect: (img.datumRect && img.datumRect.w > 0) ? {
+              x: parseFloat(img.datumRect.x),
+              y: parseFloat(img.datumRect.y),
+              w: parseFloat(img.datumRect.w),
+              h: parseFloat(img.datumRect.h)
+            } : null,
+            pore_offset_mm: parseFloat(metrics.offset) || 0.0
+          };
+        })
+      };
+    });
+
+    const res = await fetch('/api/export-workspace-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ specs: payloadSpecs })
+    });
+
+    if (!res.ok) {
+      throw new Error(`Export API error: ${res.status}`);
+    }
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = `PVI_Workspace_Report_${new Date().toISOString().slice(0,10)}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    toast('PDF generated and downloaded successfully.', 'ok');
+  } catch (err) {
+    console.error('ReportLab export failed. Falling back to browser print view.', err);
+    toast('PDF generator failed. Falling back to print view.', 'warn');
+    runHtmlPrintFallback();
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText || 'Download PDF Report (A4)';
+    }
+  }
+}
+
+function runHtmlPrintFallback() {
   const dateStr = new Date().toLocaleString();
   let imageTotal=0;
   const specSections=Workspace.specs.map((tab,si)=>{

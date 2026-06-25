@@ -5,12 +5,12 @@ from fastapi.responses import Response
 
 try:
     from ..core.calculations import run_evaluation
-    from ..core.exporter import generate_pdf
-    from ..core.models import EvalRequest
+    from ..core.exporter import generate_pdf, generate_workspace_pdf
+    from ..core.models import EvalRequest, WorkspaceExportRequest
 except ImportError:
     from core.calculations import run_evaluation
-    from core.exporter import generate_pdf
-    from core.models import EvalRequest
+    from core.exporter import generate_pdf, generate_workspace_pdf
+    from core.models import EvalRequest, WorkspaceExportRequest
 
 router = APIRouter(tags=["porosity"])
 
@@ -34,3 +34,18 @@ def export_pdf(req: EvalRequest):
             )
         },
     )
+
+
+@router.post("/export-workspace-pdf")
+def export_workspace_pdf(req: WorkspaceExportRequest):
+    """Export the workspace (all spec tabs and their images) as a single ReportLab A4 PDF."""
+    workspace_data = req.dict()["specs"]
+    pdf_bytes = generate_workspace_pdf(workspace_data)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": "attachment; filename=PVI_Workspace_Report.pdf"
+        },
+    )
+

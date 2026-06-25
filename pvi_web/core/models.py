@@ -21,7 +21,12 @@ class SpecModel(BaseModel):
     nr: int = 0
     hk: int = 1
     nk: int = 1
-    method: str = 'visual'
+    method: str = 'visual_machined'
+    # ── Type-specific limits (optional — fall back to phi/pct if None) ──
+    phi_gas: Optional[float] = None      # max single gas pore Φ (mm)
+    pct_gas: Optional[float] = None      # max gas porosity %
+    phi_shrink: Optional[float] = None   # max single shrink pore Φ (mm)
+    pct_shrink: Optional[float] = None   # max shrink porosity %
 
 class PoreModel(BaseModel):
     id: int
@@ -53,6 +58,26 @@ class EvalRequest(BaseModel):
     wall_h_mm: float
     exclusion_zones: Optional[List[ExclusionZoneModel]] = None
     datum_rect: Optional[DatumRectModel] = None
+    pore_offset_mm: float = 0.0   # for cropped images — Y offset before zone assignment
+
+
+# ── Workspace export models (multi-spec × multi-image PDF) ─────────────────
+
+class WorkspaceImageModel(BaseModel):
+    name: str = 'Image'
+    pores: List[PoreModel]
+    wall_h_mm: float
+    exclusion_zones: Optional[List[ExclusionZoneModel]] = None
+    datum_rect: Optional[DatumRectModel] = None
+    pore_offset_mm: float = 0.0
+
+class WorkspaceSpecModel(BaseModel):
+    name: str = 'Specification'
+    spec: SpecModel
+    images: List[WorkspaceImageModel]
+
+class WorkspaceExportRequest(BaseModel):
+    specs: List[WorkspaceSpecModel]
 
 
 class DefectCellModel(BaseModel):
