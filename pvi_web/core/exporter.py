@@ -13,7 +13,7 @@ from reportlab.platypus import (
     HRFlowable, KeepTogether, PageBreak
 )
 from reportlab.graphics.shapes import (
-    Drawing, Rect, Circle, Line, String, PolyLine, Group
+    Drawing, Rect, Circle, Line, String, PolyLine, Group, Polygon
 )
 from reportlab.graphics import renderPDF
 from .calculations import run_evaluation
@@ -163,8 +163,13 @@ def _verdict_banner(all_pass):
     return t
 
 
-def _info_table(spec, res, st):
-    """Two-column Part Info + Acceptance Limits table."""
+def _info_table(spec, res, st, actual_datum_area=None):
+    """Two-column Part Info + Acceptance Limits table.
+    actual_datum_area: the REAL datum used in the evaluation (calibrated image area or drawn datum).
+    Falls back to spec['datum'] when None.
+    """
+    if actual_datum_area is None:
+        actual_datum_area = spec.get('datum', 100)
     left_rows = [
         [Paragraph("PART INFORMATION", st['label']), ''],
         [Paragraph("Part Number", st['small']),  Paragraph(spec.get('pno','—'), st['bold'])],
@@ -181,7 +186,7 @@ def _info_table(spec, res, st):
         [Paragraph("Spacing coeff. A",  st['small']),  Paragraph(f"{spec.get('a',2)}", st['bold'])],
         [Paragraph("Ignore threshold U",st['small']),  Paragraph(f"{spec.get('u',0.2)} mm", st['bold'])],
         [Paragraph("Wall thickness t",  st['small']),  Paragraph(f"{spec.get('t',6)} mm", st['bold'])],
-        [Paragraph("Datum area",        st['small']),  Paragraph(f"{spec.get('datum',100)} mm²", st['bold'])],
+        [Paragraph("Datum area",        st['small']),  Paragraph(f"{actual_datum_area:.2f} mm²", st['bold'])],
     ]
     # Add gas/shrink limits if present
     if spec.get('phi_gas') is not None:
@@ -264,12 +269,15 @@ def _datum_excl_table(res, spec_dict, datum_rect, excl_zones, st):
     """Dedicated □ Datum & 🚫 Exclusion Analysis two-column table."""
     has_datum = res.get('has_datum', False)
     excl_count = res.get('excl_zone_count', 0)
-    if not has_datum and excl_count == 0:
+    datum_type_val = res.get('datum_type', 'spec')
+    # Show the datum panel when: user drew a datum, image is calibrated, or exclusion zones exist
+    if datum_type_val == 'spec' and excl_count == 0:
         return None
 
     datum_area = res.get('datum_area', spec_dict.get('datum', 100))
-    datum_type = ('Drawn □ (measured)' if has_datum else
-                  'Full image (calibrated)' if res.get('datum_type') == 'image' else 'Spec default')
+    datum_type = ('Drawn □ (measured)' if res.get('datum_type') == 'drawn' else
+                  'Full image (calibrated scale)' if res.get('datum_type') == 'calibrated_image' else
+                  'Spec default (no calibration)')
     lim_pct    = spec_dict.get('pct', 5)
     net_pct    = res.get('net_pct', res.get('pct', 0))
     raw_pct    = res.get('raw_pct', res.get('pct', 0))
@@ -373,9 +381,12 @@ def _zone_map_drawing(pores, spec, wall_h_mm, exclusion_zones=None, datum_rect=N
     w_w_mm = max(max(x_vals) * 1.2 if x_vals else 1, 1)
 
     # -- Zone fills --
-    d.add(Rect(wx, wy + t3*2, ww, t3, fillColor=C_HR_BG, strokeColor=None))
-    d.add(Rect(wx, wy + t3,   ww, t3, fillColor=C_HK_BG, strokeColor=None))
-    d.add(Rect(wx, wy,        ww, t3, fillColor=C_HR_BG, strokeColor=None))
+    if spec.get('zone_disabled'):
+        d.add(Rect(wx, wy, ww, wh, fillColor=C_HR_BG, strokeColor=None))
+    else:
+        d.add(Rect(wx, wy + t3*2, ww, t3, fillColor=C_HR_BG, strokeColor=None))
+        d.add(Rect(wx, wy + t3,   ww, t3, fillColor=C_HK_BG, strokeColor=None))
+        d.add(Rect(wx, wy,        ww, t3, fillColor=C_HR_BG, strokeColor=None))
 
     # -- Datum rectangle overlay --
     dr_dict = datum_rect if isinstance(datum_rect, dict) else (datum_rect.model_dump() if datum_rect else None)
@@ -411,24 +422,40 @@ def _zone_map_drawing(pores, spec, wall_h_mm, exclusion_zones=None, datum_rect=N
                 d.add(Circle(cx, cy, r, fillColor=colors.HexColor('#fff5f5'),
                              strokeColor=C_RED_BD, strokeWidth=1.0,
                              strokeDashArray=[3, 2]))
+            elif z_dict.get('type') == 'polygon':
+                pts = z_dict.get('points', [])
+                if pts and len(pts) >= 3:
+                    coords = []
+                    for p in pts:
+                        px = wx + (p.get('x', 0.0) / w_w_mm) * ww
+                        py = wy + wh - (p.get('y', 0.0) / w_h_mm) * wh
+                        coords.extend([px, py])
+                    d.add(Polygon(coords, fillColor=colors.HexColor('#fff5f5'),
+                                  strokeColor=C_RED_BD, strokeWidth=1.0,
+                                  strokeDashArray=[3, 2]))
 
     # -- Wall border --
     d.add(Rect(wx, wy, ww, wh, fillColor=None,
                strokeColor=colors.HexColor('#bbbbbb'), strokeWidth=1.2))
 
     # -- Zone dividers --
-    for yi in [wy + t3, wy + t3*2]:
-        d.add(Line(wx, yi, wx+ww, yi,
-                   strokeColor=colors.HexColor('#cccccc'),
-                   strokeDashArray=[4, 3], strokeWidth=0.8))
+    if not spec.get('zone_disabled'):
+        for yi in [wy + t3, wy + t3*2]:
+            d.add(Line(wx, yi, wx+ww, yi,
+                       strokeColor=colors.HexColor('#cccccc'),
+                       strokeDashArray=[4, 3], strokeWidth=0.8))
 
     # -- Zone labels --
-    d.add(String(wx+4, wy+wh-10, "HR  OUTER ⅓",
-                 fontSize=7, fontName='Helvetica-Bold', fillColor=C_HR))
-    d.add(String(wx+4, wy+t3*2-10, "HK  CENTRAL ⅓",
-                 fontSize=7, fontName='Helvetica-Bold', fillColor=C_HK))
-    d.add(String(wx+4, wy+t3-10, "HR  OUTER ⅓",
-                 fontSize=7, fontName='Helvetica-Bold', fillColor=C_HR))
+    if spec.get('zone_disabled'):
+        d.add(String(wx+4, wy+wh-10, "■ FLAT AREA MODE — No HR/HK zones",
+                     fontSize=7, fontName='Helvetica-Bold', fillColor=C_HR))
+    else:
+        d.add(String(wx+4, wy+wh-10, "HR  OUTER ⅓",
+                     fontSize=7, fontName='Helvetica-Bold', fillColor=C_HR))
+        d.add(String(wx+4, wy+t3*2-10, "HK  CENTRAL ⅓",
+                     fontSize=7, fontName='Helvetica-Bold', fillColor=C_HK))
+        d.add(String(wx+4, wy+t3-10, "HR  OUTER ⅓",
+                     fontSize=7, fontName='Helvetica-Bold', fillColor=C_HR))
 
     # -- Surface labels --
     d.add(String(wx+2, wy+wh+5, "SURFACE A",
@@ -468,22 +495,9 @@ def _zone_map_drawing(pores, spec, wall_h_mm, exclusion_zones=None, datum_rect=N
         dia   = p.get('dia', 0.5)
         zone  = p.get('zone', 'hr')
         ptype = p.get('type', 'gas')
-
-        # Check exclusion
-        is_excl = False
-        if exclusion_zones:
-            for z in exclusion_zones:
-                z_dict = z if isinstance(z, dict) else z.model_dump()
-                if z_dict.get('type') == 'rect':
-                    zx, zy = z_dict.get('x', 0.0), z_dict.get('y', 0.0)
-                    zw, zh = z_dict.get('w', 0.0), z_dict.get('h', 0.0)
-                    if zx <= raw_x <= (zx + zw) and zy <= raw_y <= (zy + zh):
-                        is_excl = True; break
-                elif z_dict.get('type') == 'circle':
-                    cx, cy = z_dict.get('cx', 0.0), z_dict.get('cy', 0.0)
-                    r = z_dict.get('r', 0.0)
-                    if ((raw_x-cx)**2 + (raw_y-cy)**2) <= r*r:
-                        is_excl = True; break
+        is_excl = p.get('is_excluded', False)
+        is_cropped = p.get('is_cropped', False)
+        eff_dia = p.get('effective_dia', dia)
 
         # Check outside datum
         is_out_datum = False
@@ -493,20 +507,21 @@ def _zone_map_drawing(pores, spec, wall_h_mm, exclusion_zones=None, datum_rect=N
 
         svg_x = wx + (raw_x / w_w_mm) * ww
         svg_y = wy + wh - (raw_y / w_h_mm) * wh
-        r     = max(3, min(16, (dia / w_h_mm) * wh * 0.5))
+        r_orig = max(3, min(16, (dia / w_h_mm) * wh * 0.5))
+        r_eff  = max(2, min(16, (eff_dia / w_h_mm) * wh * 0.5)) if is_cropped else r_orig
 
         if is_excl or is_out_datum:
-            d.add(Circle(svg_x, svg_y, r,
+            d.add(Circle(svg_x, svg_y, r_orig,
                          fillColor=colors.HexColor('#f9f9f9'),
                          strokeColor=C_IGN, strokeWidth=0.8,
                          strokeDashArray=[2,2], opacity=0.5))
             d.add(String(svg_x, svg_y-2.5, "✕",
-                         fontSize=max(6, min(10, r*1.2)), fontName='Helvetica',
+                         fontSize=max(6, min(10, r_orig*1.2)), fontName='Helvetica',
                          fillColor=C_DIM, textAnchor='middle', opacity=0.6))
             continue
 
-        ign  = u_thresh > 0 and dia < u_thresh
-        fail = not ign and dia > phi_lim
+        ign  = u_thresh > 0 and (eff_dia if is_cropped else dia) < u_thresh
+        fail = not ign and (eff_dia if is_cropped else dia) > phi_lim
 
         if ign:
             stroke, fill = C_IGN, colors.HexColor('#f0f0f0')
@@ -521,18 +536,36 @@ def _zone_map_drawing(pores, spec, wall_h_mm, exclusion_zones=None, datum_rect=N
         if ptype == 'shrink':
             stroke = colors.HexColor('#7c3aed')
 
-        if fail:
-            d.add(Circle(svg_x, svg_y, r+4,
-                         fillColor=None, strokeColor=colors.HexColor('#ffbbbb'),
-                         strokeWidth=1, strokeDashArray=[3,2]))
+        if is_cropped:
+            # Draw ghost circle first
+            d.add(Circle(svg_x, svg_y, r_orig,
+                         fillColor=None, strokeColor=colors.HexColor('#ffa8a8'),
+                         strokeWidth=0.8, strokeDashArray=[2, 2], opacity=0.6))
+            # Draw actual active portion
+            d.add(Circle(svg_x, svg_y, r_eff,
+                         fillColor=fill, strokeColor=stroke, strokeWidth=1.2))
+            # Draw scissor badge next to the pore
+            d.add(String(svg_x + r_eff + 1, svg_y - 2, "✂",
+                         fontSize=6, fontName='Helvetica',
+                         fillColor=colors.HexColor('#e03131'), textAnchor='start'))
+            # Draw text label inside effective circle if large enough
+            if r_eff >= 7:
+                d.add(String(svg_x, svg_y-3, f"{eff_dia:.1f}",
+                             fontSize=5.5, fontName='Helvetica-Bold',
+                             fillColor=stroke, textAnchor='middle'))
+        else:
+            if fail:
+                d.add(Circle(svg_x, svg_y, r_orig+4,
+                             fillColor=None, strokeColor=colors.HexColor('#ffbbbb'),
+                             strokeWidth=1, strokeDashArray=[3,2]))
 
-        d.add(Circle(svg_x, svg_y, r,
-                     fillColor=fill, strokeColor=stroke, strokeWidth=1.2))
+            d.add(Circle(svg_x, svg_y, r_orig,
+                         fillColor=fill, strokeColor=stroke, strokeWidth=1.2))
 
-        if r >= 7:
-            d.add(String(svg_x, svg_y-3, f"{dia:.1f}",
-                         fontSize=6, fontName='Helvetica-Bold',
-                         fillColor=stroke, textAnchor='middle'))
+            if r_orig >= 7:
+                d.add(String(svg_x, svg_y-3, f"{dia:.1f}",
+                             fontSize=6, fontName='Helvetica-Bold',
+                             fillColor=stroke, textAnchor='middle'))
 
     # -- Legend --
     lx = wx
@@ -673,7 +706,7 @@ def generate_pdf(
     # Part info
     elems.append(Paragraph("IDENTIFICATION & LIMITS", st['section']))
     elems.append(_section_hr())
-    elems.append(_info_table(spec_dict, res, st))
+    elems.append(_info_table(spec_dict, res, st, actual_datum_area=res.get('datum_area', spec_dict.get('datum', 100))))
     elems.append(Spacer(1, 14))
 
     # Summary stats

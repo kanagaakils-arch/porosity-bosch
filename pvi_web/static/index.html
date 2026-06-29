@@ -474,13 +474,37 @@ select.fi option{background:var(--c2)}
 .excl-list-item {
   display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--tx);
   padding: 3px 6px; border-radius: 4px; background: rgba(239,68,68,.06);
-  margin-bottom: 3px;
+  margin-bottom: 3px; cursor: pointer; transition: background .15s;
+}
+.excl-list-item:hover { background: rgba(239,68,68,.12); }
+.excl-list-item.excl-selected {
+  background: rgba(239,68,68,.2); outline: 1px solid rgba(239,68,68,.5);
 }
 .excl-list-item .excl-del {
   margin-left: auto; cursor: pointer; color: #ef4444; font-size: 11px;
-  opacity: 0.6; transition: opacity .15s;
+  opacity: 0.6; transition: opacity .15s; flex-shrink: 0;
 }
 .excl-list-item .excl-del:hover { opacity: 1; }
+/* Exclusion zone inline editor */
+.excl-edit-panel {
+  margin-top: 4px; padding: 7px 9px; background: rgba(239,68,68,.07);
+  border: 1px solid rgba(239,68,68,.25); border-radius: 6px;
+  font-size: 9px; color: var(--tx);
+}
+.excl-edit-panel .excl-edit-row {
+  display: flex; align-items: center; gap: 5px; margin-bottom: 4px;
+}
+.excl-edit-panel .excl-edit-row:last-child { margin-bottom: 0; }
+.excl-edit-panel label { width: 22px; color: var(--dim); font-size: 8px; flex-shrink:0; }
+.excl-edit-panel input[type=number] {
+  width: 60px; padding: 2px 5px; font-size: 9px;
+  background: var(--c1); border: 1px solid var(--bd2); border-radius: 4px;
+  color: var(--tx); outline: none;
+}
+.excl-edit-panel input[type=number]:focus { border-color: #ef4444; }
+.excl-edit-panel .excl-edit-hint { font-size: 8px; color: var(--dim); margin-top: 3px; }
+/* Handle dots on canvas zones */
+.excl-handle-cursor { cursor: nwse-resize; }
 /* Advanced panel toggle switch */
 .adv-toggle-row {
   display: flex; align-items: center; justify-content: space-between;
@@ -1187,6 +1211,12 @@ select.fi option{background:var(--c2)}
                 <div class="fi-wrap"><input class="fi" id="sp-datum" type="number" value="100" min="1" step="1"><span class="fi-unit">mm²</span></div>
                 <div class="fh">Reference □/△/○ from drawing</div>
               </div>
+              <div class="fi-item" style="border-top:1px solid rgba(255,255,255,.08);margin-top:6px;padding-top:8px">
+                <button type="button" class="btn btn-sec btn-sm" id="sp-zone-toggle-btn" onclick="toggleZoneMode()" style="width:100%; display:flex; align-items:center; justify-content:center; gap:6px; height:32px; font-size:11px; font-weight:600; cursor:pointer;" title="Disable HR/HK zone division — useful for flat/planar analysis (not cross-section)">
+                  <span id="sp-zone-toggle-icon">🚫</span>
+                  <span id="sp-zone-toggle-lbl">Disable HR/HK zones</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1242,6 +1272,10 @@ select.fi option{background:var(--c2)}
   <div class="spec-tab-strip">
     <div id="spec-tabs" style="display:flex;gap:4px;align-items:center"><button class="spec-tab on" onclick="switchSpecTab(0)" title="Own specification">Spec 1</button></div>
     <button class="spec-tab-add" onclick="addSpecTab()">+ New Spec Tab</button>
+    <button id="toolbar-zone-toggle" onclick="toggleZoneMode()" class="spec-tab" style="margin-left:auto; display:flex; align-items:center; gap:6px; height:24px; padding:0 8px; font-size:10px; cursor:pointer;" title="Disable/Enable HR/HK zone division for active specification">
+      <span id="toolbar-zone-icon">🌐</span>
+      <span id="toolbar-zone-lbl">HR/HK Zones</span>
+    </button>
   </div>
 
   <!-- IMAGE TOOLBAR -->
@@ -1355,6 +1389,10 @@ select.fi option{background:var(--c2)}
       <button class="btn-stack" id="btn-excl-circle" onclick="setTool('exclude_circle')" title="Draw exclusion zone circle — detected pores inside will be ignored" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
         <span class="btn-stack__icon">⭕</span>
         <span class="btn-stack__label">Excl. Circle</span>
+      </button>
+      <button class="btn-stack" id="btn-excl-select" onclick="setTool('excl_select')" title="Select, move and resize existing exclusion zones" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
+        <span class="btn-stack__icon">✏️</span>
+        <span class="btn-stack__label">Edit Zones</span>
       </button>
       <button class="btn-stack" onclick="clearExclusionZones()" title="Remove all exclusion zones" style="color:#ef4444;border-color:rgba(239,68,68,.25)">
         <span class="btn-stack__icon">🔄</span>
@@ -1522,12 +1560,15 @@ select.fi option{background:var(--c2)}
       <div style="padding:8px 14px;border-top:1px solid var(--bd)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <div style="font-size:10px;font-weight:700;color:var(--tx)">🚫 Exclusion Zones</div>
-          <button onclick="clearExclusionZones()" style="font-size:8px;padding:2px 8px;background:transparent;border:1px solid rgba(239,68,68,.3);
-              border-radius:4px;color:#ef4444;cursor:pointer">Clear All</button>
+          <div style="display:flex;gap:4px">
+            <button onclick="setTool('excl_select')" title="Edit/move zones" style="font-size:8px;padding:2px 8px;background:transparent;border:1px solid rgba(239,68,68,.3);border-radius:4px;color:#ef4444;cursor:pointer">✏️ Edit</button>
+            <button onclick="clearExclusionZones()" style="font-size:8px;padding:2px 8px;background:transparent;border:1px solid rgba(239,68,68,.3);border-radius:4px;color:#ef4444;cursor:pointer">Clear All</button>
+          </div>
         </div>
-        <div id="excl-zone-list" style="max-height:80px;overflow-y:auto">
+        <div id="excl-zone-list" style="max-height:160px;overflow-y:auto">
           <div style="font-size:9px;color:var(--dim);font-style:italic">No exclusion zones — use 🚫 Excl. Zone tool to draw</div>
         </div>
+        <div id="excl-edit-panel" class="excl-edit-panel" style="display:none"></div>
       </div>
 
       <!-- Footer tip -->
@@ -2245,6 +2286,7 @@ function loadSpecIntoForm(){
   setToggleValue('tg-hr', s.hr||0); setToggleValue('tg-nr', s.nr||0);
   setToggleValue('tg-hk', s.hk||0); setToggleValue('tg-nk', s.nk||0);
   setMethod(s.method || 'visual_machined');
+  _syncZoneToggleUI();
 }
 
 function loadSpecIntoSidebar(){
@@ -2944,6 +2986,8 @@ function saveSpec(){
   const _uVal   = document.getElementById('sp-u').value;     s.u     = _uVal   !== '' ? +_uVal   : 0.2;
   const _tVal   = document.getElementById('sp-t').value;     s.t     = _tVal   !== '' ? +_tVal   : 6;
   const _datVal = document.getElementById('sp-datum').value; s.datum = _datVal !== '' ? +_datVal : 100;
+  // Zone mode: zone_disabled is managed by the toggle, not a direct input — just preserve it
+  // (do NOT overwrite from checkbox directly; toggleZoneMode manages it)
   // Type-specific limits — persist only when the field has a value
   const _gPhi = document.getElementById('sp-phi-gas');     s.phi_gas    = _gPhi    && _gPhi.value    !== '' ? +_gPhi.value    : null;
   const _sPhi = document.getElementById('sp-phi-shrink');  s.phi_shrink = _sPhi    && _sPhi.value    !== '' ? +_sPhi.value    : null;
@@ -2984,6 +3028,8 @@ function saveSpec(){
   document.getElementById('sb-datum').textContent=s.datum+' mm²';
   // Reset canvas pore zones (spec changed)
   recomputeZones();
+  // Sync zone toggle UI to match newly loaded spec
+  if(typeof _syncZoneToggleUI === 'function') _syncZoneToggleUI();
   renderSpecTabs();
   renderImageTabs();
   nav('meas');
@@ -3151,7 +3197,12 @@ function drawCanvas(){
         const pxLen=Math.hypot(sl.x2-sl.x1, sl.y2-sl.y1);
         const mmLen=S.imgState.scalePxPerMm?(pxLen/S.imgState.scalePxPerMm).toFixed(2):null;
         const lbl=mmLen?`${mmLen} mm`:`${pxLen.toFixed(0)} px`;
-        mctx.save(); mctx.strokeStyle='#ff3333'; mctx.lineWidth=2;
+        // Detect if constrained (horizontal or vertical)
+        const isConstrained = window._scaleShift && S.imgState.scaleDrawing;
+        const isH = Math.abs(sl.x2-sl.x1) >= Math.abs(sl.y2-sl.y1);
+        mctx.save();
+        mctx.strokeStyle = isConstrained ? '#00ccff' : '#ff3333';
+        mctx.lineWidth=2.5;
         mctx.beginPath(); mctx.moveTo(sl.x1,sl.y1); mctx.lineTo(sl.x2,sl.y2); mctx.stroke();
         // tick ends
         const ang=Math.atan2(sl.y2-sl.y1,sl.x2-sl.x1)+Math.PI/2;
@@ -3162,9 +3213,22 @@ function drawCanvas(){
         // label
         const mx=(sl.x1+sl.x2)/2, my=(sl.y1+sl.y2)/2-14;
         mctx.font='bold 11px system-ui'; const tw=mctx.measureText(lbl).width;
-        mctx.fillStyle='rgba(0,0,0,.7)'; mctx.fillRect(mx-tw/2-5,my-13,tw+10,17);
+        mctx.fillStyle='rgba(0,0,0,.75)'; mctx.fillRect(mx-tw/2-5,my-13,tw+10,17);
         mctx.fillStyle='#fff'; mctx.textAlign='center'; mctx.textBaseline='middle';
         mctx.fillText(lbl,mx,my); mctx.textAlign='start'; mctx.textBaseline='alphabetic';
+        // Constrain hint shown while drawing
+        if(S.imgState.scaleDrawing){
+          const hint = isConstrained
+            ? (isH ? '⇔ Horizontal locked' : '⇕ Vertical locked')
+            : '⇧ Hold Shift to constrain H/V';
+          mctx.font='bold 10px system-ui';
+          const hw=mctx.measureText(hint).width;
+          const hx=(sl.x1+sl.x2)/2, hy=(sl.y1+sl.y2)/2+20;
+          mctx.fillStyle = isConstrained ? 'rgba(0,180,255,.85)' : 'rgba(60,60,60,.75)';
+          mctx.fillRect(hx-hw/2-6, hy-11, hw+12, 18);
+          mctx.fillStyle='#fff'; mctx.textAlign='center'; mctx.textBaseline='middle';
+          mctx.fillText(hint,hx,hy); mctx.textAlign='start'; mctx.textBaseline='alphabetic';
+        }
         mctx.restore();
       }
 
@@ -3309,30 +3373,38 @@ function drawCanvas(){
 
   if(!S.imgMode){
     // ── DRAW MODE ONLY: zone fills, wall border, surface lines, dimension labels ──
+    const zoneDisabled = !!(S.spec && S.spec.zone_disabled);
 
-    // Zone fills
-    mctx.fillStyle='rgba(255,165,0,.07)';
-    mctx.fillRect(wallL, clipTop, wallW, y1c - clipTop);
-    mctx.fillStyle='rgba(120,90,230,.06)';
-    mctx.fillRect(wallL, y1c, wallW, y2c - y1c);
-    mctx.fillStyle='rgba(255,165,0,.07)';
-    mctx.fillRect(wallL, y2c, wallW, clipBot - y2c);
+    if(!zoneDisabled){
+      // Zone fills
+      mctx.fillStyle='rgba(255,165,0,.07)';
+      mctx.fillRect(wallL, clipTop, wallW, y1c - clipTop);
+      mctx.fillStyle='rgba(120,90,230,.06)';
+      mctx.fillRect(wallL, y1c, wallW, y2c - y1c);
+      mctx.fillStyle='rgba(255,165,0,.07)';
+      mctx.fillRect(wallL, y2c, wallW, clipBot - y2c);
 
-    // Zone dividers
-    mctx.setLineDash([7,4]); mctx.lineWidth=1;
-    mctx.strokeStyle='rgba(0,0,0,.18)';
-    mctx.beginPath(); mctx.moveTo(wallL,y1c); mctx.lineTo(wR,y1c); mctx.stroke();
-    mctx.beginPath(); mctx.moveTo(wallL,y2c); mctx.lineTo(wR,y2c); mctx.stroke();
-    mctx.setLineDash([]);
+      // Zone dividers
+      mctx.setLineDash([7,4]); mctx.lineWidth=1;
+      mctx.strokeStyle='rgba(0,0,0,.18)';
+      mctx.beginPath(); mctx.moveTo(wallL,y1c); mctx.lineTo(wR,y1c); mctx.stroke();
+      mctx.beginPath(); mctx.moveTo(wallL,y2c); mctx.lineTo(wR,y2c); mctx.stroke();
+      mctx.setLineDash([]);
 
-    // Zone labels
-    mctx.font='8px Space Grotesk'; mctx.textBaseline='top'; mctx.textAlign='left';
-    mctx.fillStyle='rgba(180,110,0,.55)';
-    mctx.fillText('HR  OUTER ⅓', wallL+5, clipTop+5);
-    mctx.fillStyle='rgba(100,60,200,.55)';
-    mctx.fillText('HK  CENTRAL ⅓', wallL+5, y1c+5);
-    mctx.fillStyle='rgba(180,110,0,.55)';
-    mctx.fillText('HR  OUTER ⅓', wallL+5, y2c+5);
+      // Zone labels
+      mctx.font='8px Space Grotesk'; mctx.textBaseline='top'; mctx.textAlign='left';
+      mctx.fillStyle='rgba(180,110,0,.55)';
+      mctx.fillText('HR  OUTER \u2153', wallL+5, clipTop+5);
+      mctx.fillStyle='rgba(100,60,200,.55)';
+      mctx.fillText('HK  CENTRAL \u2153', wallL+5, y1c+5);
+      mctx.fillStyle='rgba(180,110,0,.55)';
+      mctx.fillText('HR  OUTER \u2153', wallL+5, y2c+5);
+    } else {
+      // Flat area mode: no zone fills, show subtle badge instead
+      mctx.font='bold 9px Space Grotesk'; mctx.textBaseline='top'; mctx.textAlign='left';
+      mctx.fillStyle='rgba(255,100,60,.55)';
+      mctx.fillText('\u25a0  FLAT AREA MODE \u2014 No HR/HK zones', wallL+5, clipTop+5);
+    }
 
     // Surface A / B lines
     mctx.strokeStyle='rgba(30,100,200,.5)'; mctx.lineWidth=2;
@@ -3378,31 +3450,39 @@ function drawCanvas(){
 
   } else if(S.imgState.image) {
     // ── IMAGE MODE with image loaded: zone dividers on image ──────────────
-    // Zone dividers — span only the image width, not the full canvas
-    mctx.setLineDash([8,4]); mctx.lineWidth=1.5;
-    mctx.strokeStyle='rgba(255,255,255,.55)';
-    if(zoneY1 >= clipTop && zoneY1 <= clipBot){
-      mctx.beginPath(); mctx.moveTo(imgX,zoneY1); mctx.lineTo(imgRight,zoneY1); mctx.stroke();
-    }
-    if(zoneY2 >= clipTop && zoneY2 <= clipBot){
-      mctx.beginPath(); mctx.moveTo(imgX,zoneY2); mctx.lineTo(imgRight,zoneY2); mctx.stroke();
-    }
-    mctx.setLineDash([]);
+    const zoneDisabledImg = !!(S.spec && S.spec.zone_disabled);
+    if(!zoneDisabledImg){
+      // Zone dividers — span only the image width, not the full canvas
+      mctx.setLineDash([8,4]); mctx.lineWidth=1.5;
+      mctx.strokeStyle='rgba(255,255,255,.55)';
+      if(zoneY1 >= clipTop && zoneY1 <= clipBot){
+        mctx.beginPath(); mctx.moveTo(imgX,zoneY1); mctx.lineTo(imgRight,zoneY1); mctx.stroke();
+      }
+      if(zoneY2 >= clipTop && zoneY2 <= clipBot){
+        mctx.beginPath(); mctx.moveTo(imgX,zoneY2); mctx.lineTo(imgRight,zoneY2); mctx.stroke();
+      }
+      mctx.setLineDash([]);
 
-    // Zone labels — anchored to image left edge, not canvas left
-    mctx.font='bold 9px Space Grotesk'; mctx.textBaseline='top'; mctx.textAlign='left';
-    const lx = imgX + 8;
-    if(imgTopMm < t3mm){
-      mctx.fillStyle='rgba(255,210,80,.95)';
-      mctx.fillText('HR  OUTER ⅓', lx, imgY + 8);
-    }
-    if(imgBotMm > t3mm && imgTopMm < t3mm*2){
-      mctx.fillStyle='rgba(210,170,255,.95)';
-      mctx.fillText('HK  CENTRAL ⅓', lx, Math.max(imgY + 8, y1c + 8));
-    }
-    if(imgBotMm > t3mm*2){
-      mctx.fillStyle='rgba(255,210,80,.95)';
-      mctx.fillText('HR  OUTER ⅓', lx, Math.max(imgY + 8, y2c + 8));
+      // Zone labels — anchored to image left edge, not canvas left
+      mctx.font='bold 9px Space Grotesk'; mctx.textBaseline='top'; mctx.textAlign='left';
+      const lx = imgX + 8;
+      if(imgTopMm < t3mm){
+        mctx.fillStyle='rgba(255,210,80,.95)';
+        mctx.fillText('HR  OUTER \u2153', lx, imgY + 8);
+      }
+      if(imgBotMm > t3mm && imgTopMm < t3mm*2){
+        mctx.fillStyle='rgba(210,170,255,.95)';
+        mctx.fillText('HK  CENTRAL \u2153', lx, Math.max(imgY + 8, y1c + 8));
+      }
+      if(imgBotMm > t3mm*2){
+        mctx.fillStyle='rgba(255,210,80,.95)';
+        mctx.fillText('HR  OUTER \u2153', lx, Math.max(imgY + 8, y2c + 8));
+      }
+    } else {
+      // Flat area mode — show badge on image, no zone lines
+      mctx.font='bold 9px Space Grotesk'; mctx.textBaseline='top'; mctx.textAlign='left';
+      mctx.fillStyle='rgba(255,100,60,.9)';
+      mctx.fillText('\u25a0  FLAT AREA MODE \u2014 No HR/HK zones', imgX + 8, imgY + 8);
     }
 
     // Offset badge — top-right of image
@@ -3434,6 +3514,25 @@ function drawCanvas(){
     });
     mctx.fillStyle='rgba(255,173,0,.85)'; mctx.font='bold 9px Space Grotesk'; mctx.textAlign='left'; mctx.textBaseline='bottom';
     mctx.fillText('DATUM □  '+(dr.w*dr.h).toFixed(1)+'mm²  ('+dr.w.toFixed(2)+'×'+dr.h.toFixed(2)+'mm)',dp.x+4,dp.y-3);
+    // ── Draw 8 resize handles when datum tool is active ──────────────────────
+    if(S.tool==='datum' || S.tool==='select'){
+      const drawSc2 = (S.imgMode && S.imgState.scalePxPerMm) ? S.imgState.scalePxPerMm : scale;
+      const dw2 = dr.w * drawSc2, dh2 = dr.h * drawSc2;
+      mctx.save();
+      mctx.strokeStyle='rgba(255,173,0,.95)'; mctx.lineWidth=2; mctx.setLineDash([]);
+      mctx.strokeRect(dp.x, dp.y, dw2, dh2);
+      const hPts = [
+        [dp.x,       dp.y],       [dp.x+dw2/2, dp.y],       [dp.x+dw2,   dp.y],
+        [dp.x,       dp.y+dh2/2],                             [dp.x+dw2,   dp.y+dh2/2],
+        [dp.x,       dp.y+dh2],   [dp.x+dw2/2, dp.y+dh2],   [dp.x+dw2,   dp.y+dh2],
+      ];
+      hPts.forEach(([hx,hy])=>{
+        mctx.fillStyle='#fff'; mctx.strokeStyle='rgba(255,173,0,.95)'; mctx.lineWidth=1.5;
+        mctx.fillRect(hx-4,hy-4,8,8); mctx.strokeRect(hx-4,hy-4,8,8);
+      });
+      mctx.restore();
+    }
+
   } else {
     // Default datum centred in wall
     const dw2=Math.sqrt(S.spec.datum||100)*scale*.8;
@@ -3454,34 +3553,151 @@ function drawCanvas(){
     if(S.imgMode&&_ez.length){
       mctx.save();
       _ez.forEach(function(z,zi){
+        const isSelected = (S.tool==='excl_select' && S._exclSelected===zi);
+        const inEditPts  = isSelected && S._exclEditPts && S._exclEditPts.zi===zi;
+
+        // ── Draw zone fill + hatching ─────────────────────────────────────
         if(z.type==='circle'){
           var _cp=mmToCanvas(z.cx,z.cy),_r=z.r*_sc;
           mctx.fillStyle='rgba(239,68,68,.08)';
           mctx.beginPath(); mctx.arc(_cp.x,_cp.y,_r,0,Math.PI*2); mctx.fill();
-          mctx.setLineDash([5,3]); mctx.strokeStyle='rgba(239,68,68,.6)'; mctx.lineWidth=1.5;
+          mctx.setLineDash(isSelected?[]:[5,3]); mctx.strokeStyle=isSelected?'rgba(239,68,68,1)':'rgba(239,68,68,.6)'; mctx.lineWidth=isSelected?2:1.5;
           mctx.beginPath(); mctx.arc(_cp.x,_cp.y,_r,0,Math.PI*2); mctx.stroke(); mctx.setLineDash([]);
           mctx.strokeStyle='rgba(239,68,68,.12)'; mctx.lineWidth=0.5;
           mctx.save();
           mctx.beginPath(); mctx.arc(_cp.x,_cp.y,_r,0,Math.PI*2); mctx.clip();
-          for(var _d=-_r;_d<_r*2;_d+=10){
-            mctx.beginPath(); mctx.moveTo(_cp.x+_d-_r,_cp.y-_r); mctx.lineTo(_cp.x+_d-_r-_r*2,_cp.y+_r); mctx.stroke();
-          }
+          for(var _d=-_r;_d<_r*2;_d+=10){ mctx.beginPath(); mctx.moveTo(_cp.x+_d-_r,_cp.y-_r); mctx.lineTo(_cp.x+_d-_r-_r*2,_cp.y+_r); mctx.stroke(); }
           mctx.restore();
           mctx.fillStyle='rgba(239,68,68,.85)'; mctx.font='bold 8px system-ui';
           mctx.textAlign='center'; mctx.textBaseline='middle';
           mctx.fillText('EXCL #'+(zi+1),_cp.x,_cp.y);
+        } else if(z.type==='polygon'){
+          const pts=z.points||[];
+          if(pts.length>=3){
+            // Fill
+            mctx.fillStyle='rgba(239,68,68,.09)';
+            mctx.beginPath();
+            const _pp0=mmToCanvas(pts[0].x,pts[0].y); mctx.moveTo(_pp0.x,_pp0.y);
+            for(let _pi=1;_pi<pts.length;_pi++){ const _ppi=mmToCanvas(pts[_pi].x,pts[_pi].y); mctx.lineTo(_ppi.x,_ppi.y); }
+            mctx.closePath(); mctx.fill();
+            // Hatching inside polygon using clip
+            mctx.save();
+            mctx.beginPath();
+            const _pp0c=mmToCanvas(pts[0].x,pts[0].y); mctx.moveTo(_pp0c.x,_pp0c.y);
+            for(let _pi=1;_pi<pts.length;_pi++){ const _ppi=mmToCanvas(pts[_pi].x,pts[_pi].y); mctx.lineTo(_ppi.x,_ppi.y); }
+            mctx.closePath(); mctx.clip();
+            const _bb=polyBBox(pts);
+            const _bbp0=mmToCanvas(_bb.minX,_bb.minY), _bbp1=mmToCanvas(_bb.maxX,_bb.maxY);
+            const _span=Math.max(_bbp1.x-_bbp0.x,_bbp1.y-_bbp0.y);
+            mctx.strokeStyle='rgba(239,68,68,.12)'; mctx.lineWidth=0.5;
+            for(let _d=-_span;_d<_span*2;_d+=10){ mctx.beginPath(); mctx.moveTo(_bbp0.x+_d,_bbp0.y); mctx.lineTo(_bbp0.x+_d-_span,_bbp0.y+_span); mctx.stroke(); }
+            mctx.restore();
+            // Outline
+            mctx.setLineDash(isSelected?[]:[5,3]); mctx.strokeStyle=isSelected?'rgba(239,68,68,1)':'rgba(239,68,68,.65)'; mctx.lineWidth=isSelected?2:1.5;
+            mctx.beginPath();
+            const _ppo=mmToCanvas(pts[0].x,pts[0].y); mctx.moveTo(_ppo.x,_ppo.y);
+            for(let _pi=1;_pi<pts.length;_pi++){ const _ppi=mmToCanvas(pts[_pi].x,pts[_pi].y); mctx.lineTo(_ppi.x,_ppi.y); }
+            mctx.closePath(); mctx.stroke(); mctx.setLineDash([]);
+            // Label at centroid
+            const _cen=polyCentroid(pts), _cenC=mmToCanvas(_cen.x,_cen.y);
+            mctx.fillStyle='rgba(239,68,68,.9)'; mctx.font='bold 8px system-ui';
+            mctx.textAlign='center'; mctx.textBaseline='middle';
+            mctx.fillText('EXCL #'+(zi+1)+' ✦',_cenC.x,_cenC.y);
+          }
         } else {
           var _p=mmToCanvas(z.x,z.y),_w=z.w*_sc,_h=z.h*_sc;
           mctx.fillStyle='rgba(239,68,68,.08)'; mctx.fillRect(_p.x,_p.y,_w,_h);
-          mctx.setLineDash([5,3]); mctx.strokeStyle='rgba(239,68,68,.6)'; mctx.lineWidth=1.5;
+          mctx.setLineDash(isSelected?[]:[5,3]); mctx.strokeStyle=isSelected?'rgba(239,68,68,1)':'rgba(239,68,68,.6)'; mctx.lineWidth=isSelected?2:1.5;
           mctx.strokeRect(_p.x,_p.y,_w,_h); mctx.setLineDash([]);
           mctx.strokeStyle='rgba(239,68,68,.12)'; mctx.lineWidth=0.5;
-          for(var _d=-Math.max(_w,_h);_d<Math.max(_w,_h)*2;_d+=10){
-            mctx.beginPath();mctx.moveTo(_p.x+_d,_p.y);mctx.lineTo(_p.x+_d-_h,_p.y+_h);mctx.stroke();
-          }
+          for(var _d=-Math.max(_w,_h);_d<Math.max(_w,_h)*2;_d+=10){ mctx.beginPath();mctx.moveTo(_p.x+_d,_p.y);mctx.lineTo(_p.x+_d-_h,_p.y+_h);mctx.stroke(); }
           mctx.fillStyle='rgba(239,68,68,.85)'; mctx.font='bold 8px system-ui';
           mctx.textAlign='left'; mctx.textBaseline='top';
           mctx.fillText('EXCL #'+(zi+1),_p.x+3,_p.y+2);
+        }
+
+        // ── Selection resize handles (non-edit-pts mode) ──────────────────
+        if(isSelected && !inEditPts){
+          mctx.save();
+          mctx.strokeStyle='rgba(239,68,68,.9)'; mctx.lineWidth=2; mctx.setLineDash([]);
+          if(z.type==='circle'){
+            const _sp=mmToCanvas(z.cx,z.cy), _sr=z.r*_sc;
+            _drawExclHandle(mctx,_sp.x,_sp.y,'#ef4444');
+            _drawExclHandle(mctx,_sp.x+_sr,_sp.y,'#ef4444');
+            _drawExclHandle(mctx,_sp.x-_sr,_sp.y,'#ef4444');
+            _drawExclHandle(mctx,_sp.x,_sp.y-_sr,'#ef4444');
+            _drawExclHandle(mctx,_sp.x,_sp.y+_sr,'#ef4444');
+          } else if(z.type==='rect'){
+            const _sp=mmToCanvas(z.x,z.y), _sw=z.w*_sc, _sh=z.h*_sc;
+            const _hx=[_sp.x, _sp.x+_sw/2, _sp.x+_sw];
+            const _hy=[_sp.y, _sp.y+_sh/2, _sp.y+_sh];
+            [[0,0],[1,0],[2,0],[0,1],[2,1],[0,2],[1,2],[2,2]].forEach(([hxi,hyi])=>{ _drawExclHandle(mctx,_hx[hxi],_hy[hyi],'#ef4444'); });
+          } else if(z.type==='polygon'){
+            // Polygon selected but NOT in edit mode: show bounding box handles
+            const pts=z.points||[];
+            if(pts.length>=2){
+              const _bb=polyBBox(pts);
+              const _bbl=mmToCanvas(_bb.minX,_bb.minY), _bbr=mmToCanvas(_bb.maxX,_bb.maxY);
+              const _bw=_bbr.x-_bbl.x, _bh=_bbr.y-_bbl.y;
+              mctx.setLineDash([3,3]); mctx.strokeStyle='rgba(239,68,68,.4)'; mctx.lineWidth=1;
+              mctx.strokeRect(_bbl.x,_bbl.y,_bw,_bh); mctx.setLineDash([]);
+              const _hx=[_bbl.x,_bbl.x+_bw/2,_bbr.x];
+              const _hy=[_bbl.y,_bbl.y+_bh/2,_bbr.y];
+              [[0,0],[1,0],[2,0],[0,1],[2,1],[0,2],[1,2],[2,2]].forEach(([hxi,hyi])=>{ _drawExclHandle(mctx,_hx[hxi],_hy[hyi],'#ef4444'); });
+            }
+          }
+          // ── Rotation handle: circle above bounding box ──────────────────
+          if(S._exclRotating && S._exclRotating.zi===zi && S._exclRotating.active){
+            const _rState = S._exclRotating;
+            const _rCx = mmToCanvas(_rState.cx, _rState.cy);
+            // Rotation handle is 36px above the topmost point
+            let _topY = _rCx.y - 40;
+            if(z.type==='polygon'){ const _bb2=polyBBox(z.points); _topY=mmToCanvas(_bb2.minX,_bb2.minY).y - 40; }
+            else if(z.type==='circle'){ _topY=mmToCanvas(z.cx,z.cy-z.r).y-40; }
+            else { _topY=mmToCanvas(z.x,z.y).y - 40; }
+            // Stem line
+            mctx.setLineDash([3,3]); mctx.strokeStyle='rgba(255,200,0,.7)'; mctx.lineWidth=1;
+            mctx.beginPath(); mctx.moveTo(_rCx.x, _rCx.y); mctx.lineTo(_rCx.x, _topY+9); mctx.stroke(); mctx.setLineDash([]);
+            // Rotation circle handle
+            mctx.fillStyle='#fbbf24'; mctx.strokeStyle='rgba(255,255,255,.9)'; mctx.lineWidth=1.5;
+            mctx.beginPath(); mctx.arc(_rCx.x, _topY, 9, 0, Math.PI*2); mctx.fill(); mctx.stroke();
+            mctx.fillStyle='#fff'; mctx.font='bold 9px system-ui'; mctx.textAlign='center'; mctx.textBaseline='middle';
+            mctx.fillText('↻', _rCx.x, _topY);
+          }
+          mctx.restore();
+        }
+
+        // ── Edit Points mode: vertex + midpoint handles ────────────────────
+        if(inEditPts && z.type==='polygon'){
+          const pts = z.points||[];
+          mctx.save();
+          // Draw each vertex handle (filled orange square)
+          for(let _vi=0; _vi<pts.length; _vi++){
+            const _vc = mmToCanvas(pts[_vi].x, pts[_vi].y);
+            mctx.fillStyle='#ef4444'; mctx.strokeStyle='#fff'; mctx.lineWidth=1.5;
+            mctx.fillRect(_vc.x-5,_vc.y-5,10,10);
+            mctx.strokeRect(_vc.x-5,_vc.y-5,10,10);
+            // Vertex index label
+            if(pts.length<=16){
+              mctx.fillStyle='#fff'; mctx.font='bold 7px system-ui'; mctx.textAlign='center'; mctx.textBaseline='middle';
+              mctx.fillText(_vi+1, _vc.x, _vc.y);
+            }
+          }
+          // Draw midpoint "+" handles (hollow cyan circles) for adding new vertices
+          for(let _vi=0; _vi<pts.length; _vi++){
+            const _vj=(_vi+1)%pts.length;
+            const _mx=(pts[_vi].x+pts[_vj].x)/2, _my=(pts[_vi].y+pts[_vj].y)/2;
+            const _mc=mmToCanvas(_mx,_my);
+            mctx.fillStyle='rgba(30,200,255,.22)'; mctx.strokeStyle='rgba(30,200,255,.85)'; mctx.lineWidth=1.2;
+            mctx.beginPath(); mctx.arc(_mc.x,_mc.y,5,0,Math.PI*2); mctx.fill(); mctx.stroke();
+            mctx.fillStyle='rgba(30,200,255,.95)'; mctx.font='bold 9px system-ui'; mctx.textAlign='center'; mctx.textBaseline='middle';
+            mctx.fillText('+',_mc.x,_mc.y);
+          }
+          // Tip label
+          const _bb3=polyBBox(pts), _topC=mmToCanvas(_bb3.minX,_bb3.minY);
+          mctx.fillStyle='rgba(255,255,255,.7)'; mctx.font='10px system-ui'; mctx.textAlign='left'; mctx.textBaseline='bottom';
+          mctx.fillText('✏ Edit Points — Right-click to finish/delete vertex',_topC.x,_topC.y-4);
+          mctx.restore();
         }
       });
       mctx.restore();
@@ -3622,23 +3838,89 @@ function drawPore(p, selected){
   const cx=c.x, cy=c.y;
   const ignored=S.spec.u>0&&p.dia<S.spec.u;
   const failing=!ignored&&p.dia>S.spec.phi;
-  // Zone-masked pore: in an exclusion zone — draw greyed-out, excluded from metrics
-  const zoneMasked = _poreInExclZone(p);
-  if(zoneMasked){
-    // Draw as faint grey circle with diagonal hatch to signal exclusion
+  // ── Exclusion zone crop status ────────────────────────────────────────────
+  const _cs = _poreExclCropStatus(p);
+  if(_cs.status === 'full'){
+    // Pore is completely inside an exclusion zone: draw full ghost only
     mctx.save();
-    mctx.globalAlpha = 0.32;
+    mctx.globalAlpha = 0.22;
     buildPath(0);
-    mctx.fillStyle='rgba(100,100,100,0.18)'; mctx.fill();
-    mctx.strokeStyle='#999'; mctx.lineWidth=1.5; mctx.setLineDash([3,3]); mctx.stroke(); mctx.setLineDash([]);
-    // Label "EXCL" inside
+    mctx.fillStyle='rgba(100,100,100,0.12)'; mctx.fill();
+    mctx.strokeStyle='#aaa'; mctx.lineWidth=1.2; mctx.setLineDash([2,3]); mctx.stroke(); mctx.setLineDash([]);
     if(r>8){
-      mctx.fillStyle='#888'; mctx.font=`bold ${Math.max(7,Math.min(10,r*.55))}px Space Grotesk`;
+      mctx.fillStyle='#aaa'; mctx.font=`bold ${Math.max(7,Math.min(10,r*.55))}px Space Grotesk`;
       mctx.textAlign='center'; mctx.textBaseline='middle';
       mctx.fillText('✕',cx,cy);
     }
     mctx.restore();
-    return; // skip normal rendering
+    return;
+  }
+  if(_cs.status === 'partial'){
+    // ── PARTIAL: pore straddles a zone boundary — draw cropped outside, ghost inside ──
+    const _page = (typeof activeImagePage==='function') ? activeImagePage() : null;
+    const _zones = (_page && _page.exclusionZones) || [];
+    const _sc = (S.imgMode && S.imgState.scalePxPerMm) ? S.imgState.scalePxPerMm : drawScale;
+    // 1. Ghost the FULL pore shape (entire area, very faint)
+    mctx.save();
+    mctx.globalAlpha = 0.15;
+    buildPath(0);
+    mctx.strokeStyle='rgba(239,68,68,0.5)'; mctx.lineWidth=1; mctx.setLineDash([2,2]); mctx.stroke(); mctx.setLineDash([]);
+    mctx.restore();
+    // 2. Draw the OUTSIDE portion with full color using clip
+    mctx.save();
+    // Build clip = canvas minus all exclusion zones (evenodd)
+    mctx.beginPath();
+    mctx.rect(-10,-10,S.cv.W+20,S.cv.H+20);
+    _zones.forEach(z=>{
+      if(z.type==='circle'){
+        const zcp=mmToCanvas(z.cx,z.cy); const zr=z.r*_sc;
+        mctx.moveTo(zcp.x+zr,zcp.y);
+        mctx.arc(zcp.x,zcp.y,zr,0,Math.PI*2);
+      } else if(z.type==='polygon'){
+        const pts=z.points||[];
+        if(pts.length>=3){
+          const p0=mmToCanvas(pts[0].x,pts[0].y); mctx.moveTo(p0.x,p0.y);
+          for(let _pi=1;_pi<pts.length;_pi++){ const _pp=mmToCanvas(pts[_pi].x,pts[_pi].y); mctx.lineTo(_pp.x,_pp.y); }
+          mctx.closePath();
+        }
+      } else {
+        const zp=mmToCanvas(z.x,z.y); const zw=z.w*_sc, zh=z.h*_sc;
+        mctx.rect(zp.x,zp.y,zw,zh);
+      }
+    });
+    mctx.clip('evenodd');
+    // Now draw the pore normally within the clip
+    const zoneCol2=p.zone==='hr'?'#b87000':p.zone==='hk'?'#6a3ecc':'#0099cc';
+    const strokeCol2=ignored?'#999999':failing?'#cc2222':zoneCol2;
+    const fillAlpha2=ignored?.10:failing?.22:.18;
+    const fillBase2=ignored?'150,150,150':failing?'220,50,50':p.type==='gas'?'0,120,200':'160,100,40';
+    const grad2=mctx.createRadialGradient(cx-r*.3,cy-r*.3,0,cx,cy,Math.max(1,r));
+    grad2.addColorStop(0,`rgba(${fillBase2},${fillAlpha2*1.5})`);
+    grad2.addColorStop(1,`rgba(${fillBase2},${fillAlpha2*.4})`);
+    buildPath(0);
+    if(S.imgMode){
+      mctx.strokeStyle='rgba(255,255,255,0.9)'; mctx.lineWidth=4; mctx.stroke();
+    }
+    mctx.fillStyle=grad2; mctx.fill();
+    mctx.strokeStyle=strokeCol2;
+    mctx.lineWidth=S.imgMode?(selected?3.5:2):(selected?2:1.2);
+    mctx.stroke();
+    // Crop label
+    if(r>9){
+      mctx.fillStyle=strokeCol2;
+      mctx.font=`${Math.max(7,Math.min(10,r*.55))}px Space Grotesk`;
+      mctx.textAlign='center'; mctx.textBaseline='middle';
+      mctx.fillText((_cs.effectiveDia).toFixed(2),cx,cy);
+    }
+    mctx.restore();
+    // 3. Crop scissor badge at zone boundary crossing point
+    mctx.save();
+    mctx.font=`${Math.max(9,Math.min(13,r*.7))}px Arial`;
+    mctx.textAlign='center'; mctx.textBaseline='middle';
+    mctx.fillStyle='rgba(239,68,68,0.85)';
+    mctx.fillText('✂',cx+(r*0.55),cy-(r*0.55));
+    mctx.restore();
+    return;
   }
   const zoneCol=p.zone==='hr'?'#b87000':p.zone==='hk'?'#6a3ecc':'#0099cc';
   const strokeCol=ignored?'#999999':failing?'#cc2222':zoneCol;
@@ -3747,6 +4029,9 @@ function drawRuler(){
 // PORE ZONE ASSIGNMENT
 // ═══════════════════════════════════════════════════
 function getPoreZone(p){
+  // If zones are disabled (flat area mode), all pores are in 'hr' (treated uniformly)
+  if(S.spec && S.spec.zone_disabled) return 'hr';
+
   // p.y is position within the image/wall in mm from the top of the visible area.
   // In image mode: account for imgOffsetMm so zones are relative to the full wall,
   // not relative to the cropped image frame.
@@ -3778,6 +4063,60 @@ function recomputeZones(){
   AP().forEach(p=>{ p.zone=getPoreZone(p); });
 }
 
+function toggleZoneMode(){
+  S.spec.zone_disabled = !S.spec.zone_disabled;
+  _syncZoneToggleUI();
+  recomputeZones();
+  drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+  toast(S.spec.zone_disabled ? 'Zone analysis disabled — flat area mode' : 'HR/HK zone analysis enabled');
+}
+
+function _syncZoneToggleUI(){
+  const on = !!(S.spec && S.spec.zone_disabled);
+
+  // 1. Front page button
+  const btn = document.getElementById('sp-zone-toggle-btn');
+  const icon = document.getElementById('sp-zone-toggle-icon');
+  const lbl = document.getElementById('sp-zone-toggle-lbl');
+  if (btn) {
+    if (on) {
+      btn.style.background = 'rgba(239, 68, 68, 0.12)';
+      btn.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+      btn.style.color = '#ef4444';
+      if (icon) icon.textContent = '✅';
+      if (lbl) lbl.textContent = 'HR/HK Zones: Disabled';
+    } else {
+      btn.style.background = 'var(--c3)';
+      btn.style.borderColor = 'var(--bd)';
+      btn.style.color = 'var(--tx)';
+      if (icon) icon.textContent = '🚫';
+      if (lbl) lbl.textContent = 'Disable HR/HK zones';
+    }
+  }
+
+  // 2. Workspace toolbar icon button (tab-strip)
+  const twBtn = document.getElementById('toolbar-zone-toggle');
+  const twIcon = document.getElementById('toolbar-zone-icon');
+  const twLbl = document.getElementById('toolbar-zone-lbl');
+  if (twBtn) {
+    if (on) {
+      twBtn.style.background = 'rgba(239, 68, 68, 0.15)';
+      twBtn.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+      twBtn.style.color = '#ef4444';
+      if (twIcon) twIcon.textContent = '🚫';
+      if (twLbl) twLbl.textContent = 'Zones: Off';
+      twBtn.title = "HR/HK zones are disabled (Flat Area Mode). Click to enable.";
+    } else {
+      twBtn.style.background = 'var(--c3)';
+      twBtn.style.borderColor = 'var(--bd)';
+      twBtn.style.color = 'var(--tx)';
+      if (twIcon) twIcon.textContent = '🌐';
+      if (twLbl) twLbl.textContent = 'Zones: On';
+      twBtn.title = "HR/HK zones are active. Click to disable.";
+    }
+  }
+}
+
 // ═══════════════════════════════════════════════════
 // CANVAS EVENTS
 // ═══════════════════════════════════════════════════
@@ -3798,21 +4137,77 @@ function bindCanvasEvents(){
       else if(S.imgState.imgTool==='crop' && S.imgState.cropRect){
         cancelCrop();
       }
-      // Priority 3: exit any active image tool
+      // Priority 3: exit polygon Edit Points mode
+      else if(S._exclEditPts!=null){
+        S._exclEditPts=null; drawCanvas(); renderExclList();
+        toast('Edit Points mode exited');
+      }
+      // Priority 4: exit rotation mode
+      else if(S._exclRotating!=null){
+        S._exclRotating=null; drawCanvas(); renderExclList();
+      }
+      // Priority 5: exit any active image tool
       else if(S.imgState.imgTool){
         imgToolActivate(S.imgState.imgTool); // toggles off
       }
     }
     if((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey){ e.preventDefault(); undoPore(); }
     if((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))){ e.preventDefault(); redoPore(); }
+    // Delete/Backspace: remove selected exclusion zone
+    if((e.key==='Delete'||e.key==='Backspace') && S.tool==='excl_select' && S._exclSelected!=null){
+      const tag=e.target.tagName;
+      if(tag==='INPUT'||tag==='TEXTAREA') return;
+      e.preventDefault();
+      removeExclZone(S._exclSelected);
+      S._exclSelected=null; S._exclEditPts=null; S._exclRotating=null;
+    }
+    // Shift held during scale_line draw → constrain to H/V, redraw live
+    if(e.key==='Shift' && S.imgState.imgTool==='scale_line' && S.imgState.scaleDrawing){
+      window._scaleShift=true; drawCanvas();
+    }
+  });
+
+  // Global shift tracking for scale line constraint
+  document.addEventListener('keydown', e=>{
+    if(e.key==='Shift') { window._scaleShift=true;
+      if(S.imgState.imgTool==='scale_line' && S.imgState.scaleDrawing) drawCanvas();
+    }
+  });
+  document.addEventListener('keyup', e=>{
+    if(e.key==='Shift') { window._scaleShift=false;
+      if(S.imgState.imgTool==='scale_line' && S.imgState.scaleDrawing) drawCanvas();
+    }
   });
   wrap.addEventListener('contextmenu',e=>{
     e.preventDefault();
     const p=getCanvasPos(e);
+    const mm=canvasToMm(p.x,p.y);
+    // ── Exclusion zone right-click: show context menu ────────────────────
+    if(S.imgMode){
+      const _page=activeImagePage();
+      const _zones=_page?(_page.exclusionZones||[]):[];
+      if(_zones.length){
+        // If in polygon edit mode, check if right-clicking on a vertex
+        let _ptIdx=null;
+        if(S._exclEditPts!=null){
+          const _epz=_zones[S._exclEditPts.zi];
+          if(_epz&&_epz.type==='polygon'){
+            const _epts=_epz.points||[];
+            for(let _vi=0;_vi<_epts.length;_vi++){
+              const _vc=mmToCanvas(_epts[_vi].x,_epts[_vi].y);
+              if(Math.hypot(p.x-_vc.x,p.y-_vc.y)<=9){ _ptIdx=_vi; break; }
+            }
+            if(_ptIdx!=null){ showExclContextMenu(e,S._exclEditPts.zi,_ptIdx); return; }
+          }
+        }
+        // General zone right-click
+        const _zi=exclZoneAtCanvas(p.x,p.y,_zones);
+        if(_zi>=0){ showExclContextMenu(e,_zi,null); return; }
+      }
+    }
     // Right-click on datum square → remove it
     if(S.datumRect && S.datumRect.w>0){
       const dr=S.datumRect;
-      const mm=canvasToMm(p.x,p.y);
       if(mm.x>=dr.x && mm.x<=(dr.x+dr.w) && mm.y>=dr.y && mm.y<=(dr.y+dr.h)){
         clearDatum(); return;
       }
@@ -3871,6 +4266,81 @@ function bindCanvasEvents(){
     } else if(S.tool==='measure'){
       if(!S.measurePt1){ S.measurePt1=mm; drawCanvas(); }
       else { S.measurePt1=null; drawCanvas(); }
+    } else if(S.tool==='excl_select'){
+      // --- Exclusion zone select/move/resize/vertex-edit/rotate ---
+      const _page = activeImagePage();
+      const _zones = _page ? (_page.exclusionZones||[]) : [];
+      // Check for handle first (resize, vertex, midpoint, rotate)
+      const _hinfo = exclZoneHandleAtCanvas(p.x, p.y, _zones);
+      if(_hinfo){
+        S._exclSelected = _hinfo.zi;
+        const _zSnap = JSON.parse(JSON.stringify(_zones[_hinfo.zi]));
+        // Rotation handle
+        if(_hinfo.handle==='rotate'){
+          if(S._exclRotating && S._exclRotating.zi===_hinfo.zi){
+            dragState={ type:'excl_rotate', zi:_hinfo.zi, startMx:p.x, startMy:p.y,
+              cx:S._exclRotating.cx, cy:S._exclRotating.cy,
+              origPts:S._exclRotating.origPts?JSON.parse(JSON.stringify(S._exclRotating.origPts)):null,
+              origProps:S._exclRotating.origProps?JSON.parse(JSON.stringify(S._exclRotating.origProps)):null,
+              zone:_zSnap };
+          }
+          isPointerDown=true; drawCanvas(); renderExclList(); return;
+        }
+        // Polygon vertex drag
+        if(_hinfo.handle==='poly_vtx'){
+          pushHistory();
+          dragState={ type:'excl_vtx_drag', zi:_hinfo.zi, ptIdx:_hinfo.ptIdx,
+            startMx:p.x, startMy:p.y, zone:_zSnap };
+          isPointerDown=true; drawCanvas(); return;
+        }
+        // Polygon midpoint insert
+        if(_hinfo.handle==='poly_mid'){
+          pushHistory();
+          const _mz = _zones[_hinfo.zi];
+          if(_mz && _mz.type==='polygon'){
+            // Insert new vertex at midpoint position, right after midIdx
+            const _insertPt = { x:_hinfo.midX, y:_hinfo.midY };
+            _mz.points.splice(_hinfo.midIdx+1, 0, _insertPt);
+            // Now immediately drag this new vertex
+            dragState={ type:'excl_vtx_drag', zi:_hinfo.zi, ptIdx:_hinfo.midIdx+1,
+              startMx:p.x, startMy:p.y, zone:JSON.parse(JSON.stringify(_mz)) };
+          }
+          isPointerDown=true; drawCanvas(); return;
+        }
+        // Polygon bounding-box scale handles
+        if(_hinfo.handle && _hinfo.handle.startsWith('poly_bbox_')){
+          pushHistory();
+          dragState={ type:'excl_poly_scale', zi:_hinfo.zi, handle:_hinfo.handle.replace('poly_bbox_',''),
+            startMx:p.x, startMy:p.y, zone:_zSnap,
+            origMinX:_hinfo.origMinX, origMinY:_hinfo.origMinY,
+            origW:_hinfo.origW, origH:_hinfo.origH };
+          isPointerDown=true; drawCanvas(); renderExclList(); return;
+        }
+        // Standard resize handles (circle/rect)
+        pushHistory();
+        dragState = { type:'excl_resize', zi:_hinfo.zi, handle:_hinfo.handle,
+          startMx: p.x, startMy: p.y,
+          zone: _zSnap };
+        isPointerDown = true; drawCanvas(); renderExclList(); return;
+      }
+      // Check for zone body (move)
+      const _zi = exclZoneAtCanvas(p.x, p.y, _zones);
+      if(_zi >= 0){
+        S._exclSelected = _zi;
+        // Exit edit-pts mode if clicking a different zone
+        if(S._exclEditPts && S._exclEditPts.zi !== _zi) S._exclEditPts = null;
+        const _z = _zones[_zi];
+        pushHistory();
+        dragState = { type:'excl_move', zi:_zi,
+          origZone: JSON.parse(JSON.stringify(_z)),
+          startMx: p.x, startMy: p.y };
+        isPointerDown = true;
+      } else {
+        S._exclSelected = null;
+        S._exclEditPts = null;
+        S._exclRotating = null;
+      }
+      drawCanvas(); renderExclList();
     } else if(S.tool==='exclude_rect'){
       S._exclDraw={active:true,type:'rect',ox:mm.x,oy:mm.y,x:mm.x,y:mm.y,w:0,h:0};
       isPointerDown=true; drawCanvas();
@@ -3878,15 +4348,24 @@ function bindCanvasEvents(){
       S._exclDraw={active:true,type:'circle',ox:mm.x,oy:mm.y,cx:mm.x,cy:mm.y,r:0};
       isPointerDown=true; drawCanvas();
     } else if(S.tool==='datum'){
-      // If clicking INSIDE existing datum → move it
       if(S.datumRect && S.datumRect.w > 0){
+        // 1. Check resize handles first
+        const _dh = datumHandleAtCanvas(p.x, p.y);
+        if(_dh){
+          pushHistory();
+          dragState = { type:'datum_resize', handle:_dh.name, startMx:p.x, startMy:p.y,
+            origDatum: {...S.datumRect} };
+          isPointerDown=true; wrap.style.cursor=_dh.cur; drawCanvas(); return;
+        }
+        // 2. Click inside body → move
         const dr=S.datumRect;
         if(mm.x>=dr.x && mm.x<=(dr.x+dr.w) && mm.y>=dr.y && mm.y<=(dr.y+dr.h)){
+          pushHistory();
           dragState={type:'datum_move', startMx:p.x, startMy:p.y, origDX:dr.x, origDY:dr.y};
-          isPointerDown=true; drawCanvas(); return;
+          isPointerDown=true; wrap.style.cursor='move'; drawCanvas(); return;
         }
       }
-      // Otherwise start a NEW datum square
+      // 3. Outside → start drawing a NEW datum rect (non-square; remove square constraint)
       S.datumRect={_ox:mm.x, _oy:mm.y, x:mm.x, y:mm.y, w:0, h:0};
       isPointerDown=true; drawCanvas();
     }
@@ -3940,19 +4419,140 @@ function bindCanvasEvents(){
       S.datumRect.y = dragState.origDY + (p.y-dragState.startMy)/sc;
       const a=(S.datumRect.w*S.datumRect.h).toFixed(1);
       document.getElementById('sb-datum').textContent=`${a} mm² (datum □)`;
-      drawCanvas(); return;
+      drawCanvas(); updateLiveMetrics(); return;
+    }
+    // Datum RESIZE drag
+    if(dragState && dragState.type==='datum_resize' && S.datumRect){
+      const sc=(S.imgMode && S.imgState.scalePxPerMm)?S.imgState.scalePxPerMm:S.cv.scale;
+      const dxmm = (p.x - dragState.startMx) / sc;
+      const dymm = (p.y - dragState.startMy) / sc;
+      _applyDatumResize(dragState.handle, dxmm, dymm, dragState.origDatum);
+      const a=(S.datumRect.w*S.datumRect.h).toFixed(1);
+      document.getElementById('sb-datum').textContent=`${a} mm² (datum □)`;
+      drawCanvas(); updateLiveMetrics(); return;
     }
     const pore=poreAtCanvas(p.x,p.y);
     showCanvasTip(pore,e);
-    if(S.tool==='datum'&&isPointerDown&&S.datumRect&&S.datumRect._ox!==undefined){
-      // SQUARE CONSTRAINT — anchor at click origin, extend in drag direction
+    // Datum draw: free rectangle (width × height independently), no square constraint
+    if(S.tool==='datum' && isPointerDown && S.datumRect && S.datumRect._ox!==undefined){
       const ox=S.datumRect._ox, oy=S.datumRect._oy;
       const dx=mm.x-ox, dy=mm.y-oy;
-      const side=Math.max(Math.abs(dx),Math.abs(dy))||.01;
-      const nx=dx>=0?ox:ox-side;
-      const ny=dy>=0?oy:oy-side;
-      S.datumRect={_ox:ox,_oy:oy,x:nx,y:ny,w:side,h:side};
-      document.getElementById('sb-datum').textContent=`${(side*side).toFixed(1)} mm² (datum □)`;
+      const nx=dx>=0?ox:mm.x;
+      const ny=dy>=0?oy:mm.y;
+      const rw=Math.max(Math.abs(dx),0.01), rh=Math.max(Math.abs(dy),0.01);
+      S.datumRect={_ox:ox,_oy:oy,x:nx,y:ny,w:rw,h:rh};
+      document.getElementById('sb-datum').textContent=`${(rw*rh).toFixed(1)} mm² (datum □)`;
+    }
+    // Datum tool hover cursor: show resize cursor near handles, move cursor inside body
+    if(S.tool==='datum' && !isPointerDown && S.datumRect && S.datumRect.w>0){
+      const _dh2 = datumHandleAtCanvas(p.x, p.y);
+      if(_dh2){ wrap.style.cursor = _dh2.cur; }
+      else {
+        const dr2=S.datumRect;
+        const _inD = mm.x>=dr2.x && mm.x<=(dr2.x+dr2.w) && mm.y>=dr2.y && mm.y<=(dr2.y+dr2.h);
+        wrap.style.cursor = _inD ? 'move' : 'crosshair';
+      }
+    } else if(S.tool==='datum'){
+      wrap.style.cursor = 'crosshair';
+    }
+    // excl_select: move, resize, vertex drag, rotate, scale
+    if(S.tool==='excl_select' && isPointerDown && dragState){
+      const _page2 = activeImagePage();
+      const _zones2 = _page2 ? (_page2.exclusionZones||[]) : [];
+      const _sc2 = (S.imgMode && S.imgState.scalePxPerMm) ? S.imgState.scalePxPerMm : S.cv.scale;
+
+      // ── Move ─────────────────────────────────────────────────────────────
+      if(dragState.type==='excl_move' && _zones2[dragState.zi]){
+        const _dxmm = (p.x - dragState.startMx)/_sc2;
+        const _dymm = (p.y - dragState.startMy)/_sc2;
+        const _oz = dragState.origZone;
+        const _tz = _zones2[dragState.zi];
+        if(_oz.type==='circle'){
+          _tz.cx = _oz.cx + _dxmm; _tz.cy = _oz.cy + _dymm;
+        } else if(_oz.type==='polygon'){
+          _tz.points = (_oz.points||[]).map(pt=>({x:pt.x+_dxmm,y:pt.y+_dymm}));
+        } else {
+          _tz.x = _oz.x + _dxmm; _tz.y = _oz.y + _dymm;
+        }
+        drawCanvas(); updateLiveMetrics(); updatePoreRegistry(); renderExclList();
+
+      // ── Standard resize ───────────────────────────────────────────────────
+      } else if(dragState.type==='excl_resize' && _zones2[dragState.zi]){
+        const _dxmm = (p.x - dragState.startMx)/_sc2;
+        const _dymm = (p.y - dragState.startMy)/_sc2;
+        _applyExclResize(_zones2[dragState.zi], dragState.handle, _dxmm, _dymm, dragState.zone);
+        drawCanvas(); updateLiveMetrics(); updatePoreRegistry(); renderExclList();
+
+      // ── Vertex drag ───────────────────────────────────────────────────────
+      } else if(dragState.type==='excl_vtx_drag' && _zones2[dragState.zi]){
+        const _tz2 = _zones2[dragState.zi];
+        if(_tz2.type==='polygon' && _tz2.points && dragState.ptIdx<_tz2.points.length){
+          _tz2.points[dragState.ptIdx] = mm; // directly set to cursor mm position
+        }
+        drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+
+      // ── Rotation ──────────────────────────────────────────────────────────
+      } else if(dragState.type==='excl_rotate' && _zones2[dragState.zi]){
+        const _tz3 = _zones2[dragState.zi];
+        const _rcx = mmToCanvas(dragState.cx, dragState.cy);
+        // Current angle from centroid to mouse
+        const _curAngle = Math.atan2(p.y-_rcx.y, p.x-_rcx.x) * 180/Math.PI;
+        const _startAngle = Math.atan2(dragState.startMy-_rcx.y, dragState.startMx-_rcx.x) * 180/Math.PI;
+        const _delta = _curAngle - _startAngle;
+        if(_tz3.type==='polygon' && dragState.origPts){
+          _tz3.points = rotatePolyPoints(dragState.origPts, _delta, dragState.cx, dragState.cy);
+        } else if(_tz3.type==='rect' && dragState.origProps){
+          // Convert rect → polygon, then rotate
+          const _rPoly = rectToPolygon(dragState.origProps);
+          _rPoly.points = rotatePolyPoints(_rPoly.points, _delta, dragState.cx, dragState.cy);
+          // Replace zone in-place with polygon
+          _zones2[dragState.zi] = _rPoly;
+          // Update dragState for next frame (still rotating)
+          // (origProps stays to allow reverting)
+        } else if(_tz3.type==='circle'){
+          // Circle is rotationally symmetric, rotation is identity — do nothing special
+        }
+        drawCanvas(); updateLiveMetrics(); updatePoreRegistry(); renderExclList();
+
+      // ── Polygon bounding-box scale ────────────────────────────────────────
+      } else if(dragState.type==='excl_poly_scale' && _zones2[dragState.zi]){
+        const _tz4 = _zones2[dragState.zi];
+        if(_tz4.type==='polygon' && dragState.zone.type==='polygon'){
+          const _dxmm = (p.x-dragState.startMx)/_sc2;
+          const _dymm = (p.y-dragState.startMy)/_sc2;
+          const _origPts = dragState.zone.points||[];
+          const _oW = dragState.origW, _oH = dragState.origH;
+          const _oMinX = dragState.origMinX, _oMinY = dragState.origMinY;
+          const h = dragState.handle;
+          // Determine new width/height from handle direction
+          let _nW=_oW, _nH=_oH, _nMinX=_oMinX, _nMinY=_oMinY;
+          if(h.includes('e')){ _nW=Math.max(0.5,_oW+_dxmm); }
+          if(h.includes('w')){ _nMinX=_oMinX+_dxmm; _nW=Math.max(0.5,_oW-_dxmm); }
+          if(h.includes('s')){ _nH=Math.max(0.5,_oH+_dymm); }
+          if(h.includes('n')){ _nMinY=_oMinY+_dymm; _nH=Math.max(0.5,_oH-_dymm); }
+          // Scale each point proportionally
+          const _scX = _oW>0 ? _nW/_oW : 1;
+          const _scY = _oH>0 ? _nH/_oH : 1;
+          _tz4.points = _origPts.map(pt=>({
+            x: _nMinX + (pt.x-_oMinX)*_scX,
+            y: _nMinY + (pt.y-_oMinY)*_scY
+          }));
+        }
+        drawCanvas(); updateLiveMetrics(); updatePoreRegistry(); renderExclList();
+      }
+      // Update cursor based on hover
+      const _hov = exclZoneHandleAtCanvas(p.x, p.y, _zones2);
+      if(_hov) wrap.style.cursor = _hov.cursor;
+      else { const _zi2 = exclZoneAtCanvas(p.x,p.y,_zones2); wrap.style.cursor = _zi2>=0?'move':'default'; }
+      return;
+    }
+    // excl_select: hover cursor (no drag)
+    if(S.tool==='excl_select' && !isPointerDown){
+      const _page3 = activeImagePage();
+      const _zones3 = _page3 ? (_page3.exclusionZones||[]) : [];
+      const _hov2 = exclZoneHandleAtCanvas(p.x, p.y, _zones3);
+      if(_hov2) wrap.style.cursor = _hov2.cursor;
+      else { const _zi3 = exclZoneAtCanvas(p.x,p.y,_zones3); wrap.style.cursor = _zi3>=0?'move':'default'; }
     }
     if(S.tool==='exclude_rect'&&isPointerDown&&S._exclDraw&&S._exclDraw.active){
       var _emx=mm.x-S._exclDraw.ox,_emy=mm.y-S._exclDraw.oy;
@@ -3973,7 +4573,37 @@ function bindCanvasEvents(){
     const p=getCanvasPos(e);
     if(S.imgState.imgDragging){ S.imgState.imgDragging=false; wrap.style.cursor='default'; isPointerDown=false; dragState=null; return; }
     if(S.imgMode && handleImageToolMouseup(p)){ isPointerDown=false; dragState=null; return; }
-    if(dragState && dragState.type==='datum_move'){ isPointerDown=false; dragState=null; updateLiveMetrics(); updatePoreRegistry(); drawCanvas(); return; }
+    if(dragState && dragState.type==='datum_move'){
+      isPointerDown=false; dragState=null; wrap.style.cursor='default';
+      // Sync global S.datumRect to per-page datumRect so export always reads latest position
+      const _movePage = activeImagePage(); if(_movePage) _movePage.datumRect = S.datumRect;
+      updateLiveMetrics(); updatePoreRegistry(); drawCanvas(); return;
+    }
+    if(dragState && dragState.type==='datum_resize'){
+      isPointerDown=false; dragState=null; wrap.style.cursor='default';
+      updateLiveMetrics(); updatePoreRegistry(); drawCanvas();
+      const page=activeImagePage(); if(page) page.datumRect=S.datumRect;
+      return;
+    }
+    if(dragState && (dragState.type==='excl_move'||dragState.type==='excl_resize'
+      ||dragState.type==='excl_vtx_drag'||dragState.type==='excl_rotate'||dragState.type==='excl_poly_scale')){
+      isPointerDown=false;
+      // After rotation, update S._exclRotating origin so handle redraws correctly
+      if(dragState.type==='excl_rotate' && S._exclRotating){
+        const _page3=activeImagePage();
+        if(_page3&&_page3.exclusionZones&&_page3.exclusionZones[dragState.zi]){
+          const _tz5=_page3.exclusionZones[dragState.zi];
+          if(_tz5.type==='polygon'){
+            const _nc=polyCentroid(_tz5.points);
+            S._exclRotating.cx=_nc.x; S._exclRotating.cy=_nc.y;
+            S._exclRotating.origPts=JSON.parse(JSON.stringify(_tz5.points));
+          }
+        }
+      }
+      dragState=null;
+      updateLiveMetrics(); updatePoreRegistry(); drawCanvas(); renderExclList();
+      return;
+    }
     isPointerDown=false; dragState=null;
     if(S.tool==='exclude_rect'&&S._exclDraw&&S._exclDraw.active&&S._exclDraw.w>0.05&&S._exclDraw.h>0.05){
       var _eu=S._exclDraw,_pu=activeImagePage();
@@ -4003,10 +4633,12 @@ function bindCanvasEvents(){
     if(S.tool==='pan') wrap.style.cursor='grab'; else wrap.style.cursor='default';
     // If datum was just drawn, show the clear button, auto-switch to Place Pore, and recalculate
     if(S.tool==='datum' && S.datumRect && S.datumRect.w>0.01){
+      // Sync newly-drawn datum to per-page datumRect for export consistency
+      const _drawPage = activeImagePage();
+      if(_drawPage){ _drawPage.datumRect = {x:S.datumRect.x, y:S.datumRect.y, w:S.datumRect.w, h:S.datumRect.h}; }
       const btn=document.getElementById('btn-clear-datum');
       if(btn) btn.style.display='inline-flex';
       updateLiveMetrics(); updatePoreRegistry();
-      // Auto-return to Select after drawing datum
       setTool('select');
       toast('Datum □ set — '+S.datumRect.w.toFixed(2)+'×'+S.datumRect.h.toFixed(2)+'mm · Now place pores or evaluate');
     }
@@ -4274,6 +4906,8 @@ function setPoreType(t){
 }
 function setTool(t){
   S.tool=t; S.measurePt1=null;
+  // Clear excl selection/edit state if leaving excl_select
+  if(t!=='excl_select'){ S._exclSelected=null; S._exclEditPts=null; S._exclRotating=null; }
   ['place','select','measure','datum','pan'].forEach(tt=>{
     const b=document.getElementById('tool-'+tt);
     if(b) b.classList.toggle('on',tt===t);
@@ -4282,6 +4916,8 @@ function setTool(t){
   if(exclRect) exclRect.classList.toggle('on', t==='exclude_rect');
   const exclCircle = document.getElementById('btn-excl-circle');
   if(exclCircle) exclCircle.classList.toggle('on', t==='exclude_circle');
+  const exclSel = document.getElementById('btn-excl-select');
+  if(exclSel) exclSel.classList.toggle('on', t==='excl_select');
 
   const hints={
     place:'Click to place pore · Scroll over pore: resize · Right-click: delete',
@@ -4290,15 +4926,18 @@ function setTool(t){
     datum:'Click and drag to define datum area rectangle',
     exclude_rect:'Click and drag to define rectangular exclusion zone',
     exclude_circle:'Click and drag/extend to define circular exclusion zone',
+    excl_select:'Click a zone to select · Drag to move · Drag corner handles to resize · Delete key to remove',
     pan:'Click and drag to pan the canvas'
   };
   document.getElementById('canvas-hint').textContent=hints[t] || '';
   document.getElementById('sb-tool').textContent=t.toUpperCase();
   const wrap=document.getElementById('canvas-wrap');
-  const cursors={place:'crosshair',select:'grab',measure:'crosshair',datum:'cell',exclude_rect:'crosshair',exclude_circle:'crosshair',pan:'grab'};
+  const cursors={place:'crosshair',select:'grab',measure:'crosshair',datum:'cell',exclude_rect:'crosshair',exclude_circle:'crosshair',excl_select:'default',pan:'grab'};
   wrap.style.cursor=cursors[t] || 'default';
   // Hide edit panel when leaving select mode
   if(t!=='select'){ const ep=document.getElementById('pore-edit-panel'); if(ep) ep.style.display='none'; }
+  // Refresh excl list to show/hide edit panel
+  if(typeof renderExclList==='function') renderExclList();
 }
 
 // ═══════════════════════════════════════════════════
@@ -4442,7 +5081,16 @@ function pushHistoryLive(){
 // METRICS — correct calculations
 // ═══════════════════════════════════════════════════
 function effectivePores(){
-  const _ap=AP(); return S.spec.u>0 ? _ap.filter(p=>p.dia>=S.spec.u) : [..._ap];
+  const _ap=AP();
+  const _pg = (typeof activeImagePage==='function') ? activeImagePage() : null;
+  // Normalise cropped pores: use effective dia for metric calculations
+  const normalised = _ap.map(p=>{
+    const cs = _poreExclCropStatus(p, _pg);
+    if(cs.status==='full') return null; // fully excluded
+    if(cs.status==='partial') return Object.assign({}, p, {dia: cs.effectiveDia, _isCropped:true});
+    return p;
+  }).filter(Boolean);
+  return S.spec.u>0 ? normalised.filter(p=>p.dia>=S.spec.u) : normalised;
 }
 
 
@@ -4464,49 +5112,686 @@ function getEffectiveWallW(){
   return wallWidthMm()||20;
 }
 function getEffectiveDatum(){
+  const _page = (typeof activeImagePage==='function') ? activeImagePage() : null;
+  let base = S.spec.datum || 100;
   // Priority 1: user drew a datum square
   if(S.datumRect && S.datumRect.w > 0){
-    return +(S.datumRect.w * S.datumRect.h).toFixed(2);
+    base = S.datumRect.w * S.datumRect.h;
+  } else if(S.imgMode && S.imgState.image && S.imgState.scalePxPerMm && S.imgState.fitScale){
+    // Priority 2: image mode with calibrated scale → full image area
+    const natPxMm = S.imgState.scalePxPerMm / (S.imgState.fitScale || 1);
+    const wMm = S.imgState.image.naturalWidth / natPxMm;
+    const hMm = S.imgState.image.naturalHeight / natPxMm;
+    base = wMm * hMm;
   }
-  // Priority 2: image mode with calibrated scale → full image area
-  if(S.imgMode && S.imgState.image && S.imgState.scalePxPerMm && S.imgState.fitScale){
-    const natPxMm=S.imgState.scalePxPerMm/(S.imgState.fitScale||1);
-    const wMm=S.imgState.image.naturalWidth/natPxMm;
-    const hMm=S.imgState.image.naturalHeight/natPxMm;
-    return +(wMm*hMm).toFixed(2);
-  }
-  return S.spec.datum || 100;
+  // Subtract exclusion zone area that falls within the datum bounds
+  // Guard: only compute when wall dimensions are valid to prevent NaN
+  const wW = getEffectiveWallW() || 0;
+  const wH = getEffectiveWallH() || 0;
+  const exclArea = (wW > 0 && wH > 0)
+    ? _exclusionAreaForDatum(_page, S.datumRect, wW, wH)
+    : 0;
+  const result = base - (isNaN(exclArea) ? 0 : exclArea);
+  return +Math.max(result, 0.01).toFixed(2);
 }
 
-// ── Live exclusion-zone mask helper ─────────────────────────────────────────
-// Returns true if pore centre falls inside any active exclusion zone.
-// Accepts an optional explicit page; falls back to activeImagePage().
-function _poreInExclZone(p, page){
-  const _page = page || ((typeof activeImagePage==='function') ? activeImagePage() : null);
-  const zones = (_page && _page.exclusionZones) || [];
-  if(!zones.length) return false;
-  return zones.some(z=>{
-    if(z.type==='rect'){
-      return p.x>=z.x && p.x<=(z.x+z.w) && p.y>=z.y && p.y<=(z.y+z.h);
+// ── Live exclusion-zone mask helpers ─────────────────────────────────────────
+
+// Circle–Rectangle intersection area (analytical)
+function _circleRectIntersectArea(cx, cy, r, rx, ry, rw, rh){
+  // Optimization: completely inside
+  if(cx - r >= rx && cx + r <= rx + rw && cy - r >= ry && cy + r <= ry + rh) {
+    return Math.PI * r * r;
+  }
+  // Clamp circle centre to rectangle, find closest point distance
+  const closestX = Math.max(rx, Math.min(cx, rx+rw));
+  const closestY = Math.max(ry, Math.min(cy, ry+rh));
+  const dist = Math.hypot(cx-closestX, cy-closestY);
+  if(dist >= r) return 0;          // no intersection
+  // Numerical integration (fast, accurate enough for UI)
+  const steps = 60;
+  let count = 0;
+  const r2 = r*r;
+  for(let i=0; i<steps; i++){
+    const angle = (i/steps)*Math.PI*2;
+    const cosVal = Math.cos(angle);
+    const sinVal = Math.sin(angle);
+    for(let ri=1; ri<=steps; ri++){
+      const pr = (ri/steps)*r;
+      const px = cx + cosVal*pr;
+      const py = cy + sinVal*pr;
+      if(px>=rx && px<=rx+rw && py>=ry && py<=ry+rh) count++;
     }
-    if(z.type==='circle'){
-      const dx=p.x-z.cx, dy=p.y-z.cy;
-      return (dx*dx+dy*dy)<=z.r*z.r;
+  }
+  return (count/(steps*steps)) * Math.PI*r2;
+}
+
+// Circle–Circle intersection area (analytical)
+function _circleCircleIntersectArea(cx1, cy1, r1, cx2, cy2, r2){
+  const d = Math.hypot(cx1-cx2, cy1-cy2);
+  if(d >= r1+r2) return 0;
+  if(d <= Math.abs(r1-r2)) return Math.PI*Math.min(r1,r2)*Math.min(r1,r2);
+  const arg1 = (d*d+r1*r1-r2*r2)/(2*d*r1);
+  const arg2 = (d*d+r2*r2-r1*r1)/(2*d*r2);
+  const a1 = r1*r1*Math.acos(Math.max(-1, Math.min(1, arg1)));
+  const a2 = r2*r2*Math.acos(Math.max(-1, Math.min(1, arg2)));
+  const a3 = 0.5*Math.sqrt(Math.max(0, (-d+r1+r2)*(d+r1-r2)*(d-r1+r2)*(d+r1+r2)));
+  return a1 + a2 - a3;
+}
+
+// ── POLYGON GEOMETRY UTILITIES ────────────────────────────────────────────────
+
+/** Shoelace formula — area of polygon (mm²) */
+function polyArea(pts){
+  if(!pts||pts.length<3) return 0;
+  let a=0;
+  for(let i=0;i<pts.length;i++){
+    const j=(i+1)%pts.length;
+    a+=pts[i].x*pts[j].y - pts[j].x*pts[i].y;
+  }
+  return Math.abs(a)/2;
+}
+
+/** Ray-casting point-in-polygon test */
+function pointInPoly(x, y, pts){
+  if(!pts||pts.length<3) return false;
+  let inside=false, j=pts.length-1;
+  for(let i=0;i<pts.length;i++){
+    const xi=pts[i].x, yi=pts[i].y, xj=pts[j].x, yj=pts[j].y;
+    if(((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
+    j=i;
+  }
+  return inside;
+}
+
+/** Bounding box {minX,minY,maxX,maxY} */
+function polyBBox(pts){
+  if(!pts||!pts.length) return {minX:0,minY:0,maxX:0,maxY:0};
+  let minX=pts[0].x,minY=pts[0].y,maxX=pts[0].x,maxY=pts[0].y;
+  for(const p of pts){
+    if(p.x<minX)minX=p.x; if(p.x>maxX)maxX=p.x;
+    if(p.y<minY)minY=p.y; if(p.y>maxY)maxY=p.y;
+  }
+  return {minX,minY,maxX,maxY};
+}
+
+/** Centroid of polygon */
+function polyCentroid(pts){
+  if(!pts||!pts.length) return {x:0,y:0};
+  let cx=0,cy=0;
+  for(const p of pts){cx+=p.x;cy+=p.y;}
+  return {x:cx/pts.length, y:cy/pts.length};
+}
+
+/** Squared distance from point (px,py) to segment (ax,ay)→(bx,by) */
+function _ptSegDistSq(px,py,ax,ay,bx,by){
+  const dx=bx-ax, dy=by-ay;
+  if(dx===0&&dy===0) return (px-ax)**2+(py-ay)**2;
+  const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy)));
+  return (px-ax-t*dx)**2+(py-ay-t*dy)**2;
+}
+
+/** Circle-polygon intersection area with fast paths.
+ *  - Entirely inside polygon  → returns π·r² exactly
+ *  - Entirely outside polygon → returns 0 exactly
+ *  - Straddles boundary       → polar Monte Carlo (72×72 samples) */
+function _circlePolyIntersectArea(cx, cy, r, pts, steps=72){
+  if(!pts||pts.length<3||r<=0) return 0;
+  const poreArea = Math.PI*r*r;
+  const n = pts.length;
+  const centreIn = pointInPoly(cx,cy,pts);
+
+  // Min distance from centre to any edge
+  let minDsq = Infinity;
+  for(let i=0;i<n;i++){
+    const j=(i+1)%n;
+    const dsq=_ptSegDistSq(cx,cy, pts[i].x,pts[i].y, pts[j].x,pts[j].y);
+    if(dsq<minDsq) minDsq=dsq;
+  }
+  const minDist=Math.sqrt(minDsq);
+
+  if(minDist>=r){
+    // Pore doesn't straddle any edge — fast path
+    return centreIn ? poreArea : 0;
+  }
+
+  // Straddles boundary → Monte Carlo
+  let count=0, total=steps*steps;
+  for(let i=0;i<steps;i++){
+    const angle=(i/steps)*Math.PI*2, ca=Math.cos(angle), sa=Math.sin(angle);
+    for(let ri=1;ri<=steps;ri++){
+      const pr=(ri/steps)*r;
+      if(pointInPoly(cx+ca*pr, cy+sa*pr, pts)) count++;
     }
-    return false;
+  }
+  return (count/total)*poreArea;
+}
+
+/** Sutherland-Hodgman: clip polygon pts to rect (rx,ry,rw,rh).
+ *  Returns clipped polygon vertex array. */
+function _clipPolyToRect(pts, rx, ry, rw, rh){
+  const inside=(p,edge)=>{
+    if(edge==='l') return p.x>=rx;
+    if(edge==='r') return p.x<=rx+rw;
+    if(edge==='t') return p.y>=ry;
+    return p.y<=ry+rh;
+  };
+  const intersect=(p1,p2,edge)=>{
+    const x1=p1.x,y1=p1.y,x2=p2.x,y2=p2.y;
+    if(edge==='l'){ const t=(rx-x1)/(x2-x1||1e-12); return {x:rx,      y:y1+t*(y2-y1)}; }
+    if(edge==='r'){ const t=(rx+rw-x1)/(x2-x1||1e-12); return {x:rx+rw, y:y1+t*(y2-y1)}; }
+    if(edge==='t'){ const t=(ry-y1)/(y2-y1||1e-12); return {x:x1+t*(x2-x1),y:ry};        }
+    const t=(ry+rh-y1)/(y2-y1||1e-12); return {x:x1+t*(x2-x1),y:ry+rh};
+  };
+  let out=[...pts];
+  for(const edge of ['l','r','t','b']){
+    if(!out.length) return [];
+    const inp=out; out=[];
+    for(let i=0;i<inp.length;i++){
+      const curr=inp[i], prev=inp[i-1<0?inp.length-1:i-1];
+      const ci=inside(curr,edge), pi=inside(prev,edge);
+      if(ci){ if(!pi) out.push(intersect(prev,curr,edge)); out.push(curr); }
+      else if(pi) out.push(intersect(prev,curr,edge));
+    }
+  }
+  return out;
+}
+
+
+/** Convert rect exclusion zone → polygon (4 corners) */
+function rectToPolygon(z){
+  return { type:'polygon', points:[
+    {x:z.x,      y:z.y},
+    {x:z.x+z.w,  y:z.y},
+    {x:z.x+z.w,  y:z.y+z.h},
+    {x:z.x,      y:z.y+z.h}
+  ], rotation:z.rotation||0 };
+}
+
+/** Convert circle exclusion zone → polygon (n-sided approximation) */
+function circleToPolygon(z, n=48){
+  const pts=[];
+  for(let i=0;i<n;i++){
+    const a=(i/n)*Math.PI*2;
+    pts.push({x:z.cx+Math.cos(a)*z.r, y:z.cy+Math.sin(a)*z.r});
+  }
+  return { type:'polygon', points:pts, rotation:0 };
+}
+
+/** Rotate polygon points around centroid by angleDeg */
+function rotatePolyPoints(pts, angleDeg, cx, cy){
+  const rad = angleDeg*Math.PI/180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  return pts.map(p=>{
+    const dx=p.x-cx, dy=p.y-cy;
+    return {x: cx+dx*cos-dy*sin, y: cy+dx*sin+dy*cos};
   });
 }
 
+/** Get exclusion zone area (mm²) */
+function exclZoneArea(z){
+  if(z.type==='rect') return z.w*z.h;
+  if(z.type==='circle') return Math.PI*z.r*z.r;
+  if(z.type==='polygon') return polyArea(z.points||[]);
+  return 0;
+}
+
+/** Point-in-zone test (mm coords) for any zone type */
+function exclZoneContains(z, x, y){
+  if(z.type==='rect') return x>=z.x && x<=(z.x+z.w) && y>=z.y && y<=(z.y+z.h);
+  if(z.type==='circle'){ const dx=x-z.cx,dy=y-z.cy; return dx*dx+dy*dy<=z.r*z.r; }
+  if(z.type==='polygon') return pointInPoly(x, y, z.points||[]);
+  return false;
+}
+
+/** Build a canvas 2D path for any zone type */
+function _buildZonePath(ctx, z, sc){
+  ctx.beginPath();
+  if(z.type==='circle'){
+    const cp=mmToCanvas(z.cx,z.cy), zr=z.r*sc;
+    ctx.arc(cp.x,cp.y,zr,0,Math.PI*2);
+  } else if(z.type==='polygon'){
+    const pts=z.points||[];
+    if(pts.length<2) return;
+    const p0=mmToCanvas(pts[0].x,pts[0].y);
+    ctx.moveTo(p0.x,p0.y);
+    for(let i=1;i<pts.length;i++){ const pi=mmToCanvas(pts[i].x,pts[i].y); ctx.lineTo(pi.x,pi.y); }
+    ctx.closePath();
+  } else {
+    const p=mmToCanvas(z.x,z.y), w=z.w*sc, h=z.h*sc;
+    ctx.rect(p.x,p.y,w,h);
+  }
+}
+
+// ── POLYGON EDIT MODE STATE ────────────────────────────────────────────────────
+// S._exclEditPts = null | { zi: number }  — vertex editing mode index
+// S._exclRotating = null | { zi, cx, cy, startAngleDeg, origPts, origProps }
+
+// ── CONTEXT MENU ─────────────────────────────────────────────────────────────
+
+function _buildContextMenuEl(){
+  let el = document.getElementById('excl-ctx-menu');
+  if(el) return el;
+  el = document.createElement('div');
+  el.id = 'excl-ctx-menu';
+  el.style.cssText = [
+    'position:fixed','z-index:9999','min-width:180px','padding:4px 0',
+    'background:#1e2026','border:1px solid rgba(255,255,255,.12)',
+    'border-radius:8px','box-shadow:0 8px 24px rgba(0,0,0,.55)',
+    'font:12px "Space Grotesk",system-ui','color:#dde','display:none',
+    'user-select:none'
+  ].join(';');
+  document.body.appendChild(el);
+  // Close on outside click
+  document.addEventListener('mousedown', e=>{
+    if(el.style.display!=='none' && !el.contains(e.target)) _hideCtxMenu();
+  });
+  return el;
+}
+
+function _hideCtxMenu(){
+  const el=document.getElementById('excl-ctx-menu');
+  if(el) el.style.display='none';
+}
+
+function _ctxItem(label, icon, cb, danger=false){
+  const div=document.createElement('div');
+  div.style.cssText='padding:7px 14px;cursor:pointer;display:flex;gap:8px;align-items:center;'
+    +(danger?'color:#f87171;':'color:#dde;');
+  div.innerHTML=`<span style="font-size:13px;width:16px;text-align:center">${icon}</span><span>${label}</span>`;
+  div.addEventListener('mouseenter',()=>div.style.background='rgba(255,255,255,.07)');
+  div.addEventListener('mouseleave',()=>div.style.background='');
+  div.addEventListener('mousedown', e=>{ e.stopPropagation(); _hideCtxMenu(); cb(); });
+  return div;
+}
+
+function _ctxSep(){
+  const d=document.createElement('div');
+  d.style.cssText='height:1px;margin:3px 0;background:rgba(255,255,255,.08)';
+  return d;
+}
+
+/** Show context menu for an exclusion zone */
+function showExclContextMenu(e, zi, ptIdx){
+  e.preventDefault();
+  const page = activeImagePage();
+  if(!page||!page.exclusionZones) return;
+  const z = page.exclusionZones[zi];
+  if(!z) return;
+
+  const el = _buildContextMenuEl();
+  el.innerHTML = '';
+
+  // Header
+  const hdr=document.createElement('div');
+  hdr.style.cssText='padding:5px 14px 4px;font-size:10px;font-weight:700;color:#888;letter-spacing:.06em;text-transform:uppercase';
+  hdr.textContent = z.type==='polygon'?`Polygon Zone #${zi+1}`:z.type==='circle'?`Circle Zone #${zi+1}`:`Rect Zone #${zi+1}`;
+  el.appendChild(hdr);
+  el.appendChild(_ctxSep());
+
+  // Edit Points (polygon only, or convert first)
+  if(z.type==='polygon'){
+    el.appendChild(_ctxItem('Edit Points', '✏️', ()=>{
+      S._exclEditPts = { zi };
+      S._exclSelected = zi;
+      if(S.tool!=='excl_select') setTool('excl_select');
+      drawCanvas();
+      toast('Drag vertices • Click mid-edge + to add • Right-click vertex to delete');
+    }));
+    el.appendChild(_ctxItem('Done Editing', '✅', ()=>{
+      S._exclEditPts = null; drawCanvas();
+    }));
+    el.appendChild(_ctxSep());
+  }
+
+  // Convert to Polygon
+  if(z.type==='rect' || z.type==='circle'){
+    el.appendChild(_ctxItem('Edit Points (Convert)', '✏️', ()=>{
+      pushHistory();
+      const poly = z.type==='rect' ? rectToPolygon(z) : circleToPolygon(z);
+      page.exclusionZones[zi] = poly;
+      S._exclEditPts = { zi };
+      S._exclSelected = zi;
+      if(S.tool!=='excl_select') setTool('excl_select');
+      drawCanvas(); updateLiveMetrics(); updatePoreRegistry(); renderExclList();
+      toast('Converted to polygon — drag vertices to edit shape');
+    }));
+    el.appendChild(_ctxSep());
+  }
+
+  // Delete vertex (polygon only, when vertex right-clicked)
+  if(z.type==='polygon' && ptIdx!=null && ptIdx>=0 && z.points.length>3){
+    el.appendChild(_ctxItem(`Delete Vertex #${ptIdx+1}`, '🗑️', ()=>{
+      pushHistory();
+      z.points.splice(ptIdx,1);
+      drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+    }, true));
+    el.appendChild(_ctxSep());
+  }
+
+  // Rotate
+  el.appendChild(_ctxItem('Rotate…', '🔄', ()=>{
+    S._exclRotating = _startRotateZone(page, zi);
+    S._exclSelected = zi;
+    if(S.tool!=='excl_select') setTool('excl_select');
+    drawCanvas();
+    toast('Drag the rotation handle (circle above zone) • Click elsewhere to finish');
+  }));
+
+  // Duplicate
+  el.appendChild(_ctxItem('Duplicate Zone', '📋', ()=>{
+    pushHistory();
+    const dup = JSON.parse(JSON.stringify(z));
+    if(dup.type==='polygon') dup.points=dup.points.map(p=>({x:p.x+2,y:p.y+2}));
+    else if(dup.type==='rect'){ dup.x+=2; dup.y+=2; }
+    else if(dup.type==='circle'){ dup.cx+=2; dup.cy+=2; }
+    page.exclusionZones.push(dup);
+    S._exclSelected = page.exclusionZones.length-1;
+    drawCanvas(); updateLiveMetrics(); updatePoreRegistry(); renderExclList();
+    toast('Zone duplicated');
+  }));
+
+  el.appendChild(_ctxSep());
+
+  // Delete zone
+  el.appendChild(_ctxItem('Delete Zone', '🗑️', ()=>{
+    pushHistory();
+    page.exclusionZones.splice(zi,1);
+    if(S._exclEditPts&&S._exclEditPts.zi===zi) S._exclEditPts=null;
+    if(S._exclSelected===zi) S._exclSelected=null;
+    updateExclZoneBadge(); renderExclList();
+    drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+    toast(`Zone #${zi+1} deleted`);
+  }, true));
+
+  // Position
+  el.style.display='block';
+  let lx=e.clientX+4, ly=e.clientY+4;
+  if(lx+200>window.innerWidth) lx=e.clientX-204;
+  if(ly+el.scrollHeight>window.innerHeight) ly=e.clientY-el.scrollHeight-4;
+  el.style.left=lx+'px'; el.style.top=ly+'px';
+}
+
+/** Prepare rotation state for a zone */
+function _startRotateZone(page, zi){
+  const z = page.exclusionZones[zi];
+  let cx, cy, origPts=null, origProps=null;
+  if(z.type==='polygon'){
+    const c=polyCentroid(z.points);
+    cx=c.x; cy=c.y; origPts=JSON.parse(JSON.stringify(z.points));
+  } else if(z.type==='circle'){
+    cx=z.cx; cy=z.cy; origProps={cx:z.cx,cy:z.cy,r:z.r};
+  } else {
+    cx=z.x+z.w/2; cy=z.y+z.h/2; origProps={x:z.x,y:z.y,w:z.w,h:z.h};
+  }
+  return { zi, cx, cy, startAngleDeg:0, origPts, origProps, active:true };
+}
+
+
+// Returns crop status for a pore relative to all active exclusion zones:
+// { status:'none'|'partial'|'full', effectiveDia, effectiveArea, fraction }
+// 'partial' = pore boundary crosses a zone edge → crop & count with reduced area
+// 'full'    = pore is entirely inside a zone → exclude completely
+function _poreExclCropStatus(p, page){
+  const _page = page || ((typeof activeImagePage==='function') ? activeImagePage() : null);
+  const zones = (_page && _page.exclusionZones) || [];
+  if(!zones.length) return {status:'none', effectiveDia:p.dia, effectiveArea:Math.PI*(p.dia/2)**2, fraction:1};
+  const r = p.dia/2;
+  const poreArea = Math.PI*r*r;
+  let totalIntersect = 0;
+  // Check if centre is inside any zone
+  let centreInside = false;
+  for(const z of zones){
+    let intersect = 0;
+    if(z.type==='rect'){
+      intersect = _circleRectIntersectArea(p.x, p.y, r, z.x, z.y, z.w, z.h);
+      if(p.x>=z.x&&p.x<=(z.x+z.w)&&p.y>=z.y&&p.y<=(z.y+z.h)) centreInside=true;
+    } else if(z.type==='circle'){
+      intersect = _circleCircleIntersectArea(p.x, p.y, r, z.cx, z.cy, z.r);
+      const dx=p.x-z.cx,dy=p.y-z.cy;
+      if(dx*dx+dy*dy<=z.r*z.r) centreInside=true;
+    } else if(z.type==='polygon'){
+      const pts = z.points||[];
+      if(pts.length>=3){
+        intersect = _circlePolyIntersectArea(p.x, p.y, r, pts);
+        if(pointInPoly(p.x, p.y, pts)) centreInside=true;
+      }
+    }
+    totalIntersect = Math.min(poreArea, totalIntersect + intersect);
+  }
+  if(totalIntersect <= 0) return {status:'none', effectiveDia:p.dia, effectiveArea:poreArea, fraction:1};
+  const effectiveArea = Math.max(0, poreArea - totalIntersect);
+  const fraction = effectiveArea / poreArea;
+  // Fully inside: centre inside zone AND ≥95% of pore area overlaps
+  if(fraction < 0.05) return {status:'full', effectiveDia:0, effectiveArea:0, fraction:0};
+  const effectiveDia = 2*Math.sqrt(effectiveArea/Math.PI);
+  return {status:'partial', effectiveDia, effectiveArea, fraction, centreInside};
+}
+
+// Legacy helper — keeps backward compat: true only when pore is fully inside a zone
+function _poreInExclZone(p, page){
+  const status = _poreExclCropStatus(p, page);
+  return status.status === 'full';
+}
+
+// Partial-overlap check: centre not inside, but pore boundary crosses zone
+function _poreIsPartialExcl(p, page){
+  return _poreExclCropStatus(p, page).status === 'partial';
+}
+
+// ── Excl zone hit-testing helpers ──
+// Returns index of topmost zone containing canvas point, or -1
+function exclZoneAtCanvas(cx, cy, zones){
+  const mm = canvasToMm(cx, cy);
+  for(let i=zones.length-1; i>=0; i--){
+    const z = zones[i];
+    if(exclZoneContains(z, mm.x, mm.y)) return i;
+  }
+  return -1;
+}
+
+// Returns {zi, handle, cursor, ptIdx?, midIdx?} for a handle near canvas point, or null
+function exclZoneHandleAtCanvas(cx, cy, zones){
+  const _sc = (S.imgMode && S.imgState.scalePxPerMm) ? S.imgState.scalePxPerMm : S.cv.scale;
+  const HR = 8; // handle hit radius px
+
+  for(let i=zones.length-1; i>=0; i--){
+    const z = zones[i];
+    const isSelected = (S._exclSelected === i);
+    const inEditPts  = isSelected && S._exclEditPts && S._exclEditPts.zi === i;
+
+    // ── Rotation handle check (applies when rotating) ──────────────────────
+    if(S._exclRotating && S._exclRotating.zi===i && S._exclRotating.active){
+      const _rState = S._exclRotating;
+      const _rCx = mmToCanvas(_rState.cx, _rState.cy);
+      let _topY = _rCx.y - 40;
+      if(z.type==='polygon'&&z.points){ const _bb2=polyBBox(z.points); _topY=mmToCanvas(_bb2.minX,_bb2.minY).y-40; }
+      else if(z.type==='circle'){ _topY=mmToCanvas(z.cx,z.cy-z.r).y-40; }
+      else { _topY=mmToCanvas(z.x,z.y).y-40; }
+      if(Math.hypot(cx-_rCx.x, cy-_topY)<=12)
+        return {zi:i, handle:'rotate', cursor:'grab'};
+    }
+
+    // ── Polygon vertex/midpoint handles (edit mode) ────────────────────────
+    if(z.type==='polygon' && inEditPts){
+      const pts = z.points||[];
+      // Vertex handles
+      for(let vi=0; vi<pts.length; vi++){
+        const vc=mmToCanvas(pts[vi].x,pts[vi].y);
+        if(Math.hypot(cx-vc.x,cy-vc.y)<=HR)
+          return {zi:i, handle:'poly_vtx', ptIdx:vi, cursor:'move'};
+      }
+      // Midpoint handles (insert new vertex)
+      for(let vi=0; vi<pts.length; vi++){
+        const vj=(vi+1)%pts.length;
+        const mx=(pts[vi].x+pts[vj].x)/2, my=(pts[vi].y+pts[vj].y)/2;
+        const mc=mmToCanvas(mx,my);
+        if(Math.hypot(cx-mc.x,cy-mc.y)<=8)
+          return {zi:i, handle:'poly_mid', midIdx:vi, midX:mx, midY:my, cursor:'cell'};
+      }
+    }
+
+    // ── Polygon bounding-box handles (selected, non-edit mode) ────────────
+    if(z.type==='polygon' && isSelected && !inEditPts){
+      const pts=z.points||[];
+      if(pts.length>=2){
+        const _bb=polyBBox(pts);
+        const _bbl=mmToCanvas(_bb.minX,_bb.minY), _bbr=mmToCanvas(_bb.maxX,_bb.maxY);
+        const _bw=_bbr.x-_bbl.x, _bh=_bbr.y-_bbl.y;
+        const bboxHandles=[
+          {name:'nw',px:_bbl.x,         py:_bbl.y,         cur:'nwse-resize', scaleX:-1,scaleY:-1},
+          {name:'ne',px:_bbl.x+_bw,     py:_bbl.y,         cur:'nesw-resize', scaleX:1, scaleY:-1},
+          {name:'sw',px:_bbl.x,         py:_bbl.y+_bh,     cur:'nesw-resize', scaleX:-1,scaleY:1},
+          {name:'se',px:_bbl.x+_bw,     py:_bbl.y+_bh,     cur:'nwse-resize', scaleX:1, scaleY:1},
+          {name:'n', px:_bbl.x+_bw/2,  py:_bbl.y,          cur:'ns-resize',   scaleX:0, scaleY:-1},
+          {name:'s', px:_bbl.x+_bw/2,  py:_bbl.y+_bh,      cur:'ns-resize',   scaleX:0, scaleY:1},
+          {name:'e', px:_bbl.x+_bw,    py:_bbl.y+_bh/2,    cur:'ew-resize',   scaleX:1, scaleY:0},
+          {name:'w', px:_bbl.x,         py:_bbl.y+_bh/2,   cur:'ew-resize',   scaleX:-1,scaleY:0},
+        ];
+        for(const h of bboxHandles){
+          if(Math.hypot(cx-h.px,cy-h.py)<=HR)
+            return {zi:i, handle:'poly_bbox_'+h.name, cursor:h.cur, _bbl, _bbr,
+              origW:_bb.maxX-_bb.minX, origH:_bb.maxY-_bb.minY,
+              origMinX:_bb.minX, origMinY:_bb.minY};
+        }
+      }
+    }
+
+    // ── Circle handles ────────────────────────────────────────────────────
+    if(z.type==='circle'){
+      const cp=mmToCanvas(z.cx,z.cy), r=z.r*_sc;
+      if(Math.hypot(cx-cp.x,cy-cp.y)<=HR)
+        return {zi:i,handle:'center',cursor:'move'};
+      const cardinals=[
+        {name:'r',px:cp.x+r,py:cp.y,cur:'ew-resize'},
+        {name:'l',px:cp.x-r,py:cp.y,cur:'ew-resize'},
+        {name:'t',px:cp.x,py:cp.y-r,cur:'ns-resize'},
+        {name:'b',px:cp.x,py:cp.y+r,cur:'ns-resize'}
+      ];
+      for(const c of cardinals){
+        if(Math.hypot(cx-c.px,cy-c.py)<=HR)
+          return {zi:i,handle:'radius_'+c.name,cursor:c.cur,_startMx:cx,_startMy:cy};
+      }
+    }
+
+    // ── Rect handles ──────────────────────────────────────────────────────
+    if(z.type==='rect'){
+      const p=mmToCanvas(z.x,z.y), w=z.w*_sc, h=z.h*_sc;
+      const handles=[
+        {name:'nw',px:p.x,     py:p.y,     cur:'nwse-resize'},
+        {name:'ne',px:p.x+w,   py:p.y,     cur:'nesw-resize'},
+        {name:'sw',px:p.x,     py:p.y+h,   cur:'nesw-resize'},
+        {name:'se',px:p.x+w,   py:p.y+h,   cur:'nwse-resize'},
+        {name:'n', px:p.x+w/2, py:p.y,     cur:'ns-resize'},
+        {name:'s', px:p.x+w/2, py:p.y+h,   cur:'ns-resize'},
+        {name:'e', px:p.x+w,   py:p.y+h/2, cur:'ew-resize'},
+        {name:'w', px:p.x,     py:p.y+h/2, cur:'ew-resize'}
+      ];
+      for(const h of handles){
+        if(Math.hypot(cx-h.px,cy-h.py)<=HR)
+          return {zi:i,handle:h.name,cursor:h.cur,_startMx:cx,_startMy:cy};
+      }
+    }
+  }
+  return null;
+}
+
+// Helper: draw a square selection handle on canvas
+function _drawExclHandle(ctx, x, y, color){
+  ctx.fillStyle='#fff'; ctx.strokeStyle=color; ctx.lineWidth=1.5;
+  ctx.fillRect(x-4,y-4,8,8);
+  ctx.strokeRect(x-4,y-4,8,8);
+}
+
+// ── Datum rectangle resize handles ───────────────────────────────────────────
+// Returns {handle, cursor} if canvas point (cx,cy) is near a handle, else null.
+function datumHandleAtCanvas(cx, cy){
+  const dr = S.datumRect;
+  if(!dr || dr.w <= 0) return null;
+  const _sc = (S.imgMode && S.imgState.scalePxPerMm) ? S.imgState.scalePxPerMm : S.cv.scale;
+  const HR = 8; // handle hit radius px
+  const p  = mmToCanvas(dr.x, dr.y);
+  const pw = dr.w * _sc, ph = dr.h * _sc;
+  const handles = [
+    {name:'nw', px:p.x,      py:p.y,       cur:'nwse-resize'},
+    {name:'ne', px:p.x+pw,   py:p.y,       cur:'nesw-resize'},
+    {name:'sw', px:p.x,      py:p.y+ph,    cur:'nesw-resize'},
+    {name:'se', px:p.x+pw,   py:p.y+ph,    cur:'nwse-resize'},
+    {name:'n',  px:p.x+pw/2, py:p.y,       cur:'ns-resize'},
+    {name:'s',  px:p.x+pw/2, py:p.y+ph,    cur:'ns-resize'},
+    {name:'e',  px:p.x+pw,   py:p.y+ph/2,  cur:'ew-resize'},
+    {name:'w',  px:p.x,      py:p.y+ph/2,  cur:'ew-resize'},
+  ];
+  for(const h of handles){
+    if(Math.hypot(cx - h.px, cy - h.py) <= HR) return h;
+  }
+  return null;
+}
+
+// Apply datum resize from handle name + delta-mm from original snapshot
+function _applyDatumResize(handle, dxmm, dymm, origDatum){
+  let {x, y, w, h} = origDatum;
+  if(handle==='nw'){ x+=dxmm; y+=dymm; w-=dxmm; h-=dymm; }
+  else if(handle==='ne'){ w+=dxmm; y+=dymm; h-=dymm; }
+  else if(handle==='sw'){ x+=dxmm; w-=dxmm; h+=dymm; }
+  else if(handle==='se'){ w+=dxmm; h+=dymm; }
+  else if(handle==='n'){ y+=dymm; h-=dymm; }
+  else if(handle==='s'){ h+=dymm; }
+  else if(handle==='e'){ w+=dxmm; }
+  else if(handle==='w'){ x+=dxmm; w-=dxmm; }
+  // Enforce minimum 0.5 mm
+  if(w < 0.5){ if(handle.includes('w')){ x = origDatum.x + origDatum.w - 0.5; } w = 0.5; }
+  if(h < 0.5){ if(handle.includes('n')){ y = origDatum.y + origDatum.h - 0.5; } h = 0.5; }
+  S.datumRect = { x, y, w, h };
+}
+
+// Apply resize to an excl zone given handle name and delta-mm from original state
+function _applyExclResize(tz, handle, dxmm, dymm, origZone){
+  if(tz.type==='circle'){
+    // All radius handles just change radius
+    const newR = Math.max(0.05, origZone.r + Math.sqrt(dxmm*dxmm+dymm*dymm) * Math.sign(dxmm+dymm));
+    if(handle==='radius_r') tz.r = Math.max(0.05, origZone.r+dxmm);
+    else if(handle==='radius_l') tz.r = Math.max(0.05, origZone.r-dxmm);
+    else if(handle==='radius_t') tz.r = Math.max(0.05, origZone.r-dymm);
+    else if(handle==='radius_b') tz.r = Math.max(0.05, origZone.r+dymm);
+    else if(handle==='center'){ tz.cx=origZone.cx+dxmm; tz.cy=origZone.cy+dymm; }
+    return;
+  }
+  // Rect handles — manipulate x/y/w/h from the original zone snapshot
+  let {x,y,w,h} = origZone;
+  if(handle==='nw'){ x+=dxmm; y+=dymm; w-=dxmm; h-=dymm; }
+  else if(handle==='ne'){ w+=dxmm; y+=dymm; h-=dymm; }
+  else if(handle==='sw'){ x+=dxmm; w-=dxmm; h+=dymm; }
+  else if(handle==='se'){ w+=dxmm; h+=dymm; }
+  else if(handle==='n'){ y+=dymm; h-=dymm; }
+  else if(handle==='s'){ h+=dymm; }
+  else if(handle==='e'){ w+=dxmm; }
+  else if(handle==='w'){ x+=dxmm; w-=dxmm; }
+  // Enforce minimum size
+  if(w<0.05){ if(handle.includes('w')){ x=origZone.x+origZone.w-0.05; } w=0.05; }
+  if(h<0.05){ if(handle.includes('n')){ y=origZone.y+origZone.h-0.05; } h=0.05; }
+  tz.x=x; tz.y=y; tz.w=w; tz.h=h;
+}
+
 // ── Exclusion zone filter for any page (used in evaluation across all tabs) ──
+// Fully-excluded pores (centre inside zone, ≥95% area overlap) are removed.
+// Partially-overlapping pores are kept with _effectiveDia / _cropFraction tags.
 // Pass `page` = the image page object that owns the pores.
 function _filterExclZones(pores, page){
   const zones = (page && page.exclusionZones) || [];
   if(!zones.length) return pores;
-  return pores.filter(p=>!zones.some(z=>{
-    if(z.type==='rect') return p.x>=z.x && p.x<=(z.x+z.w) && p.y>=z.y && p.y<=(z.y+z.h);
-    if(z.type==='circle'){ const dx=p.x-z.cx, dy=p.y-z.cy; return (dx*dx+dy*dy)<=z.r*z.r; }
-    return false;
-  }));
+  return pores.map(p => {
+    const cs = _poreExclCropStatus(p, page);
+    if(cs.status === 'full') return null;
+    if(cs.status === 'partial'){
+      return Object.assign({}, p, {
+        _effectiveDia: cs.effectiveDia,
+        _cropFraction: cs.fraction,
+        _isCropped: true
+      });
+    }
+    return p;
+  }).filter(Boolean);
 }
 
 function _rectIntersectionArea(a, b){
@@ -4526,27 +5811,49 @@ function _exclusionAreaForDatum(page, datumRect, wallW, wallH){
   if(!bounds.w || !bounds.h) return 0;
   return zones.reduce((sum,z)=>{
     if(z.type==='rect') return sum + _rectIntersectionArea(bounds,z);
-    if(z.type==='circle') return sum + Math.PI*z.r*z.r;
+    if(z.type==='circle') return sum + _circleRectIntersectArea(z.cx, z.cy, z.r, bounds.x, bounds.y, bounds.w, bounds.h);
+    if(z.type==='polygon'){
+      const pts=z.points||[];
+      if(pts.length>=3){
+        // Exact: Sutherland-Hodgman clip to datum rect, then Shoelace area
+        const clipped=_clipPolyToRect(pts, bounds.x, bounds.y, bounds.w, bounds.h);
+        if(clipped.length>=3) return sum + polyArea(clipped);
+      }
+    }
     return sum;
   },0);
 }
 
 function _evaluationDatumArea(page, metrics, datumRect){
   const base=Math.max(metrics?.datum || 0, 0.01);
-  return +Math.max(base, 0.01).toFixed(2);
+  const exclArea = _exclusionAreaForDatum(page, datumRect, metrics?.wallW, metrics?.wallH);
+  return +Math.max(base - exclArea, 0.01).toFixed(2);
 }
 
 // Returns only pores within datum square (or all pores if no datum drawn),
-// AND filters out pores masked by an active exclusion zone.
-// Pass explicit `page` to ensure the correct page's zones are used (critical for multi-page eval).
+// AND filters out fully-excluded pores. Partially-overlapping pores are kept
+// with their effective (cropped) diameter embedded as p._effectiveDia.
+// Pass explicit `page` to ensure the correct page's zones/datumRect are used.
 function getPoresForEvaluation(pores, page){
   if(!pores) pores=AP();
   const _page = page || ((typeof activeImagePage==='function') ? activeImagePage() : null);
-  // Strip zone-masked pores first (live mask — non-destructive, uses explicit page reference)
-  pores = pores.filter(p=>!_poreInExclZone(p, _page));
-  if(!S.datumRect || S.datumRect.w<=0) return pores;
-  const dr=S.datumRect;
-  return pores.filter(p=>p.x>=dr.x && p.x<=(dr.x+dr.w) && p.y>=dr.y && p.y<=(dr.y+dr.h));
+  // Annotate each pore with crop status, then filter fully-excluded
+  pores = pores.map(p=>{
+    const cs = _poreExclCropStatus(p, _page);
+    if(cs.status==='full') return null; // exclude completely
+    if(cs.status==='partial'){
+      // Use a shallow clone with effective diameter for metric calculations
+      return Object.assign({}, p, {_effectiveDia: cs.effectiveDia, _cropFraction: cs.fraction, _isCropped: true});
+    }
+    return Object.assign({}, p, {_effectiveDia: p.dia, _cropFraction: 1, _isCropped: false});
+  }).filter(Boolean);
+  // Use page-specific datumRect when available (ensures per-page filtering for multi-page workspaces).
+  // Fall back to S.datumRect (global) for the currently active page.
+  const _dr = (_page && _page.datumRect && _page.datumRect.w > 0)
+    ? _page.datumRect
+    : (S.datumRect && S.datumRect.w > 0 ? S.datumRect : null);
+  if(!_dr) return pores;
+  return pores.filter(p=>p.x>=_dr.x && p.x<=(_dr.x+_dr.w) && p.y>=_dr.y && p.y<=(_dr.y+_dr.h));
 }
 
 // Remove datum square
@@ -4629,18 +5936,27 @@ let metricDebounce = null;
 function updateLiveMetrics(){
   // Fast local count update
   const _apAll = AP();
-  const _exclCount = _apAll.filter(p=>_poreInExclZone(p)).length;
-  const _nonExcl = _apAll.filter(p=>!_poreInExclZone(p));
+  const _page4 = (typeof activeImagePage==='function') ? activeImagePage() : null;
+  const _exclFull = _apAll.filter(p=>_poreExclCropStatus(p,_page4).status==='full').length;
+  const _exclPartial = _apAll.filter(p=>_poreExclCropStatus(p,_page4).status==='partial').length;
+  const _nonExcl = _apAll.filter(p=>_poreExclCropStatus(p,_page4).status!=='full');
   const effLen = S.spec.u > 0 ? _nonExcl.filter(p=>p.dia>=S.spec.u).length : _nonExcl.length;
-  document.getElementById('m-cnt').textContent = _exclCount > 0 ? `${effLen} (+${_exclCount} excl)` : effLen;
+  let cntLabel = String(effLen);
+  if(_exclFull>0) cntLabel += ` (+${_exclFull} excl`+(_exclPartial>0?`, ${_exclPartial} ✂`:'')+`)`;
+  else if(_exclPartial>0) cntLabel += ` (${_exclPartial} ✂ cropped)`;
+  document.getElementById('m-cnt').textContent = cntLabel;
   document.getElementById('mb-cnt').style.width=Math.min(100,effLen*8)+'%';
   
   if(metricDebounce) clearTimeout(metricDebounce);
   metricDebounce = setTimeout(() => {
     try {
-      // FILTER pores to datum square if drawn
+      // FILTER pores to datum square if drawn, then apply exclusion zones
       const evalPores = getPoresForEvaluation(AP());
-      const data = runEvaluationLocal(evalPores, S.spec, getEffectiveWallH(), null, activeImagePage().imgOffsetMm || 0);
+      // Compute net datum ONCE here and pass explicitly to avoid double-subtracting
+      // exclusion area (getEffectiveDatum already subtracts it; if we also passed null
+      // to runEvaluationLocal it would call getEffectiveDatum a second time inside).
+      const _liveEvalDatum = getEffectiveDatum();
+      const data = runEvaluationLocal(evalPores, S.spec, getEffectiveWallH(), _liveEvalDatum, activeImagePage().imgOffsetMm || 0);
 
       const pct=data.pct;
       const maxPhi=data.max_phi;
@@ -4787,7 +6103,14 @@ function _silentReEvalActivePage(){
 // ═══════════════════════════════════════════════════════════════════════════
 function _effectivePores(pores, spec){
   const u = spec.u || 0;
-  return u > 0 ? pores.filter(p => p.dia >= u) : [...pores];
+  // Normalise: for cropped pores, use _effectiveDia as the working dia so all
+  // downstream calcs (area, max-phi, gap) reflect the cropped outside-zone portion.
+  const normalised = pores.map(p =>
+    p._isCropped && p._effectiveDia != null
+      ? Object.assign({}, p, { dia: p._effectiveDia })
+      : p
+  );
+  return u > 0 ? normalised.filter(p => p.dia >= u) : normalised;
 }
 
 function _getZone(y, wallH, poreOffset, specT){
@@ -4804,11 +6127,12 @@ function _getZone(y, wallH, poreOffset, specT){
   return 'hr';                          // Surface B zone (matches original mapping)
 }
 
-function _calcPorosity(pores, spec, datumOverride){
+function _calcPorosity(pores, spec, datum){
+  // datum MUST be passed explicitly — never falls back to getEffectiveDatum() to
+  // avoid double-subtracting exclusion area on an already-filtered pore list.
   const eff = _effectivePores(pores, spec);
   const total = eff.reduce((s, p) => s + Math.PI * (p.dia / 2) ** 2, 0);
-  const datum = datumOverride || getEffectiveDatum();
-  return total / Math.max(datum, 0.01) * 100;
+  return total / Math.max(datum || 0.01, 0.01) * 100;
 }
 
 function _calcMaxPhi(pores, spec){
@@ -4879,6 +6203,7 @@ async function _callApiEvaluate(pores, spec, wallH, exclusionZones, datumRect, p
       hk: parseInt(spec.hk) || 1,
       nk: parseInt(spec.nk) || 1,
       method: spec.method || 'visual_machined',
+      zone_disabled: !!spec.zone_disabled,
       phi_gas: (spec.phi_gas !== undefined && spec.phi_gas !== null && spec.phi_gas !== '' && !isNaN(parseFloat(spec.phi_gas))) ? parseFloat(spec.phi_gas) : null,
       pct_gas: (spec.pct_gas !== undefined && spec.pct_gas !== null && spec.pct_gas !== '' && !isNaN(parseFloat(spec.pct_gas))) ? parseFloat(spec.pct_gas) : null,
       phi_shrink: (spec.phi_shrink !== undefined && spec.phi_shrink !== null && spec.phi_shrink !== '' && !isNaN(parseFloat(spec.phi_shrink))) ? parseFloat(spec.phi_shrink) : null,
@@ -4894,30 +6219,43 @@ async function _callApiEvaluate(pores, spec, wallH, exclusionZones, datumRect, p
       zone: p.zone || 'hr'
     }));
 
-    const formattedZones = (exclusionZones || []).map(z => {
+    const formattedZones = (exclusionZones || []).flatMap(z => {
       if (z.type === 'rect') {
-        return {
+        return [{
           type: 'rect',
           x: parseFloat(z.x),
           y: parseFloat(z.y),
           w: parseFloat(z.w),
           h: parseFloat(z.h)
-        };
-      } else {
-        return {
+        }];
+      } else if (z.type === 'circle') {
+        return [{
           type: 'circle',
           cx: parseFloat(z.cx),
           cy: parseFloat(z.cy),
           r: parseFloat(z.r)
-        };
+        }];
+      } else if (z.type === 'polygon' && z.points && z.points.length >= 3) {
+        return [{
+          type: 'polygon',
+          points: z.points.map(p => ({ x: parseFloat(p.x), y: parseFloat(p.y) }))
+        }];
       }
+      return []; // skip malformed zones
     });
 
-    const formattedDatum = (datumRect && datumRect.w > 0) ? {
-      x: parseFloat(datumRect.x),
-      y: parseFloat(datumRect.y),
-      w: parseFloat(datumRect.w),
-      h: parseFloat(datumRect.h)
+    // KEY FIX: when datumRect is null/empty but image is calibrated, synthesize a
+    // full-image datum_rect so the backend uses actual image area, not spec.datum.
+    // This keeps the API result consistent with the frontend local evaluation.
+    const _calibMetrics = (typeof getImagePageMetrics==='function') ? getImagePageMetrics(activeImagePage(), S.spec) : null;
+    const _syntheticDatum = (!datumRect || !datumRect.w) && _calibMetrics && _calibMetrics.calibrated && _calibMetrics.wallW > 0 && _calibMetrics.wallH > 0
+      ? { x: 0, y: 0, w: +_calibMetrics.wallW.toFixed(4), h: +_calibMetrics.wallH.toFixed(4) }
+      : datumRect;
+    const formattedDatum = (_syntheticDatum && _syntheticDatum.w > 0) ? {
+      x: parseFloat(_syntheticDatum.x),
+      y: parseFloat(_syntheticDatum.y),
+      w: parseFloat(_syntheticDatum.w),
+      h: parseFloat(_syntheticDatum.h)
     } : null;
 
     const res = await fetch('/api/evaluate', {
@@ -4949,7 +6287,10 @@ function runEvaluationLocal(pores, spec, wallH, datumOverride, poreOffset){
   const _off = poreOffset || 0;
   pores.forEach(p => p.zone = _getZone(p.y, wallH, _off, spec.t || wallH));
 
-  const datum  = datumOverride || getEffectiveDatum();
+  // datumOverride is the NET datum area (already has exclusion zones subtracted by caller).
+  // When null/undefined, fall back to spec.datum — NOT getEffectiveDatum() — to avoid
+  // double-subtracting exclusion zone area on an already-filtered pore list.
+  const datum  = (datumOverride != null && datumOverride > 0) ? datumOverride : (spec.datum || 100);
   const pct    = _calcPorosity(pores, spec, datum);
   const maxPhi = _calcMaxPhi(pores, spec);
   const gapD   = _calcMinGap(pores, spec);
@@ -5611,15 +6952,16 @@ function renderReportImage(page, spec, metrics){
     const x=p.x*sx, y=p.y*sy, r=Math.max(3,(p.dia/2)*((sx+sy)/2));
     const ignored=spec.u>0&&p.dia<spec.u;
     const fail=!ignored&&p.dia>spec.phi;
-    const isExcluded = _poreInExclZone(p, page);
+    const _cs2 = _poreExclCropStatus(p, page);
+    const isExcluded = _cs2.status === 'full';
+    const isPartial = _cs2.status === 'partial';
 
     ctx.save();
     if(isExcluded){
-      // Faint grey for excluded pores
-      ctx.globalAlpha = 0.32;
-      ctx.fillStyle='rgba(100,100,100,0.18)';
-      ctx.strokeStyle='#999'; ctx.lineWidth=1.5; ctx.setLineDash([3,3]);
-      
+      // Fully inside zone: faint ghost
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle='rgba(100,100,100,0.10)';
+      ctx.strokeStyle='#bbb'; ctx.lineWidth=1.2; ctx.setLineDash([2,3]);
       if(p._contour && p._contour.length>=4){
         ctx.beginPath();
         p._contour.forEach(([dx,dy],i)=>{
@@ -5631,11 +6973,53 @@ function renderReportImage(page, spec, metrics){
         ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); ctx.stroke();
       }
       ctx.setLineDash([]);
-      
-      // X marker
-      ctx.fillStyle='#888'; ctx.font=`bold ${Math.max(8,Math.min(12,r*.6))}px Arial`;
+      ctx.fillStyle='#bbb'; ctx.font=`bold ${Math.max(8,Math.min(12,r*.6))}px Arial`;
       ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.fillText('✕', x, y);
+    } else if(isPartial){
+      // Partially in zone: clip to outside zones, show cropped pore
+      const ez2 = page.exclusionZones || [];
+      // Ghost full outline
+      ctx.globalAlpha = 0.15;
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+      ctx.strokeStyle='rgba(239,68,68,0.5)'; ctx.lineWidth=1; ctx.setLineDash([2,2]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      // Clip to outside zones
+      ctx.save();
+      ctx.beginPath();
+      const rW=page.imgState?.image?.naturalWidth||800, rH=page.imgState?.image?.naturalHeight||600;
+      ctx.rect(0,0,rW,rH);
+      ez2.forEach(z=>{
+        if(z.type==='circle'){
+          const zcx=z.cx*sx, zcy=z.cy*sy, zrp=z.r*((sx+sy)/2);
+          ctx.moveTo(zcx+zrp,zcy); ctx.arc(zcx,zcy,zrp,0,Math.PI*2);
+        } else {
+          ctx.rect(z.x*sx, z.y*sy, z.w*sx, z.h*sy);
+        }
+      });
+      ctx.clip('evenodd');
+      // Draw pore normally
+      const col2=ignored?'#777':fail?'#d92d20':p.zone==='hk'?'#6f42c1':'#0b7285';
+      if(p._contour && p._contour.length>=4){
+        ctx.beginPath();
+        p._contour.forEach(([dx,dy],i)=>{
+          const px=x+dx*sx, py=y+dy*sy;
+          if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+        });
+        ctx.closePath();
+        ctx.fillStyle=fail?'rgba(217,45,32,.24)':'rgba(11,114,133,.18)';
+        ctx.strokeStyle=col2; ctx.lineWidth=2; ctx.fill(); ctx.stroke();
+      } else {
+        ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+        ctx.fillStyle=fail?'rgba(217,45,32,.24)':'rgba(11,114,133,.18)';
+        ctx.strokeStyle=col2; ctx.lineWidth=2; ctx.fill(); ctx.stroke();
+      }
+      ctx.restore();
+      // Scissor badge
+      ctx.font=`bold ${Math.max(8,Math.min(11,r*.65))}px Arial`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle='rgba(239,68,68,0.85)';
+      ctx.fillText('✂', x+(r*0.55), y-(r*0.55));
     } else {
       // Normal pore drawing
       const col=ignored?'#777':fail?'#d92d20':p.zone==='hk'?'#6f42c1':'#0b7285';
@@ -5680,12 +7064,22 @@ function renderReportZoneMap(page, spec, metrics){
     const r=Math.max(3,Math.min(18,(p.dia/Math.max(metrics.wallH,.01))*wh/2));
     const ignored=spec.u>0&&p.dia<spec.u;
     const fail=!ignored&&p.dia>spec.phi;
-    const isExcluded = _poreInExclZone(p, page);
+    const _cs3 = _poreExclCropStatus(p, page);
+    const isExcluded = _cs3.status === 'full';
+    const isPartial2 = _cs3.status === 'partial';
     const isOutsideDatum = pageDatum && (p.x < pageDatum.x || p.x > pageDatum.x + pageDatum.w || p.y < pageDatum.y || p.y > pageDatum.y + pageDatum.h);
 
     if(isExcluded){
-      out+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="rgba(100,100,100,0.06)" stroke="#999" stroke-width="1" stroke-dasharray="2 2" opacity="0.5"/>`;
-      out+=`<text x="${x.toFixed(1)}" y="${(y+0.5).toFixed(1)}" fill="#888" font-size="${Math.max(6, Math.min(10, r*1.2)).toFixed(0)}" text-anchor="middle" dominant-baseline="central" opacity="0.6">✕</text>`;
+      out+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="rgba(100,100,100,0.04)" stroke="#ccc" stroke-width="1" stroke-dasharray="2 3" opacity="0.4"/>`;
+      out+=`<text x="${x.toFixed(1)}" y="${(y+0.5).toFixed(1)}" fill="#ccc" font-size="${Math.max(6, Math.min(10, r*1.2)).toFixed(0)}" text-anchor="middle" dominant-baseline="central" opacity="0.5">✕</text>`;
+    } else if(isPartial2){
+      const col3=ignored?'#777':fail?'#d92d20':p.zone==='hk'?'#6f42c1':'#0b7285';
+      // Ghost full circle
+      out+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="none" stroke="rgba(239,68,68,0.3)" stroke-width="1" stroke-dasharray="2 2" opacity="0.5"/>`;
+      // Active arc (draw partial using clip)
+      const effR = (_cs3.effectiveDia/2 / Math.max(metrics.wallH,.01))*wh;
+      out+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${fail?'rgba(217,45,32,.25)':'rgba(11,114,133,.18)'}" stroke="${col3}" stroke-width="1.3" opacity="0.85"/>`;
+      out+=`<text x="${(x+r*0.5).toFixed(1)}" y="${(y-r*0.5).toFixed(1)}" fill="rgba(239,68,68,0.8)" font-size="7" text-anchor="middle">✂</text>`;
     } else if(isOutsideDatum){
       out+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="rgba(180,100,0,0.04)" stroke="#bbb" stroke-width="1" stroke-dasharray="2 2" opacity="0.4"/>`;
       out+=`<text x="${x.toFixed(1)}" y="${(y+0.5).toFixed(1)}" fill="#999" font-size="${Math.max(6, Math.min(10, r*1.2)).toFixed(0)}" text-anchor="middle" dominant-baseline="central" opacity="0.5">✕</text>`;
@@ -5753,19 +7147,26 @@ function buildImageReportSection(tab, page, spec, specIndex, imageIndex){
 
   // Pore Rows with Status
   const poreRows = page.pores.length ? page.pores.map((p,i)=>{
-    const isExcluded = _poreInExclZone(p, page);
+    const _csR = _poreExclCropStatus(p, page);
+    const isExcluded = _csR.status === 'full';
+    const isPartialR = _csR.status === 'partial';
     const isOutsideDatum = pageDatum && (p.x < pageDatum.x || p.x > pageDatum.x + pageDatum.w || p.y < pageDatum.y || p.y > pageDatum.y + pageDatum.h);
     let statusStr = '<span class="pass">Active</span>';
     let rowStyle = '';
     if(isExcluded){
-      statusStr = '<span class="fail" style="color:#d92d20">Excluded (Zone)</span>';
-      rowStyle = ' style="background:#f9f9f9;text-decoration:line-through;color:#999"';
+      statusStr = '<span class="fail" style="color:#d92d20">✕ Excl. (Zone)</span>';
+      rowStyle = ' style="background:#fafafa;text-decoration:line-through;color:#bbb"';
+    } else if(isPartialR){
+      const pct = ((_csR.fraction||0)*100).toFixed(0);
+      statusStr = `<span style="color:#f76707">✂ Cropped (${pct}% active, Ø${_csR.effectiveDia.toFixed(2)})</span>`;
+      rowStyle = ' style="background:#fff9f0"';
     } else if(isOutsideDatum){
       statusStr = '<span class="fail" style="color:#f76707">Outside Datum</span>';
       rowStyle = ' style="background:#f9f9f9;text-decoration:line-through;color:#999"';
     }
+    const displayDia = isPartialR ? `${Number(p.dia||0).toFixed(3)} <span style="font-size:8px;color:#f76707">(→${_csR.effectiveDia.toFixed(3)})</span>` : Number(p.dia||0).toFixed(3);
     return `<tr${rowStyle}>
-      <td>${i+1}</td><td>${Number(p.dia||0).toFixed(3)}</td><td>${Number(p.x||0).toFixed(2)}</td>
+      <td>${i+1}</td><td>${displayDia}</td><td>${Number(p.x||0).toFixed(2)}</td>
       <td>${Number(p.y||0).toFixed(2)}</td><td>${escapeHtml((p.zone||'-').toUpperCase())}</td><td>${escapeHtml(p.type||'gas')}</td>
       <td>${statusStr}</td>
     </tr>`;
@@ -5879,6 +7280,7 @@ async function downloadPDF() {
           hk: parseInt(tab.spec.hk) || 1,
           nk: parseInt(tab.spec.nk) || 1,
           method: tab.spec.method || 'visual_machined',
+          zone_disabled: !!tab.spec.zone_disabled,
           phi_gas: (tab.spec.phi_gas !== undefined && tab.spec.phi_gas !== null && tab.spec.phi_gas !== '' && !isNaN(parseFloat(tab.spec.phi_gas))) ? parseFloat(tab.spec.phi_gas) : null,
           pct_gas: (tab.spec.pct_gas !== undefined && tab.spec.pct_gas !== null && tab.spec.pct_gas !== '' && !isNaN(parseFloat(tab.spec.pct_gas))) ? parseFloat(tab.spec.pct_gas) : null,
           phi_shrink: (tab.spec.phi_shrink !== undefined && tab.spec.phi_shrink !== null && tab.spec.phi_shrink !== '' && !isNaN(parseFloat(tab.spec.phi_shrink))) ? parseFloat(tab.spec.phi_shrink) : null,
@@ -5897,18 +7299,31 @@ async function downloadPDF() {
               zone: p.zone || 'hr'
             })),
             wall_h_mm: parseFloat(metrics.wallH),
-            exclusion_zones: (img.exclusionZones || []).map(z => {
+            exclusion_zones: (img.exclusionZones || []).flatMap(z => {
               if (z.type === 'rect') {
-                return { type: 'rect', x: parseFloat(z.x), y: parseFloat(z.y), w: parseFloat(z.w), h: parseFloat(z.h) };
-              } else {
-                return { type: 'circle', cx: parseFloat(z.cx), cy: parseFloat(z.cy), r: parseFloat(z.r) };
+                return [{ type: 'rect', x: parseFloat(z.x), y: parseFloat(z.y), w: parseFloat(z.w), h: parseFloat(z.h) }];
+              } else if (z.type === 'circle') {
+                return [{ type: 'circle', cx: parseFloat(z.cx), cy: parseFloat(z.cy), r: parseFloat(z.r) }];
+              } else if (z.type === 'polygon' && z.points && z.points.length >= 3) {
+                return [{ type: 'polygon', points: z.points.map(p => ({ x: parseFloat(p.x), y: parseFloat(p.y) })) }];
               }
+              return [];
             }),
+            // KEY FIX: when no explicit datum rect is drawn but the image IS calibrated,
+            // synthesize a full-image datum_rect so the backend uses the actual calibrated
+            // image area instead of falling back to spec.datum (e.g. 100 mm² by default).
+            // Without this, the PDF report datum would be wrong (too large), making
+            // porosity % appear much lower than the live frontend metrics.
             datum_rect: (img.datumRect && img.datumRect.w > 0) ? {
               x: parseFloat(img.datumRect.x),
               y: parseFloat(img.datumRect.y),
               w: parseFloat(img.datumRect.w),
               h: parseFloat(img.datumRect.h)
+            } : (metrics.calibrated && metrics.wallW > 0 && metrics.wallH > 0) ? {
+              // Synthesized full-image datum from calibrated scale
+              x: 0, y: 0,
+              w: parseFloat(metrics.wallW.toFixed(4)),
+              h: parseFloat(metrics.wallH.toFixed(4))
             } : null,
             pore_offset_mm: parseFloat(metrics.offset) || 0.0
           };
@@ -6849,7 +8264,16 @@ function handleImageToolMousemove(p){
   if(!S.imgState.imgTool) return false;
   const it=S.imgState.imgTool;
   if(it==='scale_line' && S.imgState.scaleDrawing && S.imgState.scaleLine){
-    S.imgState.scaleLine.x2=p.x; S.imgState.scaleLine.y2=p.y;
+    let ex = p.x, ey = p.y;
+    // Shift-constrain: snap to horizontal or vertical (like Acrobat / Illustrator)
+    if(window._scaleShift) {
+      const dx = ex - S.imgState.scaleLine.x1;
+      const dy = ey - S.imgState.scaleLine.y1;
+      if(Math.abs(dx) >= Math.abs(dy)) ey = S.imgState.scaleLine.y1; // horizontal
+      else                             ex = S.imgState.scaleLine.x1; // vertical
+    }
+    S.imgState.scaleLine.x2 = ex;
+    S.imgState.scaleLine.y2 = ey;
     drawCanvas(); return true;
   }
   if(it==='crop' && S.imgState.cropDrawing && S.imgState.cropRect){
@@ -7512,25 +8936,148 @@ function updateExclZoneBadge(){
 function renderExclList(){
   const page = activeImagePage();
   const zones = page ? page.exclusionZones || [] : [];
+  const selIdx = S._exclSelected;
+  const isEditMode = S.tool === 'excl_select';
+
   document.querySelectorAll('#excl-zone-list').forEach(list => {
     if(!zones.length){
-      list.innerHTML = '<div style="font-size:9px;color:var(--dim);font-style:italic">No exclusion zones \u2014 use \u{1f6ab} Excl. Zone tool to draw</div>';
+      list.innerHTML = '<div style="font-size:9px;color:var(--dim);font-style:italic">No exclusion zones — use 🚫 Excl. Zone tool to draw</div>';
       return;
     }
     list.innerHTML = zones.map((z, i) => {
-      let desc = '';
-      if(z.type === 'circle'){
-        desc = 'Circle r=' + (z.r || 0).toFixed(1) + ' mm';
+      let icon='▭', desc='';
+      if(z.type==='circle'){
+        icon='⭕';
+        desc = `r=${(z.r||0).toFixed(2)}mm @ (${(z.cx||0).toFixed(1)},${(z.cy||0).toFixed(1)})`;
+      } else if(z.type==='polygon'){
+        icon='✦';
+        const _a = polyArea(z.points||[]);
+        desc = `${(z.points||[]).length} pts · ${_a.toFixed(2)}mm²`;
       } else {
-        desc = (z.w || 0).toFixed(1) + '\u00d7' + (z.h || 0).toFixed(1) + ' mm';
+        desc = `${(z.w||0).toFixed(2)}×${(z.h||0).toFixed(2)}mm`;
       }
-      return '<div class="excl-list-item">' +
-        '<span>\u{1f6ab} Zone #' + (i+1) + '</span>' +
-        '<span style="color:var(--dim)">' + desc + '</span>' +
-        '<span class="excl-del" onclick="removeExclZone(' + i + ')" title="Remove">\u2715</span>' +
-      '</div>';
+      const isSel = isEditMode && selIdx === i;
+      const _inEP = isSel && S._exclEditPts && S._exclEditPts.zi===i;
+      return `<div class="excl-list-item${isSel?' excl-selected':''}" onclick="_exclListClick(${i})" title="${isEditMode?'Click to select · Right-click for options':'Switch to Edit Zones tool to select'}">`+
+        `<span>${icon} Zone #${i+1}</span>`+
+        `<span style="color:var(--dim);font-size:8px">${desc}</span>`+
+        (isSel?`<span style="cursor:pointer;margin-left:4px;font-size:9px;color:#60a5fa" onclick="event.stopPropagation();_exclQuickCtx(event,${i})" title="Options">⋯</span>`:'') +
+        `<span class="excl-del" onclick="event.stopPropagation();removeExclZone(${i})" title="Remove">✕</span>`+
+        `</div>`;
     }).join('');
   });
+
+  // Render inline edit panel for selected zone
+  const editPanel = document.getElementById('excl-edit-panel');
+  if(editPanel){
+    if(isEditMode && selIdx != null && zones[selIdx]){
+      const z = zones[selIdx];
+      const _inEP2 = S._exclEditPts && S._exclEditPts.zi===selIdx;
+      editPanel.style.display = 'block';
+      if(z.type==='circle'){
+        editPanel.innerHTML = `
+          <div style="font-size:8px;font-weight:700;color:#ef4444;margin-bottom:5px">✏️ Edit Zone #${selIdx+1} — Circle</div>
+          <div class="excl-edit-row">
+            <label>cx</label><input type="number" step="0.1" value="${z.cx.toFixed(2)}" onchange="_exclApplyEdit(${selIdx},'cx',+this.value)" title="Center X (mm)">
+            <label>cy</label><input type="number" step="0.1" value="${z.cy.toFixed(2)}" onchange="_exclApplyEdit(${selIdx},'cy',+this.value)" title="Center Y (mm)">
+          </div>
+          <div class="excl-edit-row">
+            <label>r</label><input type="number" step="0.1" min="0.05" value="${z.r.toFixed(2)}" onchange="_exclApplyEdit(${selIdx},'r',+this.value)" title="Radius (mm)">
+          </div>
+          <div class="excl-edit-hint">Area: ${(Math.PI*z.r*z.r).toFixed(2)} mm² · Del removes · Right-click for more options</div>
+          <div style="margin-top:5px;display:flex;gap:4px">
+            <button onclick="_exclConvertToPoly(${selIdx})" style="font-size:8px;padding:2px 6px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);border-radius:4px;color:#f87171;cursor:pointer">✏ Edit Points</button>
+            <button onclick="_exclQuickRotate(${selIdx})" style="font-size:8px;padding:2px 6px;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.4);border-radius:4px;color:#fbbf24;cursor:pointer">↻ Rotate</button>
+          </div>`;
+      } else if(z.type==='polygon'){
+        const _ptCount=(z.points||[]).length;
+        const _area=polyArea(z.points||[]).toFixed(2);
+        const _epBtnLabel = _inEP2 ? '✅ Done Editing' : '✏ Edit Points';
+        const _epBtnOnclick = _inEP2 ? '_exclExitEditPts()' : '_exclEnterEditPts('+selIdx+')';
+        const _epBtnBg = _inEP2 ? 'rgba(239,68,68,.3)' : 'rgba(239,68,68,.12)';
+        editPanel.innerHTML = `
+          <div style="font-size:8px;font-weight:700;color:#ef4444;margin-bottom:5px">✏️ Edit Zone #${selIdx+1} — Polygon (${_ptCount} vertices)</div>
+          <div class="excl-edit-hint">Area: ${_area} mm² · ${_ptCount} vertices · Del removes zone</div>
+          <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">
+            <button onclick="${_epBtnOnclick}" style="font-size:8px;padding:2px 7px;background:${_epBtnBg};border:1px solid rgba(239,68,68,.5);border-radius:4px;color:#ef4444;cursor:pointer">${_epBtnLabel}</button>
+            <button onclick="_exclQuickRotate(${selIdx})" style="font-size:8px;padding:2px 6px;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.4);border-radius:4px;color:#fbbf24;cursor:pointer">↻ Rotate</button>
+            <button onclick="_exclDupZone(${selIdx})" style="font-size:8px;padding:2px 6px;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.35);border-radius:4px;color:#60a5fa;cursor:pointer">📋 Dup</button>
+          </div>`;
+      } else {
+        editPanel.innerHTML = `
+          <div style="font-size:8px;font-weight:700;color:#ef4444;margin-bottom:5px">✏️ Edit Zone #${selIdx+1} — Rect</div>
+          <div class="excl-edit-row">
+            <label>x</label><input type="number" step="0.1" value="${z.x.toFixed(2)}" onchange="_exclApplyEdit(${selIdx},'x',+this.value)" title="Left edge X (mm)">
+            <label>y</label><input type="number" step="0.1" value="${z.y.toFixed(2)}" onchange="_exclApplyEdit(${selIdx},'y',+this.value)" title="Top edge Y (mm)">
+          </div>
+          <div class="excl-edit-row">
+            <label>w</label><input type="number" step="0.1" min="0.05" value="${z.w.toFixed(2)}" onchange="_exclApplyEdit(${selIdx},'w',+this.value)" title="Width (mm)">
+            <label>h</label><input type="number" step="0.1" min="0.05" value="${z.h.toFixed(2)}" onchange="_exclApplyEdit(${selIdx},'h',+this.value)" title="Height (mm)">
+          </div>
+          <div class="excl-edit-hint">Area: ${(z.w*z.h).toFixed(2)} mm² · Del removes · Right-click for more options</div>
+          <div style="margin-top:5px;display:flex;gap:4px">
+            <button onclick="_exclConvertToPoly(${selIdx})" style="font-size:8px;padding:2px 6px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);border-radius:4px;color:#f87171;cursor:pointer">✏ Edit Points</button>
+            <button onclick="_exclQuickRotate(${selIdx})" style="font-size:8px;padding:2px 6px;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.4);border-radius:4px;color:#fbbf24;cursor:pointer">↻ Rotate</button>
+          </div>`;
+      }
+    } else {
+      editPanel.style.display = 'none';
+    }
+  }
+}
+
+// Quick action helpers called from edit panel buttons
+function _exclConvertToPoly(zi){
+  const page=activeImagePage(); if(!page||!page.exclusionZones) return;
+  pushHistory();
+  const z=page.exclusionZones[zi];
+  page.exclusionZones[zi] = z.type==='rect'?rectToPolygon(z):circleToPolygon(z,24);
+  S._exclEditPts={zi}; S._exclSelected=zi;
+  if(S.tool!=='excl_select') setTool('excl_select');
+  drawCanvas(); updateLiveMetrics(); updatePoreRegistry(); renderExclList();
+  toast('Converted to polygon — drag vertices to reshape');
+}
+function _exclEnterEditPts(zi){
+  S._exclEditPts={zi}; S._exclSelected=zi;
+  if(S.tool!=='excl_select') setTool('excl_select');
+  drawCanvas(); renderExclList();
+  toast('Drag vertices • Click + midpoints to add • Right-click vertex to delete');
+}
+function _exclExitEditPts(){ S._exclEditPts=null; drawCanvas(); renderExclList(); }
+function _exclQuickRotate(zi){
+  const page=activeImagePage(); if(!page||!page.exclusionZones) return;
+  S._exclRotating=_startRotateZone(page,zi); S._exclSelected=zi;
+  if(S.tool!=='excl_select') setTool('excl_select');
+  drawCanvas(); renderExclList();
+  toast('Drag the gold ↻ handle above the zone to rotate');
+}
+function _exclDupZone(zi){
+  const page=activeImagePage(); if(!page||!page.exclusionZones) return;
+  pushHistory();
+  const dup=JSON.parse(JSON.stringify(page.exclusionZones[zi]));
+  if(dup.type==='polygon') dup.points=dup.points.map(p=>({x:p.x+2,y:p.y+2}));
+  else if(dup.type==='rect'){dup.x+=2;dup.y+=2;}
+  else if(dup.type==='circle'){dup.cx+=2;dup.cy+=2;}
+  page.exclusionZones.push(dup);
+  S._exclSelected=page.exclusionZones.length-1;
+  drawCanvas(); updateLiveMetrics(); updatePoreRegistry(); renderExclList();
+  toast('Zone duplicated');
+}
+function _exclQuickCtx(e,zi){ showExclContextMenu(e,zi,null); }
+
+
+function _exclListClick(i){
+  if(S.tool !== 'excl_select') setTool('excl_select');
+  S._exclSelected = i;
+  drawCanvas(); renderExclList();
+}
+
+function _exclApplyEdit(zi, key, val){
+  const page = activeImagePage();
+  if(!page || !page.exclusionZones || !page.exclusionZones[zi]) return;
+  pushHistory();
+  page.exclusionZones[zi][key] = Math.max(key==='w'||key==='r'||key==='h' ? 0.05 : -9999, val);
+  drawCanvas(); updateLiveMetrics(); updatePoreRegistry(); renderExclList();
 }
 
 function removeExclZone(index){

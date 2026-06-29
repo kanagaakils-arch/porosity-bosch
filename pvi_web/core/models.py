@@ -22,6 +22,7 @@ class SpecModel(BaseModel):
     hk: int = 1
     nk: int = 1
     method: str = 'visual_machined'
+    zone_disabled: bool = False
     # ── Type-specific limits (optional — fall back to phi/pct if None) ──
     phi_gas: Optional[float] = None      # max single gas pore Φ (mm)
     pct_gas: Optional[float] = None      # max gas porosity %
@@ -35,9 +36,13 @@ class PoreModel(BaseModel):
     dia: float
     type: str = 'gas'
     zone: str = 'hr'
+    is_excluded: Optional[bool] = None
+    is_cropped: Optional[bool] = None
+    effective_dia: Optional[float] = None
+    crop_fraction: Optional[float] = None
 
 class ExclusionZoneModel(BaseModel):
-    type: Literal["rect", "circle"]
+    type: Literal["rect", "circle", "polygon"]
     x: Optional[float] = None
     y: Optional[float] = None
     w: Optional[float] = None
@@ -45,6 +50,7 @@ class ExclusionZoneModel(BaseModel):
     cx: Optional[float] = None
     cy: Optional[float] = None
     r: Optional[float] = None
+    points: Optional[List[dict]] = None   # polygon vertices [{x, y}, ...]
 
 class DatumRectModel(BaseModel):
     x: float
