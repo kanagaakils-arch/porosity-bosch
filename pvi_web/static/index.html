@@ -3144,22 +3144,7 @@ function drawCanvas(){
   // Background — professional light
   mctx.fillStyle='#f5f6f8'; mctx.fillRect(0,0,W,H);
   
-  // ================= DEBUG INJECTION =================
-  setTimeout(() => {
-    if(mctx) {
-      mctx.save();
-      mctx.fillStyle='rgba(255,0,255,1)'; // Magenta
-      mctx.fillRect(20, 20, 400, 100);
-      mctx.fillStyle='white';
-      mctx.font='bold 20px sans-serif';
-      mctx.textBaseline='top';
-      mctx.fillText(`DEBUG: W=${W} H=${H} imgMode=${S.imgMode}`, 30, 30);
-      mctx.fillText(`imgLoaded=${!!S.imgState.image} wallW=${wallW} wallH=${wallH}`, 30, 60);
-      mctx.fillText(`WrapClientW=${document.getElementById('canvas-wrap').clientWidth}`, 30, 90);
-      mctx.restore();
-    }
-  }, 0);
-  // ===================================================
+
 
   // ── IMAGE BACKGROUND (image mode) ──────────────────────────────────────────
   if(S.imgMode){
@@ -3195,7 +3180,7 @@ function drawCanvas(){
       }
       try { mctx.drawImage(img, ix, iy, dw, dh); } catch(e) { console.error("DRAW CRASH", e); }
       mctx.restore();
-      mctx.fillStyle="rgba(255,0,0,0.1)"; mctx.fillRect(ix,iy,dw,dh);
+      
 
       // Image border
       mctx.strokeStyle='rgba(0,100,255,.3)'; mctx.lineWidth=1; mctx.setLineDash([4,4]);
@@ -8132,10 +8117,18 @@ function loadImageFile(evt){
       if(infoEl) infoEl.textContent = `${file.name}  ·  ${img.naturalWidth}×${img.naturalHeight}px`;
       renderImageTabs();
       updateImgHint();
-      // Ensure canvas is ready before drawing
-      if(!mctx || S.cv.W < 1){ initCanvas(); } else { drawCanvas(); }
-      refreshImgOffsetUI();
-      _updateScaleDisplay(); // Show warning immediately after image load (scale not set yet)
+      
+      const triggerDraw = () => {
+        if(!mctx || S.cv.W < 1){ initCanvas(); } else { drawCanvas(); }
+        refreshImgOffsetUI();
+        _updateScaleDisplay();
+      };
+      
+      if (typeof img.decode === 'function') {
+        img.decode().then(triggerDraw).catch(triggerDraw);
+      } else {
+        setTimeout(triggerDraw, 50);
+      }
     };
     img.src=e.target.result;
   };
