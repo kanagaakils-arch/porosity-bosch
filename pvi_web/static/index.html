@@ -1264,9 +1264,10 @@ select.fi option{background:var(--c2)}
       </div>
     </div>
     <div class="ph-right" style="display:flex; gap:8px; align-items:center;">
-      <button class="btn btn-sec" id="btn-scale-tool-top" onclick="imgToolActivate('scale_line')" title="Set physical scale of the image (px/mm)">📐 Set Scale</button>
-      <button class="btn btn-sec" id="btn-autodetect-top" onclick="autoDetectPores()" title="Automatically trace pores based on detection settings" style="color:#8b5cf6; border-color:rgba(139,92,246,0.5)">🔍 Auto Detect</button>
-      <button class="btn btn-pri" id="btn-eval" onclick="submitEvaluation()">Evaluate →</button>
+      <button class="btn btn-sec" id="btn-upload-top" onclick="document.getElementById('img-file-input').click()" title="Upload Image">📁 Upload Image</button>
+      <button class="btn btn-sec" id="btn-scale-tool-top" onclick="imgToolActivate('scale_line')" title="Set physical scale of the image (px/mm)" disabled>📐 Set Scale</button>
+      <button class="btn btn-sec" id="btn-autodetect-top" onclick="autoDetectPores()" title="Automatically trace pores based on detection settings" style="color:#8b5cf6; border-color:rgba(139,92,246,0.5)" disabled>🔍 Auto Detect</button>
+      <button class="btn btn-pri" id="btn-eval" onclick="submitEvaluation()" disabled>Evaluate →</button>
     </div>
   </div>
 
@@ -1281,16 +1282,6 @@ select.fi option{background:var(--c2)}
 
   <!-- IMAGE TOOLBAR -->
   <div id="img-toolbar" style="position:relative;overflow:visible" class="show">
-
-    <!-- 1. LOAD -->
-    <div class="tb-group">
-      <span class="tb-lbl">LOAD:</span>
-      <button class="btn-stack" onclick="document.getElementById('img-file-input').click()">
-        <span class="btn-stack__icon">📁</span>
-        <span class="btn-stack__label">Upload</span>
-      </button>
-    </div>
-    <div class="tb-sep"></div>
 
     <!-- 2. PREPARE — crop, rotate, flip -->
     <div class="tb-group">
@@ -1671,6 +1662,45 @@ select.fi option{background:var(--c2)}
       <!-- Scale ruler (drawn by JS) -->
     </div>
 
+    <!-- Middle panel: Pore Registry -->
+    <div id="panel-registry" style="width:240px;background:var(--c1);border-left:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0">
+      <div style="padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between">
+        <div class="pp-title" style="margin:0">Pore Registry</div>
+        <div style="font-size:10px;color:var(--dim)" id="reg-count">0 pores (0 effective)</div>
+      </div>
+      <div id="pore-registry" class="scrollable" style="flex:1;overflow-y:auto"><div style="font-size:10px;color:var(--dim);text-align:center;padding:16px">No pores · click canvas to place</div></div>
+
+      <!-- Selected pore edit panel — upgraded -->
+      <div id="pore-edit-panel" style="display:none;padding:10px 12px;border-top:2px solid var(--amb);background:rgba(255,173,0,.06)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div class="pp-title" style="color:var(--amb);margin:0">✎ Edit Pore <span id="ep-pore-id" style="font-size:9px;color:var(--dim);font-weight:400"></span></div>
+          <button onclick="const p=AP().find(p=>p.id===S.selectedId);if(p)removePore(p.id);" style="font-size:10px;padding:2px 8px;background:var(--ra);color:var(--red);border:1px solid var(--red);border-radius:4px;cursor:pointer">✕ Delete</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div class="fi-item">
+            <div class="fl">Φ diameter (mm)</div>
+            <div class="fi-wrap"><input class="fi" id="ep-phi" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.05" min="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
+          </div>
+          <div class="fi-item">
+            <div class="fl">Type</div>
+            <select class="fi" id="ep-type" onchange="const p=AP().find(p=>p.id===S.selectedId);if(p){p.type=this.value;drawCanvas();updateLiveMetrics();updatePoreRegistry();}" style="font-size:12px;padding:4px 8px">
+              <option value="gas">Gas pore</option>
+              <option value="shrink">Shrinkage</option>
+            </select>
+          </div>
+          <div class="fi-item">
+            <div class="fl">X position (mm)</div>
+            <div class="fi-wrap"><input class="fi" id="ep-x" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
+          </div>
+          <div class="fi-item">
+            <div class="fl">Y depth (mm)</div>
+            <div class="fi-wrap"><input class="fi" id="ep-y" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
+          </div>
+          <button onclick="S.selectedId=null;document.getElementById('pore-edit-panel').style.display='none';setTool('place');drawCanvas();updatePoreRegistry();" style="width:100%;font-size:10px;padding:5px 0;background:var(--c3);border:1px solid var(--bd);border-radius:4px;cursor:pointer;color:var(--dim);margin-top:2px">Done ✓</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Right pore panel -->
     <div id="pore-panel">
       <div class="image-tab-strip">
@@ -1822,11 +1852,11 @@ select.fi option{background:var(--c2)}
           </div>
           <div class="fi-item">
             <div class="fl">H / N</div>
-            <input class="fi" id="side-sp-hn" type="text" oninput="applySideSpecDetails()" placeholder="0/0">
+            <input class="fi" id="side-sp-hn" type="text" placeholder="0/0" readonly style="background:var(--c3);color:var(--dim);border-color:transparent;cursor:not-allowed" title="Edit in Full Spec">
           </div>
           <div class="fi-item">
             <div class="fl">HR/NR HK/NK</div>
-            <input class="fi" id="side-sp-zones" type="text" oninput="applySideSpecDetails()" placeholder="0/0 1/1">
+            <input class="fi" id="side-sp-zones" type="text" placeholder="0/0 1/1" readonly style="background:var(--c3);color:var(--dim);border-color:transparent;cursor:not-allowed" title="Edit in Full Spec">
           </div>
         </div>
         <div class="side-spec-actions">
@@ -1835,43 +1865,6 @@ select.fi option{background:var(--c2)}
         </div>
       </div>
 
-
-      <!-- Pore registry -->
-      <div style="padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between">
-        <div class="pp-title" style="margin:0">Pore Registry</div>
-        <div style="font-size:10px;color:var(--dim)" id="reg-count">0 pores (0 effective)</div>
-      </div>
-      <div id="pore-registry" class="scrollable"><div style="font-size:10px;color:var(--dim);text-align:center;padding:16px">No pores · click canvas to place</div></div>
-
-      <!-- Selected pore edit panel — upgraded -->
-      <div id="pore-edit-panel" style="display:none;padding:10px 12px;border-top:2px solid var(--amb);background:rgba(255,173,0,.06)">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <div class="pp-title" style="color:var(--amb);margin:0">✎ Edit Pore <span id="ep-pore-id" style="font-size:9px;color:var(--dim);font-weight:400"></span></div>
-          <button onclick="const p=AP().find(p=&gt;p.id===S.selectedId);if(p)removePore(p.id);" style="font-size:10px;padding:2px 8px;background:var(--ra);color:var(--red);border:1px solid var(--red);border-radius:4px;cursor:pointer">✕ Delete</button>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <div class="fi-item">
-            <div class="fl">Φ diameter (mm)</div>
-            <div class="fi-wrap"><input class="fi" id="ep-phi" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.05" min="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
-          </div>
-          <div class="fi-item">
-            <div class="fl">Type</div>
-            <select class="fi" id="ep-type" onchange="const p=AP().find(p=&gt;p.id===S.selectedId);if(p){p.type=this.value;drawCanvas();updateLiveMetrics();updatePoreRegistry();}" style="font-size:12px;padding:4px 8px">
-              <option value="gas">Gas pore</option>
-              <option value="shrink">Shrinkage</option>
-            </select>
-          </div>
-          <div class="fi-item">
-            <div class="fl">X position (mm)</div>
-            <div class="fi-wrap"><input class="fi" id="ep-x" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
-          </div>
-          <div class="fi-item">
-            <div class="fl">Y depth (mm)</div>
-            <div class="fi-wrap"><input class="fi" id="ep-y" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
-          </div>
-          <button onclick="S.selectedId=null;document.getElementById('pore-edit-panel').style.display='none';setTool('place');drawCanvas();updatePoreRegistry();" style="width:100%;font-size:10px;padding:5px 0;background:var(--c3);border:1px solid var(--bd);border-radius:4px;cursor:pointer;color:var(--dim);margin-top:2px">Done ✓</button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -2647,6 +2640,7 @@ function switchSpecTab(index){
   loadSpecIntoForm();
   S.selectedId=null;
   refreshWorkspaceUI();
+  updateHeaderButtons();
 }
 
 function switchImageTab(index){
@@ -2656,6 +2650,7 @@ function switchImageTab(index){
   S.selectedId=null;
   refreshWorkspaceUI();
   switchCanvasMode('image');
+  updateHeaderButtons();
 }
 
 function addSpecTab(){
@@ -2807,6 +2802,9 @@ function nav(id, opts={}){
   if(id==='meas'){ requestAnimationFrame(initCanvas); }
   if(id==='verdict'){ renderVerdict(); }
   if(id==='ref'){ buildRef(); }
+  
+  // Wait a tick for DOM updates
+  setTimeout(updateHeaderButtons, 0);
 }
 
 // ═══════════════════════════════════════════════════
@@ -3036,7 +3034,7 @@ function resizeCanvas(){
   dpr = window.devicePixelRatio||1;
   const W = wrap.clientWidth;
   const H = wrap.clientHeight;
-  if(W<1||H<1) return;
+  if(W<1||H<1){ setTimeout(resizeCanvas, 50); return; }
   MC.width  = Math.round(W*dpr); MC.height = Math.round(H*dpr);
   OC.width  = Math.round(W*dpr); OC.height = Math.round(H*dpr);
   MC.style.width  = W+'px'; MC.style.height = H+'px';
@@ -6054,8 +6052,50 @@ function updateLiveMetrics(){
       if (S.evaluated) {
         _silentReEvalActivePage();
       }
+      updateHeaderButtons();
     } catch(e){ /* calculation error — skip */ }
   }, 100);
+}
+
+function updateHeaderButtons() {
+  const btnUpload = document.getElementById('btn-upload-top');
+  const btnScale = document.getElementById('btn-scale-tool-top');
+  const btnDetect = document.getElementById('btn-autodetect-top');
+  const btnEval = document.getElementById('btn-eval');
+  
+  if (S.imgMode) {
+    const hasImg = !!(S.imgState && S.imgState.image);
+    const hasScale = !!(hasImg && S.imgState.scalePxPerMm);
+    const hasDetected = !!(hasImg && S.imgState.autoDetected);
+    
+    if(btnUpload) btnUpload.style.display = '';
+    if(btnScale) btnScale.disabled = !hasImg;
+    if(btnDetect) btnDetect.disabled = !hasScale;
+    if(btnEval) btnEval.disabled = !hasDetected;
+  } else {
+    if(btnUpload) btnUpload.style.display = 'none';
+    if(btnScale) btnScale.disabled = true;
+    if(btnDetect) btnDetect.disabled = true;
+    
+    // In Spec mode, all images must be auto-detected to allow evaluation
+    let allDetected = true;
+    let hasAnyImage = false;
+    for (let si = 0; si < Workspace.specs.length; si++) {
+      const tab = Workspace.specs[si];
+      for (let ii = 0; ii < tab.images.length; ii++) {
+        const page = tab.images[ii];
+        if (page.imgState && page.imgState.image) {
+          hasAnyImage = true;
+          if (!page.imgState.autoDetected) {
+            allDetected = false;
+            break;
+          }
+        }
+      }
+      if(!allDetected) break;
+    }
+    if(btnEval) btnEval.disabled = !(hasAnyImage && allDetected);
+  }
 }
 
 // ── Silent single-page re-evaluation ─────────────────────────────────────────
@@ -8945,6 +8985,8 @@ function autoDetectPores(){
         if(exclCount) hint += ` (${exclCount} inside exclusion zones, kept for review)`;
         if(holeCount) hint += ` (${holeCount} holes excluded)`;
         toast(`No pores detected — ${hint} (Otsu=${globalOtsu})`, 'warn');
+        S.imgState.autoDetected = true;
+        updateHeaderButtons();
         btn.textContent='🔍 Auto-Detect'; btn.disabled=false; return;
       }
 
