@@ -8840,7 +8840,7 @@ function autoDetectPores(){
   if(!S.imgState.image){toast('Upload an image first','warn');return;}
   if(!S.imgState.scalePxPerMm){toast('Set Scale first — draw a reference line','warn');return;}
 
-  const btn=document.getElementById('btn-autodetect');
+  const btn=document.getElementById('btn-autodetect-top');
   btn.textContent='⏳ Detecting…'; btn.disabled=true;
 
   setTimeout(()=>{
