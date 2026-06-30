@@ -2338,11 +2338,13 @@ function updateSpecSummaryUI(){
 
 function updateImageControlsUI(){
   const info=document.getElementById('img-scale-info');
-  if(S.imgState.scalePxPerMm){
-    info.style.display='inline-flex';
-    info.textContent=`Scale: ${(1/S.imgState.scalePxPerMm).toFixed(4)} mm/px  ·  ${S.imgState.scalePxPerMm.toFixed(2)} px/mm`;
-  } else {
-    info.style.display='none';
+  if(info){
+    if(S.imgState.scalePxPerMm){
+      info.style.display='inline-flex';
+      info.textContent=`Scale: ${(1/S.imgState.scalePxPerMm).toFixed(4)} mm/px  ·  ${S.imgState.scalePxPerMm.toFixed(2)} px/mm`;
+    } else {
+      info.style.display='none';
+    }
   }
   document.getElementById('img-overlay-info').textContent = S.imgState.image
     ? `${activeImagePage().name} · ${S.imgState.image.naturalWidth}×${S.imgState.image.naturalHeight}px`
