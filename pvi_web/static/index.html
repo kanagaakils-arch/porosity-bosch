@@ -3172,9 +3172,9 @@ function drawCanvas(){
       mctx.textAlign='start';
     } else {
       const img = S.imgState.image;
-      const iW=img.naturalWidth, iH=img.naturalHeight;
-      const fit=Math.min(wallW/iW, wallH/iH);
-      const dw=iW*fit, dh=iH*fit;
+      const iW=Math.max(1, img.naturalWidth), iH=Math.max(1, img.naturalHeight);
+      const fit=Math.min(Math.max(10, wallW)/iW, Math.max(10, wallH)/iH);
+      const dw=Math.max(1, iW*fit), dh=Math.max(1, iH*fit);
       const ix=wallL+(wallW-dw)/2 + (S.imgState.imgOffsetX || 0);
       const iy=wallTop+(wallH-dh)/2 + (S.imgState.imgOffsetY || 0);
       // ── Rescale calibration when canvas resize changes fit ─────────────────
@@ -3193,8 +3193,9 @@ function drawCanvas(){
       if(mctx.filter !== undefined) {
         mctx.filter=`brightness(${S.imgState.brightness||100}%) contrast(${S.imgState.contrast||100}%)`;
       }
-      mctx.drawImage(img, ix, iy, dw, dh);
+      try { mctx.drawImage(img, ix, iy, dw, dh); } catch(e) { console.error("DRAW CRASH", e); }
       mctx.restore();
+      mctx.fillStyle="rgba(255,0,0,0.1)"; mctx.fillRect(ix,iy,dw,dh);
 
       // Image border
       mctx.strokeStyle='rgba(0,100,255,.3)'; mctx.lineWidth=1; mctx.setLineDash([4,4]);
