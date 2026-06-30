@@ -3143,6 +3143,24 @@ function drawCanvas(){
 
   // Background — professional light
   mctx.fillStyle='#f5f6f8'; mctx.fillRect(0,0,W,H);
+  
+  // ================= DEBUG INJECTION =================
+  setTimeout(() => {
+    if(mctx) {
+      mctx.save();
+      mctx.fillStyle='rgba(255,0,255,1)'; // Magenta
+      mctx.fillRect(20, 20, 400, 100);
+      mctx.fillStyle='white';
+      mctx.font='bold 20px sans-serif';
+      mctx.textBaseline='top';
+      mctx.fillText(`DEBUG: W=${W} H=${H} imgMode=${S.imgMode}`, 30, 30);
+      mctx.fillText(`imgLoaded=${!!S.imgState.image} wallW=${wallW} wallH=${wallH}`, 30, 60);
+      mctx.fillText(`WrapClientW=${document.getElementById('canvas-wrap').clientWidth}`, 30, 90);
+      mctx.restore();
+    }
+  }, 0);
+  // ===================================================
+
   // ── IMAGE BACKGROUND (image mode) ──────────────────────────────────────────
   if(S.imgMode){
     if(!S.imgState.image){
@@ -3169,18 +3187,14 @@ function drawCanvas(){
       }
       S.imgState.imgX=ix; S.imgState.imgY=iy; S.imgState.imgW=dw; S.imgState.imgH=dh; S.imgState.fitScale=fit;
   
-      // Draw image with offscreen cache (avoids per-frame filter cost)
-      const needRebuild = !S.imgState.cacheValid || !S.imgState.offscreen ||
-        S.imgState.offscreen.width!==Math.round(dw) || S.imgState.offscreen.height!==Math.round(dh);
-      if(needRebuild){
-        const oc=document.createElement('canvas');
-        oc.width=Math.round(dw); oc.height=Math.round(dh);
-        const octx=oc.getContext('2d');
-        octx.filter=`brightness(${S.imgState.brightness||100}%) contrast(${S.imgState.contrast||100}%)`;
-        octx.drawImage(img,0,0,Math.round(dw),Math.round(dh));
-        S.imgState.offscreen=oc; S.imgState.cacheValid=true;
+      // Direct draw (safer, avoids offscreen canvas crashes)
+      mctx.save();
+      // Apply filters if supported
+      if(mctx.filter !== undefined) {
+        mctx.filter=`brightness(${S.imgState.brightness||100}%) contrast(${S.imgState.contrast||100}%)`;
       }
-      mctx.drawImage(S.imgState.offscreen, ix, iy);
+      mctx.drawImage(img, ix, iy, dw, dh);
+      mctx.restore();
 
       // Image border
       mctx.strokeStyle='rgba(0,100,255,.3)'; mctx.lineWidth=1; mctx.setLineDash([4,4]);
