@@ -1662,7 +1662,44 @@ select.fi option{background:var(--c2)}
       <!-- Scale ruler (drawn by JS) -->
     </div>
 
-    <!-- Middle panel moved to pore-panel -->
+    <!-- Middle panel: Pore Registry -->
+    <div id="panel-registry" style="width:240px;background:var(--c1);border-left:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0">
+      <div style="padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between">
+        <div class="pp-title" style="margin:0">Pore Registry</div>
+        <div style="font-size:10px;color:var(--dim)" id="reg-count">0 pores (0 effective)</div>
+      </div>
+      <div id="pore-registry" class="scrollable" style="flex:1;overflow-y:auto"><div style="font-size:10px;color:var(--dim);text-align:center;padding:16px">No pores · click canvas to place</div></div>
+
+      <!-- Selected pore edit panel — upgraded -->
+      <div id="pore-edit-panel" style="display:none;padding:10px 12px;border-top:2px solid var(--amb);background:rgba(255,173,0,.06)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div class="pp-title" style="color:var(--amb);margin:0">✎ Edit Pore <span id="ep-pore-id" style="font-size:9px;color:var(--dim);font-weight:400"></span></div>
+          <button onclick="const p=AP().find(p=>p.id===S.selectedId);if(p)removePore(p.id);" style="font-size:10px;padding:2px 8px;background:var(--ra);color:var(--red);border:1px solid var(--red);border-radius:4px;cursor:pointer">✕ Delete</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div class="fi-item">
+            <div class="fl">Φ diameter (mm)</div>
+            <div class="fi-wrap"><input class="fi" id="ep-phi" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.05" min="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
+          </div>
+          <div class="fi-item">
+            <div class="fl">Type</div>
+            <select class="fi" id="ep-type" onchange="const p=AP().find(p=>p.id===S.selectedId);if(p){p.type=this.value;drawCanvas();updateLiveMetrics();updatePoreRegistry();}" style="font-size:12px;padding:4px 8px">
+              <option value="gas">Gas pore</option>
+              <option value="shrink">Shrinkage</option>
+            </select>
+          </div>
+          <div class="fi-item">
+            <div class="fl">X position (mm)</div>
+            <div class="fi-wrap"><input class="fi" id="ep-x" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
+          </div>
+          <div class="fi-item">
+            <div class="fl">Y depth (mm)</div>
+            <div class="fi-wrap"><input class="fi" id="ep-y" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
+          </div>
+          <button onclick="S.selectedId=null;document.getElementById('pore-edit-panel').style.display='none';setTool('place');drawCanvas();updatePoreRegistry();" style="width:100%;font-size:10px;padding:5px 0;background:var(--c3);border:1px solid var(--bd);border-radius:4px;cursor:pointer;color:var(--dim);margin-top:2px">Done ✓</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Right pore panel -->
     <div id="pore-panel">
@@ -1672,45 +1709,6 @@ select.fi option{background:var(--c2)}
       <span>Image 1</span><span class="image-tab-meta">0 pores · empty</span>
     </button></div>
         <button class="image-tab-add" onclick="addImageTab()" style="width:100%;margin-top:7px">+ Add Image Tab</button>
-      </div>
-      
-      <!-- Pore Registry (Moved here for better control) -->
-      <div id="panel-registry" style="display:flex;flex-direction:column;flex-shrink:0;max-height:400px;border-bottom:1px solid var(--bd);">
-        <div style="padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;background:var(--c2)">
-          <div class="pp-title" style="margin:0">Pore Registry</div>
-          <div style="font-size:10px;color:var(--dim)" id="reg-count">0 pores (0 effective)</div>
-        </div>
-        <div id="pore-registry" class="scrollable" style="flex:1;overflow-y:auto"><div style="font-size:10px;color:var(--dim);text-align:center;padding:16px">No pores · click canvas to place</div></div>
-  
-        <!-- Selected pore edit panel — upgraded -->
-        <div id="pore-edit-panel" style="display:none;padding:10px 12px;border-top:2px solid var(--amb);background:rgba(255,173,0,.06)">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <div class="pp-title" style="color:var(--amb);margin:0">✎ Edit Pore <span id="ep-pore-id" style="font-size:9px;color:var(--dim);font-weight:400"></span></div>
-            <button onclick="const p=AP().find(p=>p.id===S.selectedId);if(p)removePore(p.id);" style="font-size:10px;padding:2px 8px;background:var(--ra);color:var(--red);border:1px solid var(--red);border-radius:4px;cursor:pointer">✕ Delete</button>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <div class="fi-item">
-              <div class="fl">Φ diameter (mm)</div>
-              <div class="fi-wrap"><input class="fi" id="ep-phi" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.05" min="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
-            </div>
-            <div class="fi-item">
-              <div class="fl">Type</div>
-              <select class="fi" id="ep-type" onchange="const p=AP().find(p=>p.id===S.selectedId);if(p){p.type=this.value;drawCanvas();updateLiveMetrics();updatePoreRegistry();}" style="font-size:12px;padding:4px 8px">
-                <option value="gas">Gas pore</option>
-                <option value="shrink">Shrinkage</option>
-              </select>
-            </div>
-            <div class="fi-item">
-              <div class="fl">X position (mm)</div>
-              <div class="fi-wrap"><input class="fi" id="ep-x" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
-            </div>
-            <div class="fi-item">
-              <div class="fl">Y depth (mm)</div>
-              <div class="fi-wrap"><input class="fi" id="ep-y" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
-            </div>
-            <button onclick="S.selectedId=null;document.getElementById('pore-edit-panel').style.display='none';setTool('place');drawCanvas();updatePoreRegistry();" style="width:100%;font-size:10px;padding:5px 0;background:var(--c3);border:1px solid var(--bd);border-radius:4px;cursor:pointer;color:var(--dim);margin-top:2px">Done ✓</button>
-          </div>
-        </div>
       </div>
       <!-- Image Position in Wall — Deep Upgraded Widget -->
       <div class="ipiw-section" id="img-offset-row" style="">
@@ -3036,12 +3034,7 @@ function resizeCanvas(){
   dpr = window.devicePixelRatio||1;
   const W = wrap.clientWidth;
   const H = wrap.clientHeight;
-  if(W<1||H<1){ 
-    setTimeout(resizeCanvas, 50); 
-    // Ensure we also try drawing if we have mctx, just in case layout is weird
-    if(mctx) requestAnimationFrame(drawCanvas);
-    return; 
-  }
+  if(W<1||H<1){ setTimeout(resizeCanvas, 50); return; }
   MC.width  = Math.round(W*dpr); MC.height = Math.round(H*dpr);
   OC.width  = Math.round(W*dpr); OC.height = Math.round(H*dpr);
   MC.style.width  = W+'px'; MC.style.height = H+'px';
@@ -8137,14 +8130,9 @@ function loadImageFile(evt){
       updateImgHint();
       
       const triggerDraw = () => {
-        if(!mctx || S.cv.W < 1){ initCanvas(); } 
-        // Always enforce drawing on the next frame to avoid blank issues due to layout racing
-        requestAnimationFrame(() => {
-          if(!mctx || S.cv.W < 1) resizeCanvas();
-          drawCanvas();
-          refreshImgOffsetUI();
-          _updateScaleDisplay();
-        });
+        if(!mctx || S.cv.W < 1){ initCanvas(); } else { drawCanvas(); }
+        refreshImgOffsetUI();
+        _updateScaleDisplay();
       };
       
       if (typeof img.decode === 'function') {
