@@ -31,17 +31,8 @@ REQUIRED = {
     "pydantic":       "pydantic",
 }
 
-STREAMLIT_REQUIRED = {
-    "streamlit":      "streamlit",
-    "cv2":            "opencv-python-headless",
-    "PIL":            "pillow",
-    "plotly":         "plotly",
-}
-
-def check_deps(streamlit_mode=False):
+def check_deps():
     deps = REQUIRED.copy()
-    if streamlit_mode:
-        deps.update(STREAMLIT_REQUIRED)
     missing = []
     for pkg, pip_name in deps.items():
         try:
@@ -79,54 +70,32 @@ def main():
                         help=f"Port to run on (default: {DEFAULT_PORT})")
     parser.add_argument("--no-browser", action="store_true",
                         help="Don't open the browser automatically")
-    parser.add_argument("--streamlit", action="store_true",
-                        help="Launch the Streamlit version of the Porosity Inspector")
     args = parser.parse_args()
 
     print(BANNER)
     print("  Checking dependencies...")
-    check_deps(streamlit_mode=args.streamlit)
+    check_deps()
     print("  ✅  All dependencies satisfied.\n")
 
-    if args.streamlit:
-        url = f"http://{HOST}:{args.port}"
-        if not args.no_browser:
-            def _open():
-                time.sleep(2.5)   # wait for Streamlit to start
-                webbrowser.open(url)
-            threading.Thread(target=_open, daemon=True).start()
-            print(f"  🌐  Browser will open at: {url}\n")
-        else:
-            print(f"  🌐  Streamlit will be available at: {url}\n")
+    url = f"http://{HOST}:{args.port}"
 
-        print("  Press Ctrl+C to stop the Streamlit app.\n")
-        print("─" * 54)
-
-        root_dir = os.path.dirname(os.path.abspath(__file__))
-        subprocess.run(
-            [sys.executable, "-m", "streamlit", "run", "app_streamlit.py", "--server.port", str(args.port)],
-            cwd=root_dir
-        )
+    if not args.no_browser:
+        def _open():
+            time.sleep(1.8)   # wait for server to be ready
+            webbrowser.open(url)
+        threading.Thread(target=_open, daemon=True).start()
+        print(f"  🌐  Browser will open at: {url}\n")
     else:
-        url = f"http://{HOST}:{args.port}"
+        print(f"  🌐  Server will be available at: {url}\n")
 
-        if not args.no_browser:
-            def _open():
-                time.sleep(1.8)   # wait for server to be ready
-                webbrowser.open(url)
-            threading.Thread(target=_open, daemon=True).start()
-            print(f"  🌐  Browser will open at: {url}\n")
-        else:
-            print(f"  🌐  Server will be available at: {url}\n")
+    print("  Press Ctrl+C to stop the server.\n")
+    print("─" * 54)
 
-        print("  Press Ctrl+C to stop the server.\n")
-        print("─" * 54)
-
-        web_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), APP_DIR)
-        subprocess.run(
-            [sys.executable, "server.py", "--port", str(args.port)],
-            cwd=web_dir
-        )
+    web_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), APP_DIR)
+    subprocess.run(
+        [sys.executable, "server.py", "--port", str(args.port)],
+        cwd=web_dir
+    )
 
 if __name__ == "__main__":
     main()
