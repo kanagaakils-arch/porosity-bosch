@@ -3823,6 +3823,10 @@ function drawCanvas(){
 
   // Scale ruler (bottom-left)
   drawRuler();
+
+  // Force GPU Compositor refresh to fix Chrome rendering freeze bugs
+  if(MC) MC.style.opacity = (MC.style.opacity === '0.999') ? '1' : '0.999';
+  if(OC) OC.style.opacity = (OC.style.opacity === '0.999') ? '1' : '0.999';
 }
 
 function drawPore(p, selected){
