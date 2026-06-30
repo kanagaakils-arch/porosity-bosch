@@ -8106,6 +8106,13 @@ function loadImageFile(evt){
     img.onload=()=>{
       console.log(`[PVI] Image loaded: ${img.naturalWidth}×${img.naturalHeight}px`);
       pushHistory();
+
+      // Force navigation to the measurement tab so the canvas is visible.
+      // This also fires requestAnimationFrame(initCanvas) to properly size and draw.
+      if(typeof nav === 'function') nav('meas');
+      if(typeof switchCanvasMode === 'function') switchCanvasMode('img');
+      else S.imgMode = true;
+
       // Reset ALL image state cleanly before setting new image
       S.imgState = Object.assign(S.imgState, {
         image: img,
