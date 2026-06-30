@@ -3055,6 +3055,18 @@ function initCanvas(){
   resizeCanvas();
   bindCanvasEvents();
   console.log('[PVI] Canvas init complete');
+  
+  // Ensure that any Flexbox layout shifts trigger a resize
+  const wrap = document.getElementById('canvas-wrap');
+  if(wrap && window.ResizeObserver && !wrap._hasObserver){
+    wrap._hasObserver = true;
+    new ResizeObserver(() => {
+      // only redraw if the actual size changed
+      if(wrap.clientWidth !== S.cv.W || wrap.clientHeight !== S.cv.H){
+        resizeCanvas();
+      }
+    }).observe(wrap);
+  }
 }
 
 function fitWall(){
