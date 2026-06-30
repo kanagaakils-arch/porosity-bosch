@@ -3,8 +3,7 @@
 <meta charset="UTF-8">
 <meta name="description" content="PVI: Professional casting porosity inspection tool compliant with VW50093, ISO 10049, ASTM E505. Calibrated image measurement, pore mapping, and PDF reporting.">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Bosch Porosity Inspector</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap&amp;font-display=swap" rel="stylesheet">
+<title>Porosity Inspector</title>
 <link rel="stylesheet" href="/static/css/platform.css">
 <style>
 /* ── DESIGN TOKENS ── */
@@ -20,7 +19,7 @@
   --tx:#343a40; --muted:#495057; --dim:#868e96; --ghost:#e9ecef;
   --bd:#dee2e6; --bd2:#ced4da; --bd3:#adb5bd;
   --r:5px; --r2:9px; --r3:14px;
-  --fs:'Space Grotesk',sans-serif;
+  --fs:sans-serif;
   --sidebar:192px; --topbar:48px;
 }
 *,::before,::after{box-sizing:border-box;margin:0;padding:0}
@@ -34,7 +33,7 @@ input[type=number]{-moz-appearance:textfield}
 ::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
 ::selection{background:rgba(0,232,162,.2)}
 
-/* Bosch single-tool package: workflow is the primary navigation. */
+/* Single-tool package: workflow is the primary navigation. */
 .home-platform .tool-launch-card:not(:first-child){
   display:none!important;
 }
@@ -1264,7 +1263,9 @@ select.fi option{background:var(--c2)}
         <div class="mph-sub" id="ms-verdict">No spec loaded</div>
       </div>
     </div>
-    <div class="ph-right">
+    <div class="ph-right" style="display:flex; gap:8px; align-items:center;">
+      <button class="btn btn-sec" id="btn-scale-tool-top" onclick="imgToolActivate('scale_line')" title="Set physical scale of the image (px/mm)">📐 Set Scale</button>
+      <button class="btn btn-sec" id="btn-autodetect-top" onclick="autoDetectPores()" title="Automatically trace pores based on detection settings" style="color:#8b5cf6; border-color:rgba(139,92,246,0.5)">🔍 Auto Detect</button>
       <button class="btn btn-pri" id="btn-eval" onclick="submitEvaluation()">Evaluate →</button>
     </div>
   </div>
@@ -1325,19 +1326,6 @@ select.fi option{background:var(--c2)}
     </div>
     <div class="tb-sep"></div>
 
-    <!-- 3. CALIBRATE — must set scale before detecting -->
-    <div class="tb-group">
-      <span class="tb-lbl">CALIBRATE:</span>
-      <button class="btn-stack" id="btn-scale-tool" onclick="imgToolActivate('scale_line')">
-        <span class="btn-stack__icon" style="color:#3b82f6">📐</span>
-        <span class="btn-stack__label">Set Scale</span>
-      </button>
-      <div id="img-scale-info" class="pill-info" style="display:none">
-        <span>—</span>
-      </div>
-    </div>
-    <div class="tb-sep"></div>
-
     <!-- 4. ENHANCE — brightness / contrast for better detection -->
     <div class="tb-group">
       <span class="tb-lbl">ENHANCE:</span>
@@ -1363,7 +1351,7 @@ select.fi option{background:var(--c2)}
       </div>
       <div class="slider-group" title="Detection threshold — 50=Auto (Otsu)" style="color:#8b5cf6">
         <span style="font-size:9px;font-weight:700">Threshold</span>
-        <input type="range" id="detect-threshold" min="10" max="90" value="50" step="5" oninput="document.getElementById('detect-sens-val').textContent=this.value+(this.value=='50'?' (Auto)':this.value&gt;50?' +'+(this.value-50):' '+(this.value-50))" style="width:56px">
+        <input type="range" id="detect-threshold" min="10" max="90" value="50" step="5" oninput="document.getElementById('detect-sens-val').textContent=this.value+(this.value=='50'?' (Auto)':this.value>50?' +'+(this.value-50):' '+(this.value-50))" style="width:56px">
         <span id="detect-sens-val" style="font-size:10px;font-weight:700;min-width:52px">50 (Auto)</span>
       </div>
       <div class="slider-group" title="Minimum pore diameter to detect (mm)" style="color:#0b7285">
@@ -1371,10 +1359,6 @@ select.fi option{background:var(--c2)}
         <input type="range" id="detect-min-dia" min="0.05" max="2.0" value="0.1" step="0.05" oninput="document.getElementById('detect-min-dia-val').textContent=parseFloat(this.value).toFixed(2)+'mm'" style="width:48px">
         <span id="detect-min-dia-val" style="font-size:10px;font-weight:700;width:38px">0.10mm</span>
       </div>
-      <button class="btn-stack btn-purple" id="btn-autodetect" onclick="autoDetectPores()" style="margin-left:4px">
-        <span class="btn-stack__icon">🔍</span>
-        <span class="btn-stack__label">Auto-Detect</span>
-      </button>
       <button class="btn-hz" style="font-size:9px;padding:2px 7px;position:relative" onclick="toggleDetectAdvanced()" id="btn-adv-toggle" title="Show/hide advanced parameters">⚙ Advanced ▾</button>
     </div>
     <div class="tb-sep"></div>
@@ -1531,7 +1515,7 @@ select.fi option{background:var(--c2)}
             <div style="font-size:8px;color:var(--dim);margin-top:7px;padding-top:7px;border-top:1px solid var(--bd);line-height:1.5">
               Rejects blobs touching image borders (partial features).</div>
           </div>
-          <input type="checkbox" class="adv-toggle-switch" id="detect-edge-reject" checked="">
+          <input type="checkbox" class="adv-toggle-switch" id="detect-edge-reject">
         </div>
 
         <!-- MAX AREA % -->
@@ -2189,7 +2173,7 @@ function makeImageState(){
     fitScale: 1, imgTool: null, scaleLine: null, scaleRect: null,
     scaleDrawing: false, cropRect: null, cropDrawing: false,
     imgOffsetX: 0, imgOffsetY: 0, imgDragging: false,
-    offscreen: null, cacheValid: false
+    offscreen: null, cacheValid: false, autoDetected: false
   };
 }
 
@@ -3163,7 +3147,8 @@ function drawCanvas(){
       const iW=img.naturalWidth, iH=img.naturalHeight;
       const fit=Math.min(wallW/iW, wallH/iH);
       const dw=iW*fit, dh=iH*fit;
-      const ix=wallL+(wallW-dw)/2, iy=wallTop+(wallH-dh)/2;
+      const ix=wallL+(wallW-dw)/2 + (S.imgState.imgOffsetX || 0);
+      const iy=wallTop+(wallH-dh)/2 + (S.imgState.imgOffsetY || 0);
       // ── Rescale calibration when canvas resize changes fit ─────────────────
       if(S.imgState.fitScale && Math.abs(fit - S.imgState.fitScale) > 1e-6 && S.imgState.scalePxPerMm){
         S.imgState.scalePxPerMm = S.imgState.scalePxPerMm * (fit / S.imgState.fitScale);
@@ -4767,6 +4752,7 @@ function _snapImgState(){
     scalePxPerMm: S.imgState.scalePxPerMm,
     scaleLine:    S.imgState.scaleLine ? {...S.imgState.scaleLine} : null,
     scaleRect:    S.imgState.scaleRect ? {...S.imgState.scaleRect} : null,
+    autoDetected: S.imgState.autoDetected
   };
 }
 
@@ -4775,6 +4761,7 @@ function _restoreImgState(snap, cb){
   S.imgState.scalePxPerMm = snap.scalePxPerMm;
   S.imgState.scaleLine    = snap.scaleLine;
   S.imgState.scaleRect    = snap.scaleRect;
+  S.imgState.autoDetected = !!snap.autoDetected;
   if(snap.src && (!S.imgState.image || S.imgState.image.src !== snap.src)){
     const img = new Image();
     img.onload = () => { S.imgState.image = img; S.imgState.cacheValid=false; if(cb) cb(); };
@@ -5535,35 +5522,61 @@ function _startRotateZone(page, zi){
 function _poreExclCropStatus(p, page){
   const _page = page || ((typeof activeImagePage==='function') ? activeImagePage() : null);
   const zones = (_page && _page.exclusionZones) || [];
-  if(!zones.length) return {status:'none', effectiveDia:p.dia, effectiveArea:Math.PI*(p.dia/2)**2, fraction:1};
+  if(!zones.length) return {status:'none', effectiveDia:p.dia, effectiveArea:Math.PI*(p.dia/2)**2, fraction:1, centreInside:false};
+  
   const r = p.dia/2;
   const poreArea = Math.PI*r*r;
-  let totalIntersect = 0;
+  
   // Check if centre is inside any zone
   let centreInside = false;
   for(const z of zones){
-    let intersect = 0;
     if(z.type==='rect'){
-      intersect = _circleRectIntersectArea(p.x, p.y, r, z.x, z.y, z.w, z.h);
-      if(p.x>=z.x&&p.x<=(z.x+z.w)&&p.y>=z.y&&p.y<=(z.y+z.h)) centreInside=true;
+      if(p.x>=z.x&&p.x<=(z.x+z.w)&&p.y>=z.y&&p.y<=(z.y+z.h)) { centreInside=true; break; }
     } else if(z.type==='circle'){
-      intersect = _circleCircleIntersectArea(p.x, p.y, r, z.cx, z.cy, z.r);
-      const dx=p.x-z.cx,dy=p.y-z.cy;
-      if(dx*dx+dy*dy<=z.r*z.r) centreInside=true;
+      if((p.x-z.cx)**2+(p.y-z.cy)**2 <= z.r**2) { centreInside=true; break; }
     } else if(z.type==='polygon'){
-      const pts = z.points||[];
-      if(pts.length>=3){
-        intersect = _circlePolyIntersectArea(p.x, p.y, r, pts);
-        if(pointInPoly(p.x, p.y, pts)) centreInside=true;
+      if(pointInPoly(p.x, p.y, z.points||[])) { centreInside=true; break; }
+    }
+  }
+
+  // Use a 20x20 grid over the pore bounding box for accurate overlap area
+  const steps = 20;
+  const step = p.dia / steps;
+  let insideCount = 0;
+  let totalGridCells = 0;
+
+  for(let i=0; i<steps; i++){
+    const px = (p.x - r) + (i + 0.5) * step;
+    for(let j=0; j<steps; j++){
+      const py = (p.y - r) + (j + 0.5) * step;
+      // Only consider points inside the pore circle
+      if((px - p.x)**2 + (py - p.y)**2 <= r*r){
+        totalGridCells++;
+        let insideExcl = false;
+        for(let z=0; z<zones.length; z++){
+          const zone = zones[z];
+          if(zone.type==='rect'){
+            if(px>=zone.x && px<=(zone.x+zone.w) && py>=zone.y && py<=(zone.y+zone.h)){ insideExcl=true; break; }
+          } else if(zone.type==='circle'){
+            if((px-zone.cx)**2 + (py-zone.cy)**2 <= zone.r**2){ insideExcl=true; break; }
+          } else if(zone.type==='polygon'){
+            if(pointInPoly(px, py, zone.points||[])){ insideExcl=true; break; }
+          }
+        }
+        if(insideExcl) insideCount++;
       }
     }
-    totalIntersect = Math.min(poreArea, totalIntersect + intersect);
   }
-  if(totalIntersect <= 0) return {status:'none', effectiveDia:p.dia, effectiveArea:poreArea, fraction:1};
+  
+  const exclFractionGrid = totalGridCells > 0 ? insideCount / totalGridCells : 0;
+  const totalIntersect = poreArea * exclFractionGrid;
+  
+  if(totalIntersect <= 0) return {status:'none', effectiveDia:p.dia, effectiveArea:poreArea, fraction:1, centreInside};
   const effectiveArea = Math.max(0, poreArea - totalIntersect);
   const fraction = effectiveArea / poreArea;
-  // Fully inside: centre inside zone AND ≥95% of pore area overlaps
-  if(fraction < 0.05) return {status:'full', effectiveDia:0, effectiveArea:0, fraction:0};
+  
+  // Fully inside: centre inside zone AND >=95% of pore area overlaps
+  if(fraction < 0.05 && centreInside) return {status:'full', effectiveDia:0, effectiveArea:0, fraction:0, centreInside};
   const effectiveDia = 2*Math.sqrt(effectiveArea/Math.PI);
   return {status:'partial', effectiveDia, effectiveArea, fraction, centreInside};
 }
@@ -5805,23 +5818,34 @@ function _rectIntersectionArea(a, b){
 function _exclusionAreaForDatum(page, datumRect, wallW, wallH){
   const zones=(page && page.exclusionZones) || [];
   if(!zones.length) return 0;
-  const bounds=datumRect && datumRect.w>0
-    ? datumRect
-    : {x:0,y:0,w:Math.max(wallW||0,0),h:Math.max(wallH||0,0)};
-  if(!bounds.w || !bounds.h) return 0;
-  return zones.reduce((sum,z)=>{
-    if(z.type==='rect') return sum + _rectIntersectionArea(bounds,z);
-    if(z.type==='circle') return sum + _circleRectIntersectArea(z.cx, z.cy, z.r, bounds.x, bounds.y, bounds.w, bounds.h);
-    if(z.type==='polygon'){
-      const pts=z.points||[];
-      if(pts.length>=3){
-        // Exact: Sutherland-Hodgman clip to datum rect, then Shoelace area
-        const clipped=_clipPolyToRect(pts, bounds.x, bounds.y, bounds.w, bounds.h);
-        if(clipped.length>=3) return sum + polyArea(clipped);
+  if(!datumRect || datumRect.w <= 0) return 0;
+  const bounds = datumRect;
+  
+  // Use a 100x100 grid for accurate overlap union area
+  const steps = 100;
+  const stepX = bounds.w / steps;
+  const stepY = bounds.h / steps;
+  const cellArea = stepX * stepY;
+  let count = 0;
+  for(let i=0; i<steps; i++){
+    const px = bounds.x + (i + 0.5) * stepX;
+    for(let j=0; j<steps; j++){
+      const py = bounds.y + (j + 0.5) * stepY;
+      let inside = false;
+      for(let z=0; z<zones.length; z++){
+        const zone = zones[z];
+        if(zone.type==='rect'){
+          if(px>=zone.x && px<=(zone.x+zone.w) && py>=zone.y && py<=(zone.y+zone.h)){ inside=true; break; }
+        } else if(zone.type==='circle'){
+          if((px-zone.cx)**2 + (py-zone.cy)**2 <= zone.r**2){ inside=true; break; }
+        } else if(zone.type==='polygon'){
+          if(pointInPoly(px, py, zone.points)){ inside=true; break; }
+        }
       }
+      if(inside) count++;
     }
-    return sum;
-  },0);
+  }
+  return count * cellArea;
 }
 
 function _evaluationDatumArea(page, metrics, datumRect){
@@ -6402,6 +6426,9 @@ async function evaluateAllSpecs(silent){
 
     for (let ii = 0; ii < tab.images.length; ii++) {
       const page = tab.images[ii];
+      if (page.imgState && page.imgState.image && !page.imgState.autoDetected) {
+        throw new Error(`Image ${ii+1} in Spec ${si+1} has not been Auto-Detected.`);
+      }
       // ── NET (excl. zone filtered) evaluation ──
       let pores = JSON.parse(JSON.stringify(page.pores || []));
       const exclZonesCount = (page.exclusionZones || []).length;
@@ -6775,6 +6802,10 @@ function showVerdictForTab(si,ii){
 }
 
 async function submitEvaluation(){
+  if(S.imgMode && S.imgState && S.imgState.image && !S.imgState.autoDetected) {
+    toast('Please run Auto Detect before evaluating.', 'warn');
+    return;
+  }
   const btn = document.getElementById('btn-eval');
   if(btn){ btn.disabled=true; btn.textContent='Evaluating…'; }
   try {
@@ -8718,7 +8749,7 @@ function _resetAdvancedDefaults(){
     }
   });
   // Reset edge reject and max area
-  document.querySelectorAll('#detect-edge-reject').forEach(el=>el.checked=true);
+  document.querySelectorAll('#detect-edge-reject').forEach(el=>el.checked=false);
   const maSl=document.getElementById('detect-max-area');
   const maVl=document.getElementById('detect-max-area-val');
   if(maSl) maSl.value=15;
@@ -8726,6 +8757,23 @@ function _resetAdvancedDefaults(){
   const maPip=document.getElementById('adv-max-area-pip');
   if(maPip) maPip.style.left=((15-1)/29*100)+'%';
   toast('Advanced parameters reset to defaults','info');
+}
+
+function applyImageFilters(){
+  const b = +document.getElementById('img-brightness').value;
+  const c = +document.getElementById('img-contrast').value;
+  S.imgState.brightness = b;
+  S.imgState.contrast = c;
+  S.imgState.cacheValid = false; // Force re-render of offscreen cache
+  drawCanvas();
+}
+
+function resetImageFilters(){
+  const bri = document.getElementById('img-brightness');
+  const con = document.getElementById('img-contrast');
+  if(bri) bri.value = 100;
+  if(con) con.value = 100;
+  applyImageFilters();
 }
 
 function autoDetectPores(){
@@ -8786,6 +8834,57 @@ function autoDetectPores(){
 
       // Morphological opening (removes small noise bridges) — radius=1 always
       processed=_open(processed,W,H,1);
+
+      // ── Physical Exclusion Masking during Tracing ──
+      // Wipe out pores that fall inside exclusion zones so they are never traced.
+      {
+        const maskZones = activeImagePage()?.exclusionZones || [];
+        if (maskZones.length > 0) {
+          for (let i = 0; i < maskZones.length; i++) {
+            const z = maskZones[i];
+          let minXmm = 0, maxXmm = 0, minYmm = 0, maxYmm = 0;
+          if (z.type === 'rect') {
+            minXmm = z.x; maxXmm = z.x + z.w; minYmm = z.y; maxYmm = z.y + z.h;
+          } else if (z.type === 'circle') {
+            minXmm = z.cx - z.r; maxXmm = z.cx + z.r; minYmm = z.cy - z.r; maxYmm = z.cy + z.r;
+          } else if (z.type === 'polygon' && z.points && z.points.length > 0) {
+            minXmm = z.points[0].x; maxXmm = z.points[0].x;
+            minYmm = z.points[0].y; maxYmm = z.points[0].y;
+            for (const pt of z.points) {
+              if(pt.x < minXmm) minXmm = pt.x; if(pt.x > maxXmm) maxXmm = pt.x;
+              if(pt.y < minYmm) minYmm = pt.y; if(pt.y > maxYmm) maxYmm = pt.y;
+            }
+          } else {
+            continue;
+          }
+          
+          const startX = Math.max(0, Math.floor(minXmm * dsNatPxMm));
+          const endX = Math.min(W - 1, Math.ceil(maxXmm * dsNatPxMm));
+          const startY = Math.max(0, Math.floor(minYmm * dsNatPxMm));
+          const endY = Math.min(H - 1, Math.ceil(maxYmm * dsNatPxMm));
+
+          for (let y = startY; y <= endY; y++) {
+            const yMm = y / dsNatPxMm;
+            let offset = y * W + startX;
+            for (let x = startX; x <= endX; x++) {
+              if (processed[offset] > 0) { // Only check if pixel is currently a pore
+                const xMm = x / dsNatPxMm;
+                let inside = false;
+                if (z.type === 'rect') {
+                  inside = true; // BB check already passed
+                } else if (z.type === 'circle') {
+                  if ((xMm - z.cx) ** 2 + (yMm - z.cy) ** 2 <= z.r ** 2) inside = true;
+                } else if (z.type === 'polygon') {
+                  if (pointInPoly(xMm, yMm, z.points)) inside = true;
+                }
+                if (inside) processed[offset] = 0;
+              }
+              offset++;
+            }
+          }
+        }
+      }
+      }
 
       // Connected components
       const labels=_labelCC(processed,W,H);
@@ -8894,6 +8993,7 @@ function autoDetectPores(){
         const removed=before-AP().length;
         if(removed>0) toast(`ℹ️ ${removed} pore${removed>1?'s':''} outside datum square excluded`);
       }
+      S.imgState.autoDetected = true;
       drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
       let msg = `✅ ${added} pore${added>1?'s':''} detected · ${gasCount} gas · ${shrinkCount} shrink · Otsu=${globalOtsu}`;
       if(exclCount) msg += ` · ${exclCount} in excl. zones`;
