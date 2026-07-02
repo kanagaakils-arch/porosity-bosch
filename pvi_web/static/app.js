@@ -261,10 +261,8 @@ function applySideSpecDetails(){
   s.specSaved=true;
   activeSpecTab().name=s.pno||activeSpecTab().name;
   loadSpecIntoForm();
-  updateSpecSummaryUI();
-  renderSpecTabs();
   recomputeZones();
-  updateLiveMetrics();
+  refreshWorkspaceUI();
 }
 
 function syncSideSpecToFullForm(){
@@ -329,14 +327,19 @@ function renderImageTabs(){
 
 function refreshWorkspaceUI(){
   bindActiveWorkspace();
-  renderSpecTabs();
-  renderImageTabs();
-  updateSpecSummaryUI();
-  updateImageControlsUI();
-  updateImgHint();
-  updatePoreRegistry();
-  showEditPanel();
-  refreshImgOffsetUI();
+  const _drEl = document.getElementById('sb-datum');
+  if(_drEl) _drEl.textContent = S.imgMode ? getEffectiveDatum().toFixed(1)+' mm² (img)' : (S.spec.datum||100)+' mm²';
+  if(typeof _updateScaleDisplay === 'function') _updateScaleDisplay();
+  if(typeof renderSpecTabs === 'function') renderSpecTabs();
+  if(typeof renderImageTabs === 'function') renderImageTabs();
+  if(typeof updateSpecSummaryUI === 'function') updateSpecSummaryUI();
+  if(typeof updateImageControlsUI === 'function') updateImageControlsUI();
+  if(typeof updateImgHint === 'function') updateImgHint();
+  if(typeof updateLiveMetrics === 'function') updateLiveMetrics();
+  if(typeof updatePoreRegistry === 'function') updatePoreRegistry();
+  if(typeof showEditPanel === 'function') showEditPanel();
+  if(typeof refreshImgOffsetUI === 'function') refreshImgOffsetUI();
+  if(typeof renderExclList === 'function') renderExclList();
   if(mctx) drawCanvas();
 }
 
@@ -477,8 +480,7 @@ function applyImgOffset(val) {
   _checkCroppedImageWarning(mm);
   _updateWallStripWindow(mm);
   if (S.imgMode) recomputeZones();
-  updateLiveMetrics();
-  if (mctx) drawCanvas();
+  refreshWorkspaceUI();
 }
 
 function _updateWallStripWindow(offsetMm) {
@@ -861,6 +863,7 @@ function applyCustomPreset(k) {
   ['h','n','hr','nr','hk','nk'].forEach(f=>{ 
     if(p[f] !== undefined) tog('tg-'+f, p[f], null); 
   });
+  saveSpec();
 }
 
 function deleteCustomPreset(k) {
@@ -907,6 +910,7 @@ function applyPreset(k){
   ['h','n','hr','nr','hk','nk'].forEach(f=>{ 
     tog('tg-'+f, p[f], null); 
   });
+  saveSpec();
 }
 
 // ═══════════════════════════════════════════════════
@@ -968,8 +972,7 @@ function saveSpec(){
   recomputeZones();
   // Sync zone toggle UI to match newly loaded spec
   if(typeof _syncZoneToggleUI === 'function') _syncZoneToggleUI();
-  renderSpecTabs();
-  renderImageTabs();
+  refreshWorkspaceUI();
   nav('meas');
 }
 
@@ -2094,12 +2097,12 @@ function bindCanvasEvents(){
       }
       // Priority 3: exit polygon Edit Points mode
       else if(S._exclEditPts!=null){
-        S._exclEditPts=null; drawCanvas(); renderExclList();
+        S._exclEditPts=null; refreshWorkspaceUI();
         toast('Edit Points mode exited');
       }
       // Priority 4: exit rotation mode
       else if(S._exclRotating!=null){
-        S._exclRotating=null; drawCanvas(); renderExclList();
+        S._exclRotating=null; refreshWorkspaceUI();
       }
       // Priority 5: exit any active image tool
       else if(S.imgState.imgTool){
@@ -2532,11 +2535,11 @@ function bindCanvasEvents(){
       isPointerDown=false; dragState=null; wrap.style.cursor='default';
       // Sync global S.datumRect to per-page datumRect so export always reads latest position
       const _movePage = activeImagePage(); if(_movePage) _movePage.datumRect = S.datumRect;
-      updateLiveMetrics(); updatePoreRegistry(); drawCanvas(); return;
+      refreshWorkspaceUI(); return;
     }
     if(dragState && dragState.type==='datum_resize'){
       isPointerDown=false; dragState=null; wrap.style.cursor='default';
-      updateLiveMetrics(); updatePoreRegistry(); drawCanvas();
+      refreshWorkspaceUI();
       const page=activeImagePage(); if(page) page.datumRect=S.datumRect;
       return;
     }
@@ -2556,13 +2559,13 @@ function bindCanvasEvents(){
         }
       }
       dragState=null;
-      updateLiveMetrics(); updatePoreRegistry(); drawCanvas(); renderExclList();
+      refreshWorkspaceUI();
       return;
     }
     isPointerDown=false; dragState=null;
     if(S.tool==='exclude_rect'&&S._exclDraw&&S._exclDraw.active&&S._exclDraw.w>0.05&&S._exclDraw.h>0.05){
       var _eu=S._exclDraw,_pu=activeImagePage();
-      if(!_pu){ toast('Load an image first to draw exclusion zones','warn'); S._exclDraw=null; drawCanvas(); }
+      if(!_pu){ toast('Load an image first to draw exclusion zones','warn'); S._exclDraw=null; refreshWorkspaceUI(); }
       else {
         // Snapshot history BEFORE adding the zone so Undo can remove it
         pushHistory();
@@ -2570,11 +2573,11 @@ function bindCanvasEvents(){
         _pu.exclusionZones.push({type:'rect',x:_eu.x,y:_eu.y,w:_eu.w,h:_eu.h});
         S._exclDraw=null; updateExclZoneBadge(); renderExclList();
         toast('Excl. zone #'+_pu.exclusionZones.length+' added ('+_eu.w.toFixed(1)+'×'+_eu.h.toFixed(1)+' mm) — Undo to remove');
-        drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+        refreshWorkspaceUI();
       }
     } else if(S.tool==='exclude_circle'&&S._exclDraw&&S._exclDraw.active&&S._exclDraw.r>0.05){
       var _eu=S._exclDraw,_pu=activeImagePage();
-      if(!_pu){ toast('Load an image first to draw exclusion zones','warn'); S._exclDraw=null; drawCanvas(); }
+      if(!_pu){ toast('Load an image first to draw exclusion zones','warn'); S._exclDraw=null; refreshWorkspaceUI(); }
       else {
         // Snapshot history BEFORE adding the zone so Undo can remove it
         pushHistory();
@@ -2582,9 +2585,9 @@ function bindCanvasEvents(){
         _pu.exclusionZones.push({type:'circle',cx:_eu.cx,cy:_eu.cy,r:_eu.r});
         S._exclDraw=null; updateExclZoneBadge(); renderExclList();
         toast('Excl. zone #'+_pu.exclusionZones.length+' added (Circle r='+_eu.r.toFixed(1)+' mm) — Undo to remove');
-        drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+        refreshWorkspaceUI();
       }
-    } else if(S._exclDraw){S._exclDraw=null; drawCanvas();}
+    } else if(S._exclDraw){S._exclDraw=null; refreshWorkspaceUI();}
     if(S.tool==='pan') wrap.style.cursor='grab'; else wrap.style.cursor='default';
     // If datum was just drawn, show the clear button, auto-switch to Place Pore, and recalculate
     if(S.tool==='datum' && S.datumRect && S.datumRect.w>0.01){
@@ -2593,7 +2596,7 @@ function bindCanvasEvents(){
       if(_drawPage){ _drawPage.datumRect = {x:S.datumRect.x, y:S.datumRect.y, w:S.datumRect.w, h:S.datumRect.h}; }
       const btn=document.getElementById('btn-clear-datum');
       if(btn) btn.style.display='inline-flex';
-      updateLiveMetrics(); updatePoreRegistry();
+      refreshWorkspaceUI();
       setTool('select');
       toast('Datum □ set — '+S.datumRect.w.toFixed(2)+'×'+S.datumRect.h.toFixed(2)+'mm · Now place pores or evaluate');
     }
@@ -2606,10 +2609,10 @@ function bindCanvasEvents(){
     if(pore){
       S.selectedId=pore.id;
       setTool('select');
-      drawCanvas(); updatePoreRegistry(); showEditPanel();
+      refreshWorkspaceUI();
     } else {
       S.selectedId=null;
-      drawCanvas(); updatePoreRegistry();
+      refreshWorkspaceUI();
       const ep=document.getElementById('pore-edit-panel');
       if(ep) ep.style.display='none';
     }
@@ -2663,6 +2666,14 @@ function poreAtCanvas(cx,cy){
 // ═══════════════════════════════════════════════════
 // PORE OPERATIONS
 // ═══════════════════════════════════════════════════
+function refreshWorkspaceUI(){
+  drawCanvas();
+  updateLiveMetrics();
+  updatePoreRegistry();
+  renderExclList();
+  updateExclZoneBadge();
+}
+
 function placePore(mx,my){
   // Clamp within wall
   const wH=wallHeightMm(), wW=wallWidthMm();
@@ -2672,7 +2683,7 @@ function placePore(mx,my){
   const pore={id:Date.now()+Math.random(), x, y, dia:S.nextPhi, type:S.poreType, zone:''};
   pore.zone=getPoreZone(pore);
   AP().push(pore);
-  drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+  refreshWorkspaceUI();
   document.getElementById('btn-undo').disabled=false;
 }
 
@@ -2693,7 +2704,7 @@ function addManualPore(){
   const pore={id:Date.now()+Math.random(), x, y, dia, type:S.poreType, zone:''};
   pore.zone=getPoreZone(pore);
   AP().push(pore);
-  drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+  refreshWorkspaceUI();
   // Clear all fields
   document.getElementById('me-phi').value='';
   document.getElementById('me-dep').value='';
@@ -2705,14 +2716,14 @@ function removePore(id){
   pushHistory();
   setAP(AP().filter(p=>p.id!==id));
   if(S.selectedId===id) S.selectedId=null;
-  drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+  refreshWorkspaceUI();
 }
 
 function clearAllPores(){
   if(!AP().length) return;
   pushHistory();
   setAP([]); S.selectedId=null;
-  drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+  refreshWorkspaceUI();
 }
 
 function _snapImgState(){
@@ -3013,7 +3024,7 @@ function applyEditPanelLive(){
   p.x=Math.max(0,Math.min(wW,newX));
   p.y=Math.max(0,Math.min(wH,newY));
   p.zone=getPoreZone(p);
-  drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+  refreshWorkspaceUI();
 }
 
 function pushHistoryLive(){
@@ -3875,7 +3886,7 @@ function clearDatum(){
   if(btn) btn.style.display='none';
   const sbDatum=document.getElementById('sb-datum');
   if(sbDatum) sbDatum.textContent=S.imgMode?getEffectiveDatum().toFixed(1)+' mm² (img)':(S.spec.datum||100)+' mm²';
-  drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+  refreshWorkspaceUI();
   toast('Datum square removed');
 }
 
@@ -6072,7 +6083,7 @@ function imgToolActivate(tool){
   S.imgState.scaleLine=null; S.imgState.scaleRect=null; S.imgState.cropRect=null;
   document.getElementById('btn-applycrop').style.display='none';
   document.getElementById('btn-cancelcrop').style.display='none';
-  updateImgHint(); drawCanvas();
+  refreshWorkspaceUI();
 }
 
 function loadImageFile(evt){
@@ -6116,9 +6127,8 @@ function loadImageFile(evt){
       updateImgHint();
       
       const triggerDraw = () => {
-        if(!mctx || S.cv.W < 1){ initCanvas(); } else { drawCanvas(); }
-        refreshImgOffsetUI();
-        _updateScaleDisplay();
+        if(!mctx || S.cv.W < 1){ initCanvas(); }
+        refreshWorkspaceUI();
       };
       
       if (typeof img.decode === 'function') {
@@ -6208,7 +6218,7 @@ function confirmScale(){
   if(btn) btn.classList.remove('img-tool-on');
   showScaleInfo();
   _updateScaleDisplay();
-  updateImgHint(); drawCanvas();
+  refreshWorkspaceUI();
   // Show sanity toast with image dimensions
   const canvas=document.getElementById('main-canvas');
   if(canvas&&S.imgState.image){
@@ -6233,7 +6243,7 @@ function cancelScale(){
   const btn=document.getElementById('btn-scale-tool');
   if(btn) btn.classList.remove('img-tool-on');
   _updateScaleDisplay();
-  updateImgHint(); drawCanvas();
+  refreshWorkspaceUI();
 }
 
 function showScaleInfo(){
@@ -6249,7 +6259,7 @@ function cancelCrop(){
   document.getElementById('btn-applycrop').style.display='none';
   document.getElementById('btn-cancelcrop').style.display='none';
   // Keep crop tool active so user can redraw a new selection
-  drawCanvas();
+  refreshWorkspaceUI();
   toast('Crop selection cleared — draw a new area or click ✂️ Crop again to exit', 'info');
 }
 
@@ -6278,7 +6288,7 @@ function applyCrop(){
     S.imgState.imgOffsetX=0; S.imgState.imgOffsetY=0;
     document.getElementById('img-overlay-info').textContent=
       `Cropped: ${Math.round(sw)}×${Math.round(sh)}px · Set Scale to recalibrate`;
-    updateImgHint(); drawCanvas();
+    refreshWorkspaceUI();
   };
 }
 
@@ -6295,7 +6305,7 @@ function rotateImage(deg){
   ctx.rotate(deg*Math.PI/180);
   ctx.drawImage(img,-img.naturalWidth/2,-img.naturalHeight/2);
   const ni=new Image(); ni.src=oc.toDataURL();
-  ni.onload=()=>{ pushHistory(); S.imgState.image=ni; drawCanvas(); };
+  ni.onload=()=>{ pushHistory(); S.imgState.image=ni; refreshWorkspaceUI(); };
 }
 
 function flipImage(axis){
@@ -6307,7 +6317,7 @@ function flipImage(axis){
   if(axis==='h'){ ctx.scale(-1,1); ctx.drawImage(img,-img.naturalWidth,0); }
   else { ctx.scale(1,-1); ctx.drawImage(img,0,-img.naturalHeight); }
   const ni=new Image(); ni.src=oc.toDataURL();
-  ni.onload=()=>{ pushHistory(); S.imgState.image=ni; S.imgState.cacheValid=false; drawCanvas(); };
+  ni.onload=()=>{ pushHistory(); S.imgState.image=ni; S.imgState.cacheValid=false; refreshWorkspaceUI(); };
 }
 
 // ── Export annotated PNG ───────────────────────────────────────────────────
@@ -7236,7 +7246,7 @@ function _exclApplyEdit(zi, key, val){
   if(!page || !page.exclusionZones || !page.exclusionZones[zi]) return;
   pushHistory();
   page.exclusionZones[zi][key] = Math.max(key==='w'||key==='r'||key==='h' ? 0.05 : -9999, val);
-  drawCanvas(); updateLiveMetrics(); updatePoreRegistry(); renderExclList();
+  refreshWorkspaceUI();
 }
 
 function removeExclZone(index){
@@ -7245,6 +7255,6 @@ function removeExclZone(index){
   page.exclusionZones.splice(index, 1);
   updateExclZoneBadge();
   renderExclList();
-  drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+  refreshWorkspaceUI();
   toast('\u{1f6ab} Exclusion zone removed');
 }
