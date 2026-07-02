@@ -326,6 +326,7 @@ function renderImageTabs(){
 }
 
 function refreshWorkspaceUI(){
+  persistActiveResults();
   bindActiveWorkspace();
   const _drEl = document.getElementById('sb-datum');
   if(_drEl) _drEl.textContent = S.imgMode ? getEffectiveDatum().toFixed(1)+' mm² (img)' : (S.spec.datum||100)+' mm²';
@@ -335,11 +336,12 @@ function refreshWorkspaceUI(){
   if(typeof updateSpecSummaryUI === 'function') updateSpecSummaryUI();
   if(typeof updateImageControlsUI === 'function') updateImageControlsUI();
   if(typeof updateImgHint === 'function') updateImgHint();
-  if(typeof updateLiveMetrics === 'function') updateLiveMetrics();
   if(typeof updatePoreRegistry === 'function') updatePoreRegistry();
+  if(typeof updateLiveMetrics === 'function') updateLiveMetrics();
   if(typeof showEditPanel === 'function') showEditPanel();
   if(typeof refreshImgOffsetUI === 'function') refreshImgOffsetUI();
   if(typeof renderExclList === 'function') renderExclList();
+  if(typeof updateExclZoneBadge === 'function') updateExclZoneBadge();
   if(mctx) drawCanvas();
 }
 
@@ -1099,6 +1101,7 @@ function drawCanvas(){
   const wallH   = S.cv.wallH;
   const wallW   = S.cv.wallW;
   mctx.clearRect(0,0,W,H);
+  mctx.save();
 
   // Background — professional light
   mctx.fillStyle='#f5f6f8'; mctx.fillRect(0,0,W,H);
@@ -1782,6 +1785,7 @@ function drawCanvas(){
 
   // Scale ruler (bottom-left)
   drawRuler();
+  mctx.restore();
 
   // Force GPU Compositor refresh to fix Chrome rendering freeze bugs
   if(MC) MC.style.opacity = (MC.style.opacity === '0.999') ? '1' : '0.999';
@@ -1794,12 +1798,12 @@ function drawPore(p, selected){
   const r=p.dia*drawScale/2;
   const c=mmToCanvas(p.x,p.y);
   const cx=c.x, cy=c.y;
-  const ignored=S.spec.u>0&&p.dia<S.spec.u;
+  const ignored=S.spec.u>0&&(p.dia+0.005)<S.spec.u;
   const failing=!ignored&&p.dia>S.spec.phi;
   // ── Exclusion zone crop status ────────────────────────────────────────────
   const _cs = _poreExclCropStatus(p);
   if(_cs.status === 'full'){
-    // Pore is completely inside an exclusion zone: draw full ghost only
+    // Pore is excluded or outside datum: draw full ghost only
     mctx.save();
     mctx.globalAlpha = 0.22;
     buildPath(0);
@@ -1825,10 +1829,17 @@ function drawPore(p, selected){
     mctx.strokeStyle='rgba(239,68,68,0.5)'; mctx.lineWidth=1; mctx.setLineDash([2,2]); mctx.stroke(); mctx.setLineDash([]);
     mctx.restore();
     // 2. Draw the OUTSIDE portion with full color using clip
+    // Build clip = datum box (or canvas) minus all exclusion zones (evenodd)
     mctx.save();
-    // Build clip = canvas minus all exclusion zones (evenodd)
     mctx.beginPath();
-    mctx.rect(-10,-10,S.cv.W+20,S.cv.H+20);
+    const _dr = (S.datumRect && S.datumRect.w > 0) ? S.datumRect : null;
+    if(_dr){
+      const dp = mmToCanvas(_dr.x, _dr.y);
+      const dw = _dr.w * _sc, dh = _dr.h * _sc;
+      mctx.rect(dp.x, dp.y, dw, dh);
+    } else {
+      mctx.rect(-10,-10,S.cv.W+20,S.cv.H+20);
+    }
     _zones.forEach(z=>{
       if(z.type==='circle'){
         const zcp=mmToCanvas(z.cx,z.cy); const zr=z.r*_sc;
@@ -2305,7 +2316,7 @@ function bindCanvasEvents(){
     } else if(S.tool==='exclude_circle'){
       S._exclDraw={active:true,type:'circle',ox:mm.x,oy:mm.y,cx:mm.x,cy:mm.y,r:0};
       isPointerDown=true; drawCanvas();
-    } else if(S.tool==='datum'){
+    } else if(S.tool==='datum' || (S.tool==='select' && S.datumRect && S.datumRect.w > 0)){
       if(S.datumRect && S.datumRect.w > 0){
         // 1. Check resize handles first
         const _dh = datumHandleAtCanvas(p.x, p.y);
@@ -2318,14 +2329,22 @@ function bindCanvasEvents(){
         // 2. Click inside body → move
         const dr=S.datumRect;
         if(mm.x>=dr.x && mm.x<=(dr.x+dr.w) && mm.y>=dr.y && mm.y<=(dr.y+dr.h)){
-          pushHistory();
-          dragState={type:'datum_move', startMx:p.x, startMy:p.y, origDX:dr.x, origDY:dr.y};
-          isPointerDown=true; wrap.style.cursor='move'; drawCanvas(); return;
+          if(S.tool==='datum' || !poreAtCanvas(p.x, p.y)){
+            pushHistory();
+            dragState={type:'datum_move', startMx:p.x, startMy:p.y, origDX:dr.x, origDY:dr.y};
+            isPointerDown=true; wrap.style.cursor='move'; drawCanvas(); return;
+          }
         }
       }
-      // 3. Outside → start drawing a NEW datum square (n square constraint)
-      S.datumRect={_ox:mm.x, _oy:mm.y, x:mm.x, y:mm.y, w:0, h:0};
-      isPointerDown=true; drawCanvas();
+      if(S.tool==='datum'){
+        if(S.datumRect && S.datumRect.w > 0.01){
+          toast('Datum square already exists — drag handle to resize or drag inside to move. Use Clear Datum to remove.', 'info');
+          return;
+        }
+        // 3. Outside → start drawing a NEW datum square (n square constraint)
+        S.datumRect={_ox:mm.x, _oy:mm.y, x:mm.x, y:mm.y, w:0, h:0};
+        isPointerDown=true; drawCanvas();
+      }
     }
   });
 
@@ -2401,14 +2420,17 @@ function bindCanvasEvents(){
       S.datumRect={_ox:ox,_oy:oy,x:nx,y:ny,w:side,h:side};
       document.getElementById('sb-datum').textContent=`${(side*side).toFixed(1)} mm² (datum □)`;
     }
-    // Datum tool hover cursor: show resize cursor near handles, move cursor inside body
-    if(S.tool==='datum' && !isPointerDown && S.datumRect && S.datumRect.w>0){
+    // Image tool mode hover cursor
+    if(S.imgState.imgTool){
+      wrap.style.cursor = 'crosshair';
+    } else if((S.tool==='datum' || S.tool==='select') && !isPointerDown && S.datumRect && S.datumRect.w>0){
       const _dh2 = datumHandleAtCanvas(p.x, p.y);
-      if(_dh2){ wrap.style.cursor = _dh2.cur; }
-      else {
+      if(_dh2){ wrap.style.cursor = _dh2.cur; return; }
+      else if(S.tool==='datum' || !poreAtCanvas(p.x, p.y)) {
         const dr2=S.datumRect;
         const _inD = mm.x>=dr2.x && mm.x<=(dr2.x+dr2.w) && mm.y>=dr2.y && mm.y<=(dr2.y+dr2.h);
-        wrap.style.cursor = _inD ? 'move' : 'crosshair';
+        if(_inD) { wrap.style.cursor = 'move'; return; }
+        else if(S.tool==='datum') { wrap.style.cursor = 'crosshair'; }
       }
     } else if(S.tool==='datum'){
       wrap.style.cursor = 'crosshair';
@@ -2597,7 +2619,6 @@ function bindCanvasEvents(){
       const btn=document.getElementById('btn-clear-datum');
       if(btn) btn.style.display='inline-flex';
       refreshWorkspaceUI();
-      setTool('select');
       toast('Datum □ set — '+S.datumRect.w.toFixed(2)+'×'+S.datumRect.h.toFixed(2)+'mm · Now place pores or evaluate');
     }
   });
@@ -2665,14 +2686,7 @@ function poreAtCanvas(cx,cy){
 
 // ═══════════════════════════════════════════════════
 // PORE OPERATIONS
-// ═══════════════════════════════════════════════════
-function refreshWorkspaceUI(){
-  drawCanvas();
-  updateLiveMetrics();
-  updatePoreRegistry();
-  renderExclList();
-  updateExclZoneBadge();
-}
+// refreshWorkspaceUI is defined at line 328
 
 function placePore(mx,my){
   // Clamp within wall
@@ -2914,7 +2928,7 @@ function setTool(t){
 function showCanvasTip(pore, e){
   const tip=document.getElementById('ctip');
   if(!pore){ hideTip(); return; }
-  const ignored=S.spec.u>0&&pore.dia<S.spec.u;
+  const ignored=S.spec.u>0&&(pore.dia+0.005)<S.spec.u;
   const failing=!ignored&&pore.dia>S.spec.phi;
   const zone=pore.zone;
   const meta=pore._detectMeta;
@@ -2955,19 +2969,21 @@ function updatePoreRegistry(){
     return;
   }
   reg.innerHTML=AP().map((p,i)=>{
-    const ignored=S.spec.u>0&&p.dia<S.spec.u;
+    const ignored=S.spec.u>0&&(p.dia+0.005)<S.spec.u;
     const fail=!ignored&&p.dia>S.spec.phi;
     const zCol=p.zone==='hr'?'var(--amb)':p.zone==='hk'?'var(--pur)':'var(--g)';
     const tCol=p.type==='gas'?'#4db8f5':'#c88c5a';
     const sel=S.selectedId===p.id;
     // Check if pore is outside datum square
-    const outDatum=hasDatum&&!(p.x>=S.datumRect.x&&p.x<=(S.datumRect.x+S.datumRect.w)&&p.y>=S.datumRect.y&&p.y<=(S.datumRect.y+S.datumRect.h));
-    // Check if pore is masked by an exclusion zone (live mask)
-    const exclMasked = _poreInExclZone(p);
-    const rowOpacity = exclMasked ? 'opacity:.35' : outDatum ? 'opacity:.45' : '';
+    const outDatum=hasDatum&&!_poreOverlapsDatum(p, S.datumRect);
+    // Check crop status
+    const _cs = _poreExclCropStatus(p);
+    const exclMasked = (_cs.status === 'full');
+    const isCropped = (_cs.status === 'partial');
+    const rowOpacity = exclMasked ? 'opacity:.35' : '';
     const statusBadge = exclMasked
-      ? '<span style="font-size:8px;font-weight:700;color:#ef4444;background:rgba(239,68,68,.12);padding:1px 5px;border-radius:3px;border:1px solid rgba(239,68,68,.3)">EXCL</span>'
-      : outDatum ? '<span style="font-size:9px;color:var(--dim);background:var(--c4);padding:1px 4px;border-radius:3px">OUT</span>'
+      ? (outDatum ? '<span style="font-size:9px;color:var(--dim);background:var(--c4);padding:1px 4px;border-radius:3px">OUT</span>' : '<span style="font-size:8px;font-weight:700;color:#ef4444;background:rgba(239,68,68,.12);padding:1px 5px;border-radius:3px;border:1px solid rgba(239,68,68,.3)">EXCL</span>')
+      : isCropped ? `<span style="font-size:8px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,.12);padding:1px 5px;border-radius:3px;border:1px solid rgba(245,158,11,.3)">CROP (${_cs.effectiveDia.toFixed(2)}mm)</span>`
       : ignored  ? '<span style="font-size:9px;color:var(--dim)">IGN</span>'
       : fail     ? '<span style="font-size:9px;color:var(--red)">FAIL</span>'
       :             '<span style="font-size:9px;color:var(--dim)">—</span>';
@@ -3049,8 +3065,9 @@ function pushHistoryLive(){
 // METRICS — correct calculations
 // ═══════════════════════════════════════════════════
 function effectivePores(){
-  const _ap=AP();
+  let _ap=AP();
   const _pg = (typeof activeImagePage==='function') ? activeImagePage() : null;
+  const dr = (_pg && _pg.datumRect && _pg.datumRect.w > 0) ? _pg.datumRect : (S.datumRect && S.datumRect.w > 0 ? S.datumRect : null);
   // Normalise cropped pores: use effective dia for metric calculations
   const normalised = _ap.map(p=>{
     const cs = _poreExclCropStatus(p, _pg);
@@ -3058,7 +3075,7 @@ function effectivePores(){
     if(cs.status==='partial') return Object.assign({}, p, {dia: cs.effectiveDia, _isCropped:true});
     return p;
   }).filter(Boolean);
-  return S.spec.u>0 ? normalised.filter(p=>p.dia>=S.spec.u) : normalised;
+  return S.spec.u>0 ? normalised.filter(p=>(p.dia+0.005)>=S.spec.u) : normalised;
 }
 
 
@@ -3500,49 +3517,83 @@ function _startRotateZone(page, zi){
 // Returns crop status for a pore relative to all active exclusion zones:
 // { status:'none'|'partial'|'full', effectiveDia, effectiveArea, fraction }
 // 'partial' = pore boundary crosses a zone edge → crop & count with reduced area
+// Check if pore circle/contour touches or overlaps datum box
+function _poreOverlapsDatum(p, dr){
+  if(!dr || dr.w <= 0) return true;
+  let minX = p.x - p.dia/2, maxX = p.x + p.dia/2, minY = p.y - p.dia/2, maxY = p.y + p.dia/2;
+  if(p._contour && p._contour.length >= 3){
+    minX = Math.min(...p._contour.map(([dx]) => p.x + dx));
+    maxX = Math.max(...p._contour.map(([dx]) => p.x + dx));
+    minY = Math.min(...p._contour.map(([,dy]) => p.y + dy));
+    maxY = Math.max(...p._contour.map(([,dy]) => p.y + dy));
+  }
+  return !(maxX < dr.x || minX > dr.x + dr.w || maxY < dr.y || minY > dr.y + dr.h);
+}
+
 // 'full'    = pore is entirely inside a zone → exclude completely
 function _poreExclCropStatus(p, page){
   const _page = page || ((typeof activeImagePage==='function') ? activeImagePage() : null);
   const zones = (_page && _page.exclusionZones) || [];
-  if(!zones.length) return {status:'none', effectiveDia:p.dia, effectiveArea:Math.PI*(p.dia/2)**2, fraction:1, centreInside:false};
+  const dr = (_page && _page.datumRect && _page.datumRect.w > 0) ? _page.datumRect : (S.datumRect && S.datumRect.w > 0 ? S.datumRect : null);
+  if(!zones.length && !dr) return {status:'none', effectiveDia:p.dia, effectiveArea:Math.PI*(p.dia/2)**2, fraction:1, centreInside:false};
   
   const r = p.dia/2;
   const poreArea = Math.PI*r*r;
   
-  // Check if centre is inside any zone
+  // Check if centre is inside any zone or outside datum
   let centreInside = false;
-  for(const z of zones){
-    if(z.type==='rect'){
-      if(p.x>=z.x&&p.x<=(z.x+z.w)&&p.y>=z.y&&p.y<=(z.y+z.h)) { centreInside=true; break; }
-    } else if(z.type==='circle'){
-      if((p.x-z.cx)**2+(p.y-z.cy)**2 <= z.r**2) { centreInside=true; break; }
-    } else if(z.type==='polygon'){
-      if(pointInPoly(p.x, p.y, z.points||[])) { centreInside=true; break; }
+  if(dr && !(p.x >= dr.x && p.x <= (dr.x + dr.w) && p.y >= dr.y && p.y <= (dr.y + dr.h))) {
+    centreInside = true;
+  } else {
+    for(const z of zones){
+      if(z.type==='rect'){
+        if(p.x>=z.x&&p.x<=(z.x+z.w)&&p.y>=z.y&&p.y<=(z.y+z.h)) { centreInside=true; break; }
+      } else if(z.type==='circle'){
+        if((p.x-z.cx)**2+(p.y-z.cy)**2 <= z.r**2) { centreInside=true; break; }
+      } else if(z.type==='polygon'){
+        if(pointInPoly(p.x, p.y, z.points||[])) { centreInside=true; break; }
+      }
     }
   }
 
-  // Use a 20x20 grid over the pore bounding box for accurate overlap area
-  const steps = 20;
-  const step = p.dia / steps;
+  // Determine bounding box and polygon points if real contour exists
+  let minX = p.x - r, maxX = p.x + r, minY = p.y - r, maxY = p.y + r;
+  let polyPts = null;
+  if(p._contour && p._contour.length >= 3){
+    polyPts = p._contour.map(([dx, dy]) => ({x: p.x + dx, y: p.y + dy}));
+    minX = Math.min(...polyPts.map(pt => pt.x));
+    maxX = Math.max(...polyPts.map(pt => pt.x));
+    minY = Math.min(...polyPts.map(pt => pt.y));
+    maxY = Math.max(...polyPts.map(pt => pt.y));
+  }
+
+  // Use a 25x25 grid over the pore bounding box for accurate overlap area
+  const steps = 25;
+  const stepX = (maxX - minX) / steps;
+  const stepY = (maxY - minY) / steps;
   let insideCount = 0;
   let totalGridCells = 0;
 
   for(let i=0; i<steps; i++){
-    const px = (p.x - r) + (i + 0.5) * step;
+    const px = minX + (i + 0.5) * stepX;
     for(let j=0; j<steps; j++){
-      const py = (p.y - r) + (j + 0.5) * step;
-      // Only consider points inside the pore circle
-      if((px - p.x)**2 + (py - p.y)**2 <= r*r){
+      const py = minY + (j + 0.5) * stepY;
+      const inPore = polyPts ? pointInPoly(px, py, polyPts) : ((px - p.x)**2 + (py - p.y)**2 <= r*r);
+      if(inPore){
         totalGridCells++;
         let insideExcl = false;
-        for(let z=0; z<zones.length; z++){
-          const zone = zones[z];
-          if(zone.type==='rect'){
-            if(px>=zone.x && px<=(zone.x+zone.w) && py>=zone.y && py<=(zone.y+zone.h)){ insideExcl=true; break; }
-          } else if(zone.type==='circle'){
-            if((px-zone.cx)**2 + (py-zone.cy)**2 <= zone.r**2){ insideExcl=true; break; }
-          } else if(zone.type==='polygon'){
-            if(pointInPoly(px, py, zone.points||[])){ insideExcl=true; break; }
+        if(dr && !(px >= dr.x && px <= (dr.x + dr.w) && py >= dr.y && py <= (dr.y + dr.h))) {
+          insideExcl = true;
+        } else {
+          for(let z=0; z<zones.length; z++){
+            const zone = zones[z];
+            if(zone.type==='rect'){
+              if(px>=zone.x && px<=(zone.x+zone.w) && py>=zone.y && py<=(zone.y+zone.h)){ insideExcl=true; break; }
+            } else if(zone.type==='circle'){
+              if((px-zone.cx)**2 + (py-zone.cy)**2 <= zone.r**2){ insideExcl=true; break; }
+            } else if(zone.type==='polygon'){
+              if(pointInPoly(px, py, zone.points||[])){ insideExcl=true; break; }
+            }
           }
         }
         if(insideExcl) insideCount++;
@@ -3557,8 +3608,7 @@ function _poreExclCropStatus(p, page){
   const effectiveArea = Math.max(0, poreArea - totalIntersect);
   const fraction = effectiveArea / poreArea;
   
-  // Fully inside: centre inside zone AND >=95% of pore area overlaps
-  if(fraction < 0.05 && centreInside) return {status:'full', effectiveDia:0, effectiveArea:0, fraction:0, centreInside};
+  if(fraction < 0.02) return {status:'full', effectiveDia:0, effectiveArea:0, fraction:0, centreInside};
   const effectiveDia = 2*Math.sqrt(effectiveArea/Math.PI);
   return {status:'partial', effectiveDia, effectiveArea, fraction, centreInside};
 }
@@ -3790,10 +3840,12 @@ function _applyExclResize(tz, handle, dxmm, dymm, origZone){
 // Partially-overlapping pores are kept with _effectiveDia / _cropFraction tags.
 // Pass `page` = the image page object that owns the pores.
 function _filterExclZones(pores, page){
-  const zones = (page && page.exclusionZones) || [];
-  if(!zones.length) return pores;
+  const _page = page || ((typeof activeImagePage==='function') ? activeImagePage() : null);
+  const zones = (_page && _page.exclusionZones) || [];
+  const dr = (_page && _page.datumRect && _page.datumRect.w > 0) ? _page.datumRect : (S.datumRect && S.datumRect.w > 0 ? S.datumRect : null);
+  if(!zones.length && !dr) return pores;
   return pores.map(p => {
-    const cs = _poreExclCropStatus(p, page);
+    const cs = _poreExclCropStatus(p, _page);
     if(cs.status === 'full') return null;
     if(cs.status === 'partial'){
       return Object.assign({}, p, {
@@ -3817,8 +3869,11 @@ function _rectIntersectionArea(a, b){
 function _exclusionAreaForDatum(page, datumRect, wallW, wallH){
   const zones=(page && page.exclusionZones) || [];
   if(!zones.length) return 0;
-  if(!datumRect || datumRect.w <= 0) return 0;
-  const bounds = datumRect;
+  let bounds = datumRect;
+  if(!bounds || bounds.w <= 0){
+    if(wallW > 0 && wallH > 0) bounds = { x: 0, y: 0, w: wallW, h: wallH };
+    else return 0;
+  }
   
   // Use a 100x100 grid for accurate overlap union area
   const steps = 100;
@@ -3875,8 +3930,7 @@ function getPoresForEvaluation(pores, page){
   const _dr = (_page && _page.datumRect && _page.datumRect.w > 0)
     ? _page.datumRect
     : (S.datumRect && S.datumRect.w > 0 ? S.datumRect : null);
-  if(!_dr) return pores;
-  return pores.filter(p=>p.x>=_dr.x && p.x<=(_dr.x+_dr.w) && p.y>=_dr.y && p.y<=(_dr.y+_dr.h));
+  return pores;
 }
 
 // Remove datum square
@@ -3963,7 +4017,7 @@ function updateLiveMetrics(){
   const _exclFull = _apAll.filter(p=>_poreExclCropStatus(p,_page4).status==='full').length;
   const _exclPartial = _apAll.filter(p=>_poreExclCropStatus(p,_page4).status==='partial').length;
   const _nonExcl = _apAll.filter(p=>_poreExclCropStatus(p,_page4).status!=='full');
-  const effLen = S.spec.u > 0 ? _nonExcl.filter(p=>p.dia>=S.spec.u).length : _nonExcl.length;
+  const effLen = S.spec.u > 0 ? _nonExcl.filter(p=>(p.dia+0.005)>=S.spec.u).length : _nonExcl.length;
   let cntLabel = String(effLen);
   if(_exclFull>0) cntLabel += ` (+${_exclFull} excl`+(_exclPartial>0?`, ${_exclPartial} ✂`:'')+`)`;
   else if(_exclPartial>0) cntLabel += ` (${_exclPartial} ✂ cropped)`;
@@ -3971,91 +4025,87 @@ function updateLiveMetrics(){
   document.getElementById('mb-cnt').style.width=Math.min(100,effLen*8)+'%';
   
   if(metricDebounce) clearTimeout(metricDebounce);
-  metricDebounce = setTimeout(() => {
-    try {
-      // FILTER pores to datum square if drawn, then apply exclusion zones
-      const evalPores = getPoresForEvaluation(AP());
-      // Compute net datum ONCE here and pass explicitly to avoid double-subtracting
-      // exclusion area (getEffectiveDatum already subtracts it; if we also passed null
-      // to runEvaluationLocal it would call getEffectiveDatum a second time inside).
-      const _liveEvalDatum = getEffectiveDatum();
-      const data = runEvaluationLocal(evalPores, S.spec, getEffectiveWallH(), _liveEvalDatum, activeImagePage().imgOffsetMm || 0);
+  try {
+    // FILTER pores to datum square if drawn, then apply exclusion zones
+    const evalPores = getPoresForEvaluation(AP());
+    // Compute net datum ONCE here and pass explicitly to avoid double-subtracting
+    // exclusion area (getEffectiveDatum already subtracts it; if we also passed null
+    // to runEvaluationLocal it would call getEffectiveDatum a second time inside).
+    const _liveEvalDatum = getEffectiveDatum();
+    const data = runEvaluationLocal(evalPores, S.spec, getEffectiveWallH(), _liveEvalDatum, activeImagePage().imgOffsetMm || 0);
 
-      const pct=data.pct;
-      const maxPhi=data.max_phi;
-      const gapData=data.gap_data;
-      const lim=S.spec;
+    const pct=data.pct;
+    const maxPhi=data.max_phi;
+    const gapData=data.gap_data;
+    const lim=S.spec;
 
-      // Pct
-      const pctRatio=pct/(lim.pct||5);
-      const pctCol=pctRatio>1?'var(--red)':pctRatio>.85?'var(--amb)':'var(--g)';
-      document.getElementById('m-pct').textContent=pct.toFixed(1)+'%';
-      document.getElementById('m-pct').style.color=pctCol;
-      document.getElementById('mb-pct').style.width=Math.min(100,pctRatio*100)+'%';
-      document.getElementById('mb-pct').style.background=pctCol;
-      document.getElementById('ml-pct').style.left=Math.min(98,100/1)+'%';// at 100% of limit
-      const tbPct=document.getElementById('tb-pct');
-      if(tbPct){
-        tbPct.textContent=pct.toFixed(1)+'%';
-        tbPct.style.color=pctCol;
-      }
+    // Pct
+    const pctRatio=pct/(lim.pct||5);
+    const pctCol=pctRatio>1?'var(--red)':pctRatio>.85?'var(--amb)':'var(--g)';
+    document.getElementById('m-pct').textContent=pct.toFixed(1)+'%';
+    document.getElementById('m-pct').style.color=pctCol;
+    document.getElementById('mb-pct').style.width=Math.min(100,pctRatio*100)+'%';
+    document.getElementById('mb-pct').style.background=pctCol;
+    document.getElementById('ml-pct').style.left=Math.min(98,100/1)+'%';// at 100% of limit
+    const tbPct=document.getElementById('tb-pct');
+    if(tbPct){
+      tbPct.textContent=pct.toFixed(1)+'%';
+      tbPct.style.color=pctCol;
+    }
 
-      // Phi
-      const phiRatio=maxPhi/(lim.phi||1.5);
-      const phiCol=phiRatio>1?'var(--red)':phiRatio>.85?'var(--amb)':'var(--blu)';
-      document.getElementById('m-phi').textContent=maxPhi.toFixed(2)+' mm';
-      document.getElementById('m-phi').style.color=phiCol;
-      document.getElementById('mb-phi').style.width=Math.min(100,phiRatio*100)+'%';
-      document.getElementById('mb-phi').style.background=phiCol;
+    // Phi
+    const phiRatio=maxPhi/(lim.phi||1.5);
+    const phiCol=phiRatio>1?'var(--red)':phiRatio>.85?'var(--amb)':'var(--blu)';
+    document.getElementById('m-phi').textContent=maxPhi.toFixed(2)+' mm';
+    document.getElementById('m-phi').style.color=phiCol;
+    document.getElementById('mb-phi').style.width=Math.min(100,phiRatio*100)+'%';
+    document.getElementById('mb-phi').style.background=phiCol;
 
-      // Gap
-      if(gapData){
-        const gapCol=gapData.gap<gapData.req?'var(--red)':gapData.gap<gapData.req*1.2?'var(--amb)':'var(--pur)';
-        document.getElementById('m-gap').textContent=gapData.gap.toFixed(3)+' mm';
-        document.getElementById('m-gap').style.color=gapCol;
-        const gapRatio=gapData.gap/Math.max(gapData.req,.001);
-        document.getElementById('mb-gap').style.width=Math.min(100,gapRatio*100)+'%';
-        document.getElementById('mb-gap').style.background=gapCol;
-        document.getElementById('ms-gap').textContent='min '+gapData.req.toFixed(2)+' mm';
-      } else {
-        document.getElementById('m-gap').textContent='—';
-        document.getElementById('m-gap').style.color='var(--dim)';
-        document.getElementById('mb-gap').style.width='100%';
-        document.getElementById('mb-gap').style.background='var(--pur)';
-        document.getElementById('ms-gap').textContent='A × Φ_smaller';
-      }
+    // Gap
+    if(gapData){
+      const gapCol=gapData.gap<gapData.req?'var(--red)':gapData.gap<gapData.req*1.2?'var(--amb)':'var(--pur)';
+      document.getElementById('m-gap').textContent=gapData.gap.toFixed(3)+' mm';
+      document.getElementById('m-gap').style.color=gapCol;
+      const gapRatio=gapData.gap/Math.max(gapData.req,.001);
+      document.getElementById('mb-gap').style.width=Math.min(100,gapRatio*100)+'%';
+      document.getElementById('mb-gap').style.background=gapCol;
+      document.getElementById('ms-gap').textContent='min '+gapData.req.toFixed(2)+' mm';
+    } else {
+      document.getElementById('m-gap').textContent='—';
+      document.getElementById('m-gap').style.color='var(--dim)';
+      document.getElementById('mb-gap').style.width='100%';
+      document.getElementById('mb-gap').style.background='var(--pur)';
+      document.getElementById('ms-gap').textContent='A × Φ_smaller';
+    }
 
-      // Live verdict
-      const allOK=data.all_pass;
-      const el=document.getElementById('m-verdict');
-      const bl=document.getElementById('mb-verdict');
-      if(!S.spec.specSaved||data.eff_pores===0){
-        el.textContent='—'; el.style.color='var(--dim)';
-        bl.style.width='0%'; bl.style.background='var(--dim)';
-        document.getElementById('ms-verdict').textContent='No spec / no pores';
-      } else if(allOK){
-        el.textContent='PASS'; el.style.color='var(--g)';
-        bl.style.width='100%'; bl.style.background='var(--g)';
-        document.getElementById('ms-verdict').textContent='All parameters within limit';
-        document.getElementById('tb-badge').textContent='PASS';
-        document.getElementById('tb-badge').className='t-badge tb-pass';
-        document.getElementById('tb-dot').className='t-dot td-pass';
-      } else {
-        el.textContent='FAIL'; el.style.color='var(--red)';
-        bl.style.width='100%'; bl.style.background='var(--red)';
-        document.getElementById('ms-verdict').textContent='Parameter(s) exceeded';
-        document.getElementById('tb-badge').textContent='FAIL';
-        document.getElementById('tb-badge').className='t-badge tb-fail';
-        document.getElementById('tb-dot').className='t-dot td-fail';
-      }
+    // Live verdict
+    const allOK=data.all_pass;
+    const el=document.getElementById('m-verdict');
+    const bl=document.getElementById('mb-verdict');
+    if(!S.spec.specSaved||data.eff_pores===0){
+      el.textContent='—'; el.style.color='var(--dim)';
+      bl.style.width='0%'; bl.style.background='var(--dim)';
+      document.getElementById('ms-verdict').textContent='No spec / no pores';
+    } else if(allOK){
+      el.textContent='PASS'; el.style.color='var(--g)';
+      bl.style.width='100%'; bl.style.background='var(--g)';
+      document.getElementById('ms-verdict').textContent='All parameters within limit';
+      document.getElementById('tb-badge').textContent='PASS';
+      document.getElementById('tb-badge').className='t-badge tb-pass';
+      document.getElementById('tb-dot').className='t-dot td-pass';
+    } else {
+      el.textContent='FAIL'; el.style.color='var(--red)';
+      bl.style.width='100%'; bl.style.background='var(--red)';
+      document.getElementById('ms-verdict').textContent='Parameter(s) exceeded';
+      document.getElementById('tb-badge').textContent='FAIL';
+      document.getElementById('tb-badge').className='t-badge tb-fail';
+      document.getElementById('tb-dot').className='t-dot td-fail';
+    }
 
-      updatePoreRegistry();
-      if (S.evaluated) {
-        _silentReEvalActivePage();
-      }
-      updateHeaderButtons();
-    } catch(e){ /* calculation error — skip */ }
-  }, 100);
+    _silentReEvalActivePage();
+    updatePoreRegistry();
+    updateHeaderButtons();
+  } catch(e){ /* calculation error — skip */ }
 }
 
 function updateHeaderButtons() {
@@ -4067,7 +4117,7 @@ function updateHeaderButtons() {
   if (S.imgMode) {
     const hasImg = !!(S.imgState && S.imgState.image);
     const hasScale = !!(hasImg && S.imgState.scalePxPerMm);
-    const hasDetected = !!(hasImg && S.imgState.autoDetected);
+    const hasDetected = !!(hasImg && (S.imgState.autoDetected || (AP() && AP().length > 0) || (S.datumRect && S.datumRect.w > 0)));
     
     if(btnUpload) btnUpload.style.display = '';
     if(btnScale) btnScale.disabled = !hasImg;
@@ -4078,8 +4128,8 @@ function updateHeaderButtons() {
     if(btnScale) btnScale.disabled = true;
     if(btnDetect) btnDetect.disabled = true;
     
-    // In Spec mode, all images must be auto-detected to allow evaluation
-    let allDetected = true;
+    // In Spec mode, allow evaluation if images have been detected or have pores/datum
+    let allReady = true;
     let hasAnyImage = false;
     for (let si = 0; si < Workspace.specs.length; si++) {
       const tab = Workspace.specs[si];
@@ -4087,15 +4137,16 @@ function updateHeaderButtons() {
         const page = tab.images[ii];
         if (page.imgState && page.imgState.image) {
           hasAnyImage = true;
-          if (!page.imgState.autoDetected) {
-            allDetected = false;
+          const pageReady = page.imgState.autoDetected || (page.pores && page.pores.length > 0) || (page.datumRect && page.datumRect.w > 0);
+          if (!pageReady) {
+            allReady = false;
             break;
           }
         }
       }
-      if(!allDetected) break;
+      if(!allReady) break;
     }
-    if(btnEval) btnEval.disabled = !(hasAnyImage && allDetected);
+    if(btnEval) btnEval.disabled = !(hasAnyImage && allReady);
   }
 }
 
@@ -4106,7 +4157,7 @@ function updateHeaderButtons() {
 function _silentReEvalActivePage(){
   try {
     const page = activeImagePage();
-    if(!page || !page.evaluated) return;
+    if(!page) return;
     const tab  = activeSpecTab();
     const spec = (tab && tab.spec) || S.spec;
     const metrics = getImagePageMetrics(page, spec);
@@ -4114,20 +4165,22 @@ function _silentReEvalActivePage(){
 
     // ── NET pores (excl-zone-filtered + datum-filtered) ──
     let pores = [...(page.pores || [])];
-    if(exclZonesCount > 0) pores = _filterExclZones(pores, page);
+    pores = _filterExclZones(pores, page);
     const pageDatum = (page.datumRect && page.datumRect.w > 0) ? page.datumRect : null;
-    if(pageDatum) pores = pores.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
+    if(pageDatum) pores = pores.filter(p=>_poreOverlapsDatum(p, pageDatum));
     const evalDatum = _evaluationDatumArea(page, metrics, pageDatum);
     const data = runEvaluationLocal(pores, spec, metrics.wallH, evalDatum, metrics.offset || 0);
 
     // ── RAW pores (no excl-zone filter — informational) ──
     let poresRaw = [...(page.pores || [])];
-    if(pageDatum) poresRaw = poresRaw.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
+    if(pageDatum) poresRaw = poresRaw.filter(p=>_poreOverlapsDatum(p, pageDatum));
     const rawDatumBase = pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : (metrics.datum || (spec.datum||100));
     const rawData = runEvaluationLocal(poresRaw, spec, metrics.wallH, rawDatumBase, metrics.offset || 0);
 
     const _rawPoreCount = (page.pores || []).length;
-    const _exclCount = _rawPoreCount - (exclZonesCount > 0 ? _filterExclZones([...(page.pores||[])], page).length : _rawPoreCount);
+    const _exclCount = _rawPoreCount - _filterExclZones([...(page.pores||[])], page).length;
+    const _totalBefore = pageDatum ? poresRaw.length : _rawPoreCount;
+    const _maskedN = pageDatum ? Math.max(0, poresRaw.length - pores.length) : _exclCount;
 
     // Build new verdict — does NOT touch page.pores zones
     page.verdict = {
@@ -4137,8 +4190,8 @@ function _silentReEvalActivePage(){
       hrZ: data.hr_zone, hkZ: data.hk_zone,
       eff: Array(data.eff_pores).fill({}),
       exclZoneCount: exclZonesCount,
-      exclMaskedPores: _exclCount,
-      totalPoresBeforeExcl: _rawPoreCount,
+      exclMaskedPores: _maskedN,
+      totalPoresBeforeExcl: _totalBefore,
       rawPct: rawData.pct,
       rawPoreCount: poresRaw.length,
       rawDatum: rawDatumBase,
@@ -4152,6 +4205,7 @@ function _silentReEvalActivePage(){
     };
     S.verdict = page.verdict;
     S.evaluated = true;
+    page.evaluated = true;
 
     // Re-render verdict live if the Verdict page is already open
     const vpg = document.getElementById('pg-verdict');
@@ -4178,7 +4232,7 @@ function _effectivePores(pores, spec){
       ? Object.assign({}, p, { dia: p._effectiveDia })
       : p
   );
-  return u > 0 ? normalised.filter(p => p.dia >= u) : normalised;
+  return u > 0 ? normalised.filter(p => (p.dia+0.005) >= u) : normalised;
 }
 
 function _getZone(y, wallH, poreOffset, specT){
@@ -4282,7 +4336,7 @@ async function _callApiEvaluate(pores, spec, wallH, exclusionZones, datumRect, p
       id: parseInt(p.id),
       x: parseFloat(p.x),
       y: parseFloat(p.y),
-      dia: parseFloat(p.dia),
+      dia: parseFloat((p._effectiveDia !== undefined && p._effectiveDia !== null) ? p._effectiveDia : p.dia),
       type: p.type || 'gas',
       zone: p.zone || 'hr'
     }));
@@ -4470,15 +4524,15 @@ async function evaluateAllSpecs(silent){
 
     for (let ii = 0; ii < tab.images.length; ii++) {
       const page = tab.images[ii];
-      if (page.imgState && page.imgState.image && !page.imgState.autoDetected) {
-        throw new Error(`Image ${ii+1} in Spec ${si+1} has not been Auto-Detected.`);
+      if (page.imgState && page.imgState.image && !page.imgState.autoDetected && (!page.pores || page.pores.length === 0) && (!page.datumRect || page.datumRect.w <= 0)) {
+        throw new Error(`Image ${ii+1} in Spec ${si+1} has no detected pores or datum.`);
       }
       // ── NET (excl. zone filtered) evaluation ──
       let pores = JSON.parse(JSON.stringify(page.pores || []));
       const exclZonesCount = (page.exclusionZones || []).length;
-      if(exclZonesCount > 0) pores = _filterExclZones(pores, page);
+      if(exclZonesCount >= 0) pores = _filterExclZones(pores, page);
       const pageDatum = (page.datumRect && page.datumRect.w > 0) ? page.datumRect : null;
-      if(pageDatum) pores = pores.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
+      if(pageDatum) pores = pores.filter(p=>_poreOverlapsDatum(p, pageDatum));
       const metrics = getImagePageMetrics(page, spec);
       
       const data = await _callApiEvaluate(
@@ -4492,7 +4546,7 @@ async function evaluateAllSpecs(silent){
 
       // ── RAW (all pores, NO exclusion zone filter) ──
       let poresRaw = JSON.parse(JSON.stringify(page.pores || []));
-      if(pageDatum) poresRaw = poresRaw.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
+      if(pageDatum) poresRaw = poresRaw.filter(p=>_poreOverlapsDatum(p, pageDatum));
       const rawDatumBase = pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : (metrics.datum || (spec.datum||100));
       const rawData = await _callApiEvaluate(
         poresRaw,
@@ -4504,7 +4558,9 @@ async function evaluateAllSpecs(silent){
       );
 
       const _rawPoreCount = (page.pores || []).length;
-      const _exclCount2 = _rawPoreCount - (exclZonesCount > 0 ? _filterExclZones([...(page.pores||[])], page).length : _rawPoreCount);
+      const _exclCount2 = _rawPoreCount - _filterExclZones([...(page.pores||[])], page).length;
+      const _totalBefore = pageDatum ? poresRaw.length : _rawPoreCount;
+      const _maskedN = pageDatum ? Math.max(0, poresRaw.length - pores.length) : _exclCount2;
 
       page.verdict = {
         allPass: data.all_pass, checks: data.checks, pct: data.pct,
@@ -4513,8 +4569,8 @@ async function evaluateAllSpecs(silent){
         hrZ: data.hr_zone, hkZ: data.hk_zone,
         eff: Array(data.eff_pores).fill({}),
         exclZoneCount: exclZonesCount,
-        exclMaskedPores: _exclCount2,
-        totalPoresBeforeExcl: _rawPoreCount,
+        exclMaskedPores: _maskedN,
+        totalPoresBeforeExcl: _totalBefore,
         // Dual porosity fields
         rawPct: rawData.pct,
         rawPoreCount: poresRaw.length,
@@ -4697,9 +4753,9 @@ async function runSelectedEval(mode){
       // ── NET (excl. zone filtered) evaluation ──
       let pores = JSON.parse(JSON.stringify(page.pores||[]));
       const exclZonesCount = (page.exclusionZones || []).length;
-      if(exclZonesCount > 0) pores = _filterExclZones(pores, page);
+      if(exclZonesCount >= 0) pores = _filterExclZones(pores, page);
       const pageDatum = (page.datumRect && page.datumRect.w > 0) ? page.datumRect : null;
-      if(pageDatum) pores = pores.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
+      if(pageDatum) pores = pores.filter(p=>_poreOverlapsDatum(p, pageDatum));
       const metrics = getImagePageMetrics(page, tab.spec);
       
       const data = await _callApiEvaluate(
@@ -4713,7 +4769,7 @@ async function runSelectedEval(mode){
 
       // ── RAW (all pores, NO exclusion zone filter) ──
       let poresRaw = JSON.parse(JSON.stringify(page.pores || []));
-      if(pageDatum) poresRaw = poresRaw.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
+      if(pageDatum) poresRaw = poresRaw.filter(p=>_poreOverlapsDatum(p, pageDatum));
       const rawDatumBase = pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : (metrics.datum || (tab.spec.datum||100));
       const rawData = await _callApiEvaluate(
         poresRaw,
@@ -4725,7 +4781,9 @@ async function runSelectedEval(mode){
       );
 
       const _rawPoreCount = (page.pores || []).length;
-      const _exclCount2 = _rawPoreCount - (exclZonesCount > 0 ? _filterExclZones([...(page.pores||[])], page).length : _rawPoreCount);
+      const _exclCount2 = _rawPoreCount - _filterExclZones([...(page.pores||[])], page).length;
+      const _totalBefore = pageDatum ? poresRaw.length : _rawPoreCount;
+      const _maskedN = pageDatum ? Math.max(0, poresRaw.length - pores.length) : _exclCount2;
 
       page.verdict = {
         allPass: data.all_pass, checks: data.checks, pct: data.pct,
@@ -4734,8 +4792,8 @@ async function runSelectedEval(mode){
         hrZ: data.hr_zone, hkZ: data.hk_zone,
         eff: Array(data.eff_pores).fill({}),
         exclZoneCount: exclZonesCount,
-        exclMaskedPores: _exclCount2,
-        totalPoresBeforeExcl: _rawPoreCount,
+        exclMaskedPores: _maskedN,
+        totalPoresBeforeExcl: _totalBefore,
         rawPct: rawData.pct,
         rawPoreCount: poresRaw.length,
         rawDatum: rawDatumBase,
@@ -4852,8 +4910,8 @@ function showVerdictForTab(si,ii){
 }
 
 async function submitEvaluation(){
-  if(S.imgMode && S.imgState && S.imgState.image && !S.imgState.autoDetected) {
-    toast('Please run Auto Detect before evaluating.', 'warn');
+  if(S.imgMode && S.imgState && S.imgState.image && !S.imgState.autoDetected && (!AP() || AP().length === 0) && (!S.datumRect || S.datumRect.w <= 0)) {
+    toast('Please run Auto Detect or place pores/datum before evaluating.', 'warn');
     return;
   }
   const btn = document.getElementById('btn-eval');
@@ -4891,7 +4949,7 @@ function runEvaluation(){
 
   // RAW (all pores, no exclusion zone filter) — informational
   const rawPoresAll = hasDatum && S.datumRect
-    ? AP().filter(p => p.x>=S.datumRect.x && p.x<=(S.datumRect.x+S.datumRect.w) && p.y>=S.datumRect.y && p.y<=(S.datumRect.y+S.datumRect.h))
+    ? AP().filter(p => _poreOverlapsDatum(p, S.datumRect))
     : [...AP()];
   const rawDatumBase = hasDatum && S.datumRect
     ? +(S.datumRect.w * S.datumRect.h).toFixed(2)
@@ -4924,8 +4982,8 @@ function runEvaluation(){
   }
 
   const allPass = data.all_pass;
-  const _totalPores = AP().length;
-  const _exclMaskedN = AP().filter(p=>_poreInExclZone(p)).length;
+  const _totalPores = hasDatum ? rawPoresAll.length : AP().length;
+  const _exclMaskedN = hasDatum ? Math.max(0, rawPoresAll.length - evalPores.length) : AP().filter(p=>_poreInExclZone(p)).length;
   S.verdict = {
     allPass,
     hasDatum,
@@ -5031,7 +5089,7 @@ function renderReportImage(page, spec, metrics){
   // 3. Draw Pores
   page.pores.forEach(p=>{
     const x=p.x*sx, y=p.y*sy, r=Math.max(3,(p.dia/2)*((sx+sy)/2));
-    const ignored=spec.u>0&&p.dia<spec.u;
+    const ignored=spec.u>0&&(p.dia+0.005)<spec.u;
     const fail=!ignored&&p.dia>spec.phi;
     const _cs2 = _poreExclCropStatus(p, page);
     const isExcluded = _cs2.status === 'full';
@@ -5069,7 +5127,12 @@ function renderReportImage(page, spec, metrics){
       ctx.save();
       ctx.beginPath();
       const rW=page.imgState?.image?.naturalWidth||800, rH=page.imgState?.image?.naturalHeight||600;
-      ctx.rect(0,0,rW,rH);
+      const _pdr = (page.datumRect && page.datumRect.w > 0) ? page.datumRect : null;
+      if(_pdr){
+        ctx.rect(_pdr.x*sx, _pdr.y*sy, _pdr.w*sx, _pdr.h*sy);
+      } else {
+        ctx.rect(0,0,rW,rH);
+      }
       ez2.forEach(z=>{
         if(z.type==='circle'){
           const zcx=z.cx*sx, zcy=z.cy*sy, zrp=z.r*((sx+sy)/2);
@@ -5143,12 +5206,12 @@ function renderReportZoneMap(page, spec, metrics){
     const x=wx+(p.x/Math.max(metrics.wallW,.01))*ww;
     const y=wy+(p.y/Math.max(metrics.wallH,.01))*wh;
     const r=Math.max(3,Math.min(18,(p.dia/Math.max(metrics.wallH,.01))*wh/2));
-    const ignored=spec.u>0&&p.dia<spec.u;
+    const ignored=spec.u>0&&(p.dia+0.005)<spec.u;
     const fail=!ignored&&p.dia>spec.phi;
     const _cs3 = _poreExclCropStatus(p, page);
     const isExcluded = _cs3.status === 'full';
     const isPartial2 = _cs3.status === 'partial';
-    const isOutsideDatum = pageDatum && (p.x < pageDatum.x || p.x > pageDatum.x + pageDatum.w || p.y < pageDatum.y || p.y > pageDatum.y + pageDatum.h);
+    const isOutsideDatum = pageDatum && !_poreOverlapsDatum(p, pageDatum);
 
     if(isExcluded){
       out+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="rgba(100,100,100,0.04)" stroke="#ccc" stroke-width="1" stroke-dasharray="2 3" opacity="0.4"/>`;
@@ -5179,20 +5242,22 @@ function buildImageReportSection(tab, page, spec, specIndex, imageIndex){
 
   // ── NET (excl. zone filtered) evaluation ──
   let pores = JSON.parse(JSON.stringify(page.pores || []));
-  if(exclZonesCount > 0) pores = _filterExclZones(pores, page);
+  if(exclZonesCount >= 0) pores = _filterExclZones(pores, page);
   const pageDatum = (page.datumRect && page.datumRect.w > 0) ? page.datumRect : null;
-  if(pageDatum) pores = pores.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
+  if(pageDatum) pores = pores.filter(p=>_poreOverlapsDatum(p, pageDatum));
   const evalDatum = _evaluationDatumArea(page, metrics, pageDatum);
   const data = runEvaluationLocal(pores, spec, metrics.wallH, evalDatum, metrics.offset || 0);
 
   // ── RAW (all pores, NO exclusion zone filter) ──
   let poresRaw = JSON.parse(JSON.stringify(page.pores || []));
-  if(pageDatum) poresRaw = poresRaw.filter(p=>p.x>=pageDatum.x&&p.x<=(pageDatum.x+pageDatum.w)&&p.y>=pageDatum.y&&p.y<=(pageDatum.y+pageDatum.h));
+  if(pageDatum) poresRaw = poresRaw.filter(p=>_poreOverlapsDatum(p, pageDatum));
   const rawDatumBase = pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : (metrics.datum || (spec.datum||100));
   const rawData = runEvaluationLocal(poresRaw, spec, metrics.wallH, rawDatumBase, metrics.offset || 0);
 
   const _rawPoreCount = (page.pores || []).length;
-  const _exclCount2 = _rawPoreCount - (exclZonesCount > 0 ? _filterExclZones([...(page.pores||[])], page).length : _rawPoreCount);
+  const _exclCount2 = _rawPoreCount - _filterExclZones([...(page.pores||[])], page).length;
+  const _totalBefore = pageDatum ? poresRaw.length : _rawPoreCount;
+  const _maskedN = pageDatum ? Math.max(0, poresRaw.length - pores.length) : _exclCount2;
 
   // Sync dual-porosity verdict state back to the page
   page.verdict = {
@@ -5202,8 +5267,8 @@ function buildImageReportSection(tab, page, spec, specIndex, imageIndex){
     hrZ: data.hr_zone, hkZ: data.hk_zone,
     eff: Array(data.eff_pores).fill({}),
     exclZoneCount: exclZonesCount,
-    exclMaskedPores: _exclCount2,
-    totalPoresBeforeExcl: _rawPoreCount,
+    exclMaskedPores: _maskedN,
+    totalPoresBeforeExcl: _totalBefore,
     rawPct: rawData.pct,
     rawPoreCount: poresRaw.length,
     rawDatum: rawDatumBase,
@@ -5270,7 +5335,7 @@ function buildImageReportSection(tab, page, spec, specIndex, imageIndex){
     const _delta2     = (rawData.pct - data.pct).toFixed(2);
     const _deltaSign2 = (rawData.pct - data.pct) > 0 ? '▼' : (rawData.pct - data.pct) < 0 ? '▲' : '≈';
     const _poresInDatum = pageDatum
-      ? page.pores.filter(p => p.x>=pageDatum.x && p.x<=(pageDatum.x+pageDatum.w) && p.y>=pageDatum.y && p.y<=(pageDatum.y+pageDatum.h)).length
+      ? page.pores.filter(p => _poreOverlapsDatum(p, pageDatum)).length
       : page.pores.length;
     datumExclSection = `
     <h4 style="border-left:3px solid #b45309;padding-left:8px;color:#b45309;margin-top:16px">□ Datum &amp; Exclusion Analysis</h4>
@@ -5877,7 +5942,7 @@ function drawVerdictZone(){
       const svgY=wy+(p.y/wHmm)*wh;
       const svgR=Math.max(3,Math.min(22,(p.dia/wHmm)*wh*.5));
       const excl = typeof _poreInExclZone==='function' && _poreInExclZone(p);
-      const ign=S.spec.u>0&&p.dia<S.spec.u;
+      const ign=S.spec.u>0&&(p.dia+0.005)<S.spec.u;
       const fail=!ign&&!excl&&p.dia>S.spec.phi;
       const col=excl?'rgba(180,180,180,.6)':ign?'rgba(120,120,120,.7)':fail?'#ff3d3d':p.zone==='hr'?'#ffad00':p.zone==='hk'?'#9b6bff':'#00e8a2';
       const fillC=excl?'rgba(180,180,180,.1)':ign?'rgba(120,120,120,.15)':fail?'rgba(255,61,61,.25)':
@@ -5917,14 +5982,16 @@ function drawVerdictZone(){
   dc.fillStyle='#111'; dc.fillRect(0,0,cW,cH);
   // Draw cropped image region
   try{ dc.drawImage(img, sx,sy,sw,sh, 0,0,cW,cH); } catch(e){}
-  // Draw datum pores as overlays
+  // Draw datum pores as overlays (clip to canvas so cropped pores don't spill over)
   const datumPores=getPoresForEvaluation(AP());
+  dc.save();
+  dc.beginPath(); dc.rect(0,0,cW,cH); dc.clip();
   dc.font='bold 10px sans-serif'; dc.textAlign='center';
   datumPores.forEach(p=>{
     const px=((p.x-dr.x)/dr.w)*cW;
     const py=((p.y-dr.y)/dr.h)*cH;
     const pr=Math.max(4,((p.dia/2)/dr.w)*cW);
-    const ign=S.spec.u>0&&p.dia<S.spec.u;
+    const ign=S.spec.u>0&&(p.dia+0.005)<S.spec.u;
     const fail=!ign&&p.dia>S.spec.phi;
     const col=ign?'rgba(140,140,140,.7)':fail?'#ff3d3d':p.zone==='hr'?'#ffad00':p.zone==='hk'?'#9b6bff':'#00e8a2';
     // Contour or circle
@@ -5945,7 +6012,13 @@ function drawVerdictZone(){
       dc.fill(); dc.strokeStyle=col; dc.lineWidth=1.5; dc.stroke();
     }
     if(pr>8){ dc.fillStyle='#fff'; dc.fillText(p.dia.toFixed(1),px,py+3.5); }
+    if(p._isCropped){
+      dc.font='11px Arial'; dc.fillStyle='#f59e0b';
+      dc.fillText('✂',px+(pr*0.7),py-(pr*0.7));
+      dc.font='bold 10px sans-serif';
+    }
   });
+  dc.restore();
   // Datum border overlay
   dc.strokeStyle='rgba(255,173,0,.9)'; dc.lineWidth=3; dc.setLineDash([8,5]);
   dc.strokeRect(2,2,cW-4,cH-4); dc.setLineDash([]);
@@ -6071,13 +6144,21 @@ function updateImgHint(){
 
 function imgToolActivate(tool){
   // deactivate all
-  ['btn-crop','btn-scale-tool'].forEach(id=>{
+  ['btn-crop','btn-scale-tool-top'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.classList.remove('img-tool-on');
   });
   S.imgState.imgTool = (S.imgState.imgTool===tool) ? null : tool; // toggle
   if(S.imgState.imgTool){
-    const idMap={crop:'btn-crop',scale_line:'btn-scale-tool'};
+    const idMap={crop:'btn-crop',scale_line:'btn-scale-tool-top'};
     const el=document.getElementById(idMap[tool]); if(el) el.classList.add('img-tool-on');
+    const wrap = document.getElementById('canvas-wrap');
+    if(wrap) wrap.style.cursor = 'crosshair';
+  } else {
+    const wrap = document.getElementById('canvas-wrap');
+    if(wrap) {
+      const cursors={place:'crosshair',select:'grab',measure:'crosshair',datum:'cell',exclude_rect:'crosshair',exclude_circle:'crosshair',excl_select:'default',pan:'grab'};
+      wrap.style.cursor = cursors[S.tool] || 'default';
+    }
   }
   S.imgState.scaleDrawing=false; S.imgState.cropDrawing=false;
   S.imgState.scaleLine=null; S.imgState.scaleRect=null; S.imgState.cropRect=null;
@@ -6214,7 +6295,8 @@ function confirmScale(){
   S.imgState.scalePxPerMm = pxLen / mm;  // px per mm — Euclidean (works for any line direction)
   S.imgState.scaleLine = null;
   S.imgState.imgTool=null;
-  const btn=document.getElementById('btn-scale-tool');
+  S.imgState.cacheValid=false;
+  const btn=document.getElementById('btn-scale-tool-top');
   if(btn) btn.classList.remove('img-tool-on');
   showScaleInfo();
   _updateScaleDisplay();
@@ -6240,7 +6322,7 @@ function cancelScale(){
   document.getElementById('scale-input-overlay').style.display='none';
   S.imgState.scaleLine=null;
   S.imgState.imgTool=null;
-  const btn=document.getElementById('btn-scale-tool');
+  const btn=document.getElementById('btn-scale-tool-top');
   if(btn) btn.classList.remove('img-tool-on');
   _updateScaleDisplay();
   refreshWorkspaceUI();
@@ -7058,7 +7140,7 @@ function autoDetectPores(){
       if(S.datumRect && S.datumRect.w > 0){
         const dr=S.datumRect;
         const before=AP().length;
-        setAP(AP().filter(p=> p.x>=dr.x && p.x<=(dr.x+dr.w) && p.y>=dr.y && p.y<=(dr.y+dr.h)));
+        setAP(AP().filter(p=> _poreOverlapsDatum(p, dr)));
         const removed=before-AP().length;
         if(removed>0) toast(`ℹ️ ${removed} pore${removed>1?'s':''} outside datum square excluded`);
       }

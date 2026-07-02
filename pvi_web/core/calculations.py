@@ -292,33 +292,39 @@ def circle_polygon_intersect_area(cx: float, cy: float, r: float, points: list, 
     return (count / total) * pore_area if total > 0 else 0.0
 
 
-def pore_excl_crop_status(p: PoreModel, zones: list) -> dict:
-    if not zones:
+def pore_excl_crop_status(p: PoreModel, zones: list, datum_rect: Optional[dict] = None) -> dict:
+    dr_dict = datum_rect if isinstance(datum_rect, dict) else (datum_rect.model_dump() if datum_rect else None)
+    if not zones and not (dr_dict and dr_dict.get('w', 0) > 0):
         return {'status': 'none', 'effectiveDia': p.dia, 'effectiveArea': math.pi * (p.dia / 2) ** 2, 'fraction': 1.0, 'centreInside': False}
         
     r = p.dia / 2
     pore_area = math.pi * r * r
     
     centre_inside = False
-    for z in zones:
-        z_dict = z if isinstance(z, dict) else z.model_dump()
-        if z_dict.get('type') == 'rect':
-            zx, zy = z_dict.get('x', 0.0), z_dict.get('y', 0.0)
-            zw, zh = z_dict.get('w', 0.0), z_dict.get('h', 0.0)
-            if zx <= p.x <= zx + zw and zy <= p.y <= zy + zh:
-                centre_inside = True
-                break
-        elif z_dict.get('type') == 'circle':
-            cx, cy = z_dict.get('cx', 0.0), z_dict.get('cy', 0.0)
-            zr = z_dict.get('r', 0.0)
-            if (p.x - cx)**2 + (p.y - cy)**2 <= zr**2:
-                centre_inside = True
-                break
-        elif z_dict.get('type') == 'polygon':
-            pts = z_dict.get('points', [])
-            if pts and len(pts) >= 3 and point_in_polygon(p.x, p.y, pts):
-                centre_inside = True
-                break
+    if dr_dict and dr_dict.get('w', 0) > 0:
+        dx, dy, dw, dh = dr_dict.get('x', 0.0), dr_dict.get('y', 0.0), dr_dict.get('w', 0.0), dr_dict.get('h', 0.0)
+        if not (dx <= p.x <= dx + dw and dy <= p.y <= dy + dh):
+            centre_inside = True
+    if not centre_inside:
+        for z in zones:
+            z_dict = z if isinstance(z, dict) else z.model_dump()
+            if z_dict.get('type') == 'rect':
+                zx, zy = z_dict.get('x', 0.0), z_dict.get('y', 0.0)
+                zw, zh = z_dict.get('w', 0.0), z_dict.get('h', 0.0)
+                if zx <= p.x <= zx + zw and zy <= p.y <= zy + zh:
+                    centre_inside = True
+                    break
+            elif z_dict.get('type') == 'circle':
+                cx, cy = z_dict.get('cx', 0.0), z_dict.get('cy', 0.0)
+                zr = z_dict.get('r', 0.0)
+                if (p.x - cx)**2 + (p.y - cy)**2 <= zr**2:
+                    centre_inside = True
+                    break
+            elif z_dict.get('type') == 'polygon':
+                pts = z_dict.get('points', [])
+                if pts and len(pts) >= 3 and point_in_polygon(p.x, p.y, pts):
+                    centre_inside = True
+                    break
 
     steps = 20
     step = p.dia / steps
@@ -342,23 +348,28 @@ def pore_excl_crop_status(p: PoreModel, zones: list) -> dict:
             if (px - p.x)**2 + (py - p.y)**2 <= r**2:
                 total_grid_cells += 1
                 inside_excl = False
-                for z in parsed_zones:
-                    typ = z[0]
-                    if typ == 'rect':
-                        _, zx, zy, zw, zh = z
-                        if zx <= px <= zx + zw and zy <= py <= zy + zh:
-                            inside_excl = True
-                            break
-                    elif typ == 'circle':
-                        _, cx, cy, cr = z
-                        if (px - cx)**2 + (py - cy)**2 <= cr**2:
-                            inside_excl = True
-                            break
-                    elif typ == 'polygon':
-                        _, pts = z
-                        if point_in_polygon(px, py, pts):
-                            inside_excl = True
-                            break
+                if dr_dict and dr_dict.get('w', 0) > 0:
+                    dx, dy, dw, dh = dr_dict.get('x', 0.0), dr_dict.get('y', 0.0), dr_dict.get('w', 0.0), dr_dict.get('h', 0.0)
+                    if not (dx <= px <= dx + dw and dy <= py <= dy + dh):
+                        inside_excl = True
+                if not inside_excl:
+                    for z in parsed_zones:
+                        typ = z[0]
+                        if typ == 'rect':
+                            _, zx, zy, zw, zh = z
+                            if zx <= px <= zx + zw and zy <= py <= zy + zh:
+                                inside_excl = True
+                                break
+                        elif typ == 'circle':
+                            _, cx, cy, cr = z
+                            if (px - cx)**2 + (py - cy)**2 <= cr**2:
+                                inside_excl = True
+                                break
+                        elif typ == 'polygon':
+                            _, pts = z
+                            if point_in_polygon(px, py, pts):
+                                inside_excl = True
+                                break
                 if inside_excl:
                     inside_count += 1
                     
@@ -371,19 +382,24 @@ def pore_excl_crop_status(p: PoreModel, zones: list) -> dict:
     effective_area = max(0.0, pore_area - total_intersect)
     fraction = effective_area / pore_area
     
-    if fraction < 0.05 and centre_inside:
+    if fraction < 0.02:
         return {'status': 'full', 'effectiveDia': 0.0, 'effectiveArea': 0.0, 'fraction': 0.0, 'centreInside': centre_inside}
         
     effective_dia = 2 * math.sqrt(effective_area / math.pi)
     return {'status': 'partial', 'effectiveDia': effective_dia, 'effectiveArea': effective_area, 'fraction': fraction, 'centreInside': centre_inside}
 
 
+
 def exclusion_area_for_datum(zones: list, datum_rect: dict, wall_w: float, wall_h: float) -> float:
     if not zones:
         return 0.0
     if not datum_rect or datum_rect.get('w', 0) <= 0:
-        return 0.0
-    bounds = datum_rect
+        if wall_w > 0 and wall_h > 0:
+            bounds = {'x': 0.0, 'y': 0.0, 'w': float(wall_w), 'h': float(wall_h)}
+        else:
+            return 0.0
+    else:
+        bounds = datum_rect
         
     steps = 100
     step_x = bounds['w'] / steps
@@ -452,7 +468,7 @@ def run_evaluation(
     # Apply visual cropping logic: fully-excluded are dropped, partially-excluded are cropped (dia set to effectiveDia)
     net_pores = []
     for p in pores:
-        cs = pore_excl_crop_status(p, exclusion_zones)
+        cs = pore_excl_crop_status(p, exclusion_zones, datum_rect)
         if cs['status'] == 'full':
             continue
         elif cs['status'] == 'partial':
@@ -484,12 +500,6 @@ def run_evaluation(
             net_pores.append(p_copy)
 
     dr_dict = datum_rect if isinstance(datum_rect, dict) else (datum_rect.model_dump() if datum_rect else None)
-    if dr_dict and dr_dict.get('w', 0) > 0:
-        net_pores = [
-            p for p in net_pores
-            if dr_dict.get('x', 0) <= p.x <= (dr_dict.get('x', 0) + dr_dict.get('w', 0))
-            and dr_dict.get('y', 0) <= p.y <= (dr_dict.get('y', 0) + dr_dict.get('h', 0))
-        ]
 
     x_vals = [p.x for p in pores] if pores else []
     wall_w = max(max(x_vals) * 1.2 if x_vals else 20.0, 20.0)
@@ -672,7 +682,7 @@ def run_evaluation(
 
     # Update zone info and crop metadata on pores
     for p in pores:
-        cs = pore_excl_crop_status(p, exclusion_zones)
+        cs = pore_excl_crop_status(p, exclusion_zones, datum_rect)
         p.is_excluded = (cs['status'] == 'full')
         p.is_cropped = (cs['status'] == 'partial')
         p.effective_dia = cs['effectiveDia']
