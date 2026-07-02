@@ -2317,7 +2317,7 @@ function bindCanvasEvents(){
       S._exclDraw={active:true,type:'circle',ox:mm.x,oy:mm.y,cx:mm.x,cy:mm.y,r:0};
       isPointerDown=true; drawCanvas();
     } else if(S.tool==='exclude_wand'){
-      _executeMagicWand(mm.x, mm.y);
+      _executeMagicWand(p.x, p.y);
     } else if(S.tool==='datum' || (S.tool==='select' && S.datumRect && S.datumRect.w > 0)){
       if(S.datumRect && S.datumRect.w > 0){
         // 1. Check resize handles first
@@ -2956,9 +2956,142 @@ function showCanvasTip(pore, e){
 function hideTip(){ document.getElementById('ctip').style.display='none'; }
 
 // ═══════════════════════════════════════════════════
+// DATUM & EXCLUSION ZONES REGISTRY (EDITABLE)
+// ═══════════════════════════════════════════════════
+function renderDatumRegistry() {
+  const cont = document.getElementById('datum-registry-section');
+  if (!cont) return;
+  const hasDatum = S.datumRect && S.datumRect.w > 0;
+  if (!hasDatum) {
+    const areaMm2 = getEffectiveDatum();
+    cont.innerHTML = `
+      <div style="padding:6px 12px;background:rgba(255,255,255,.03);font-size:10px;font-weight:700;color:var(--tx);display:flex;justify-content:space-between;align-items:center">
+        <span>📐 Datum / Inspection Area</span>
+        <button onclick="setTool('datum')" style="font-size:8px;padding:2px 6px;background:var(--c3);color:var(--tx);border:1px solid var(--bd);border-radius:3px;cursor:pointer">+ Draw Datum</button>
+      </div>
+      <div style="padding:8px 12px;font-size:9px;color:var(--dim);display:flex;justify-content:space-between;align-items:center">
+        <span>Type: <b>Image Bounds</b></span>
+        <span>Area: <b style="color:var(--tx)">${areaMm2.toFixed(2)} mm²</b></span>
+      </div>`;
+    return;
+  }
+  const r = S.datumRect;
+  const area = Math.abs(r.w * r.h);
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  cont.innerHTML = `
+    <div style="padding:6px 12px;background:rgba(255,255,255,.03);font-size:10px;font-weight:700;color:var(--tx);display:flex;justify-content:space-between;align-items:center">
+      <span>📐 Datum / Inspection Area</span>
+      <button onclick="S.datumRect=null;drawCanvas();updateLiveMetrics();updatePoreRegistry();" style="font-size:8px;padding:2px 6px;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:3px;cursor:pointer">✕ Remove</button>
+    </div>
+    <div style="padding:8px 12px;font-size:9px;color:var(--tx);display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="color:var(--dim)">Width:</span>
+        <input type="number" step="0.1" min="0.1" value="${Math.abs(r.w).toFixed(2)}" onchange="_editDatumReg('w',+this.value)" style="width:50px;font-size:9px;padding:2px 4px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"> mm
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="color:var(--dim)">Height:</span>
+        <input type="number" step="0.1" min="0.1" value="${Math.abs(r.h).toFixed(2)}" onchange="_editDatumReg('h',+this.value)" style="width:50px;font-size:9px;padding:2px 4px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"> mm
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="color:var(--dim)">Center X:</span>
+        <input type="number" step="0.1" value="${cx.toFixed(2)}" onchange="_editDatumReg('cx',+this.value)" style="width:50px;font-size:9px;padding:2px 4px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"> mm
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="color:var(--dim)">Center Y:</span>
+        <input type="number" step="0.1" value="${cy.toFixed(2)}" onchange="_editDatumReg('cy',+this.value)" style="width:50px;font-size:9px;padding:2px 4px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"> mm
+      </div>
+      <div style="grid-column:span 2;display:flex;justify-content:space-between;padding-top:4px;border-top:1px dashed var(--bd)">
+        <span style="color:var(--dim)">Total Area:</span>
+        <b style="color:var(--g)">${area.toFixed(2)} mm²</b>
+      </div>
+    </div>`;
+}
+
+function _editDatumReg(prop, val) {
+  if (!S.datumRect || S.datumRect.w <= 0) return;
+  pushHistory();
+  if (prop === 'w') { S.datumRect.w = val; }
+  else if (prop === 'h') { S.datumRect.h = val; }
+  else if (prop === 'cx') { S.datumRect.x = val - S.datumRect.w / 2; }
+  else if (prop === 'cy') { S.datumRect.y = val - S.datumRect.h / 2; }
+  drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+}
+
+function renderExclRegistry() {
+  const cont = document.getElementById('excl-registry-section');
+  if (!cont) return;
+  const page = activeImagePage();
+  const zones = page ? page.exclusionZones || [] : [];
+  cont.innerHTML = `
+    <div style="padding:6px 12px;background:rgba(255,255,255,.03);font-size:10px;font-weight:700;color:var(--tx);display:flex;justify-content:space-between;align-items:center">
+      <span>🚫 Exclusion Zones (${zones.length})</span>
+      <div style="display:flex;gap:4px">
+        <button onclick="setTool('exclude_rect')" title="Draw Rectangle" style="font-size:8px;padding:1px 4px;background:var(--c3);color:var(--tx);border:1px solid var(--bd);border-radius:3px;cursor:pointer">+▭</button>
+        <button onclick="setTool('exclude_circle')" title="Draw Circle" style="font-size:8px;padding:1px 4px;background:var(--c3);color:var(--tx);border:1px solid var(--bd);border-radius:3px;cursor:pointer">+⭕</button>
+        <button onclick="setTool('exclude_wand')" title="Magic Wand" style="font-size:8px;padding:1px 4px;background:var(--c3);color:var(--tx);border:1px solid var(--bd);border-radius:3px;cursor:pointer">🪄</button>
+      </div>
+    </div>
+    <div style="max-height:180px;overflow-y:auto">
+      ${!zones.length ? '<div style="font-size:9px;color:var(--dim);text-align:center;padding:12px">No exclusion zones</div>' :
+        zones.map((z, i) => {
+          if (z.type === 'circle') {
+            return `<div style="padding:6px 12px;border-bottom:1px solid var(--bd);font-size:9px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <span style="font-weight:700;color:#ef4444">⭕ Zone #${i+1} [Circle]</span>
+                <button onclick="removeExclZone(${i})" style="font-size:8px;padding:1px 5px;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:3px;cursor:pointer">✕</button>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+                <div>r: <input type="number" step="0.1" min="0.05" value="${(z.r||0).toFixed(2)}" onchange="_editExclReg(${i},'r',+this.value)" style="width:40px;font-size:8px;padding:1px 3px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"> mm</div>
+                <div>cx: <input type="number" step="0.1" value="${(z.cx||0).toFixed(2)}" onchange="_editExclReg(${i},'cx',+this.value)" style="width:40px;font-size:8px;padding:1px 3px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"></div>
+                <div>cy: <input type="number" step="0.1" value="${(z.cy||0).toFixed(2)}" onchange="_editExclReg(${i},'cy',+this.value)" style="width:40px;font-size:8px;padding:1px 3px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"></div>
+              </div>
+            </div>`;
+          } else if (z.type === 'polygon') {
+            const area = polyArea(z.points||[]);
+            return `<div style="padding:6px 12px;border-bottom:1px solid var(--bd);font-size:9px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <span style="font-weight:700;color:#f59e0b">🪄 Zone #${i+1} [Polygon]</span>
+                <button onclick="removeExclZone(${i})" style="font-size:8px;padding:1px 5px;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:3px;cursor:pointer">✕</button>
+              </div>
+              <div style="display:flex;justify-content:space-between;color:var(--dim)">
+                <span>Points: <b style="color:var(--tx)">${(z.points||[]).length}</b></span>
+                <span>Area: <b style="color:var(--tx)">${area.toFixed(2)} mm²</b></span>
+              </div>
+            </div>`;
+          } else {
+            return `<div style="padding:6px 12px;border-bottom:1px solid var(--bd);font-size:9px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <span style="font-weight:700;color:#ef4444">▭ Zone #${i+1} [Rect]</span>
+                <button onclick="removeExclZone(${i})" style="font-size:8px;padding:1px 5px;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:3px;cursor:pointer">✕</button>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+                <div>w: <input type="number" step="0.1" min="0.1" value="${Math.abs(z.w||0).toFixed(2)}" onchange="_editExclReg(${i},'w',+this.value)" style="width:40px;font-size:8px;padding:1px 3px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"> mm</div>
+                <div>h: <input type="number" step="0.1" min="0.1" value="${Math.abs(z.h||0).toFixed(2)}" onchange="_editExclReg(${i},'h',+this.value)" style="width:40px;font-size:8px;padding:1px 3px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"> mm</div>
+                <div>x: <input type="number" step="0.1" value="${(z.x||0).toFixed(2)}" onchange="_editExclReg(${i},'x',+this.value)" style="width:40px;font-size:8px;padding:1px 3px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"></div>
+                <div>y: <input type="number" step="0.1" value="${(z.y||0).toFixed(2)}" onchange="_editExclReg(${i},'y',+this.value)" style="width:40px;font-size:8px;padding:1px 3px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"></div>
+              </div>
+            </div>`;
+          }
+        }).join('')
+      }
+    </div>`;
+}
+
+function _editExclReg(idx, prop, val) {
+  const page = activeImagePage();
+  if (!page || !page.exclusionZones || !page.exclusionZones[idx]) return;
+  pushHistory();
+  page.exclusionZones[idx][prop] = val;
+  drawCanvas(); renderExclList(); updatePoreRegistry();
+}
+
+// ═══════════════════════════════════════════════════
 // PORE REGISTRY
 // ═══════════════════════════════════════════════════
 function updatePoreRegistry(){
+  if(typeof renderDatumRegistry === 'function') renderDatumRegistry();
+  if(typeof renderExclRegistry === 'function') renderExclRegistry();
   const reg=document.getElementById('pore-registry');
   const eff=effectivePores();
   const evalPores=getPoresForEvaluation(AP());
@@ -6817,14 +6950,29 @@ function _polyPerimeter(contour){
 }
 
 // ── Magic Wand Auto-Exclusion Algorithm ──────────────────────────────────────
-function _executeMagicWand(clickXmm, clickYmm) {
+function _executeMagicWand(canvasX, canvasY) {
   if (!S.imgState || !S.imgState.image || !S.imgMode) return;
+  if (!S.imgState.scalePxPerMm) {
+    if(typeof toast==='function') toast('Please set image scale first before using Magic Wand');
+    return;
+  }
   const page = activeImagePage();
   if (!page) return;
 
   const img = S.imgState.image;
   const w = img.naturalWidth;
   const h = img.naturalHeight;
+  const fit = S.imgState.fitScale || 1;
+  const ix = S.imgState.imgX !== undefined ? S.imgState.imgX : 0;
+  const iy = S.imgState.imgY !== undefined ? S.imgState.imgY : 0;
+
+  const px = Math.round((canvasX - ix) / fit);
+  const py = Math.round((canvasY - iy) / fit);
+
+  if (px < 0 || px >= w || py < 0 || py >= h) {
+    if(typeof toast==='function') toast('Click outside image boundary');
+    return;
+  }
   
   if (!S.imgState._wandData || S.imgState._wandData.w !== w) {
     const osc = document.createElement('canvas');
@@ -6834,12 +6982,6 @@ function _executeMagicWand(clickXmm, clickYmm) {
     S.imgState._wandData = { w, h, pixels: ctx.getImageData(0,0,w,h).data };
   }
   const pixels = S.imgState._wandData.pixels;
-  
-  const scale = S.imgState.scalePxPerMm / (S.imgState.fitScale || 1);
-  const px = Math.round(clickXmm * scale);
-  const py = Math.round(clickYmm * scale);
-  
-  if (px < 0 || px >= w || py < 0 || py >= h) return;
   
   const tolInput = document.getElementById('wand-tolerance');
   const tol = tolInput ? parseInt(tolInput.value, 10) : 30;
@@ -6869,7 +7011,7 @@ function _executeMagicWand(clickXmm, clickYmm) {
     if(y<h-1){ const n=curr+w; if(!mask[n] && match(n*4)){ mask[n]=1; q[tail++]=n; } }
   }
   
-  if (area < 50) { toast('Magic Wand: Region too small'); return; }
+  if (area < 50) { if(typeof toast==='function') toast('Magic Wand: Region too small'); return; }
   
   let startX = -1, startY = -1;
   for(let y=0; y<h && startY===-1; y++){
@@ -6900,15 +7042,18 @@ function _executeMagicWand(clickXmm, clickYmm) {
   if (points.length < 3) return;
   
   const step = Math.max(1, Math.floor(points.length / 100)); // Simplify to ~100 points
-  const polyMm = points.filter((_, i) => i % step === 0).map(p => [p[0] / scale, p[1] / scale]);
+  const polyMm = points.filter((_, i) => i % step === 0).map(p => {
+    const ptMm = canvasToMm(ix + p[0] * fit, iy + p[1] * fit);
+    return { x: parseFloat(ptMm.x.toFixed(2)), y: parseFloat(ptMm.y.toFixed(2)) };
+  });
   
   if (!page.exclusionZones) page.exclusionZones = [];
   pushHistory();
   page.exclusionZones.push({ type: 'polygon', points: polyMm });
-  toast('Magic Wand exclusion added');
+  if(typeof toast==='function') toast('Magic Wand exclusion added');
   S.tool = 'excl_select'; setTool('excl_select');
   S._exclSelected = page.exclusionZones.length - 1;
-  drawCanvas(); renderExclList();
+  drawCanvas(); renderExclList(); updatePoreRegistry();
 }
 
 // ── Blob extraction with PCA + row-scan outline ──────────────────────────────
