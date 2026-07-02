@@ -250,7 +250,7 @@ function applySideSpecDetails(){
   s.a=+val('side-sp-a')||2;
   s.u=+val('side-sp-u')||0;
   s.t=+val('side-sp-t')||6;
-  s.datum=+val('side-sp-datum')||100;
+  if(val('side-sp-datum') !== undefined) s.datum = +val('side-sp-datum') || 100;
   const hn=parsePair(val('side-sp-hn'),s.h||0,s.n||0);
   const zones=String(val('side-sp-zones')||'').match(/\d+/g)||[];
   s.h=hn[0]; s.n=hn[1];
@@ -825,7 +825,7 @@ function saveCustomPresetSpec() {
     a:   document.getElementById('sp-a').value !== '' ? +document.getElementById('sp-a').value : 2,
     u:   document.getElementById('sp-u').value !== '' ? +document.getElementById('sp-u').value : 0.2,
     t:   document.getElementById('sp-t').value !== '' ? +document.getElementById('sp-t').value : 6,
-    datum: document.getElementById('sp-datum').value !== '' ? +document.getElementById('sp-datum').value : 100,
+    datum: document.getElementById('sp-datum')?.value !== undefined && document.getElementById('sp-datum')?.value !== '' ? +document.getElementById('sp-datum').value : (S.spec.datum || 100),
     phi_gas:    document.getElementById('sp-phi-gas')?.value    ? +document.getElementById('sp-phi-gas').value    : null,
     phi_shrink: document.getElementById('sp-phi-shrink')?.value ? +document.getElementById('sp-phi-shrink').value : null,
     pct_gas:    document.getElementById('sp-pct-gas')?.value    ? +document.getElementById('sp-pct-gas').value    : null,
@@ -923,7 +923,7 @@ function saveSpec(){
   const _aVal   = document.getElementById('sp-a').value;     s.a     = _aVal   !== '' ? +_aVal   : 2;
   const _uVal   = document.getElementById('sp-u').value;     s.u     = _uVal   !== '' ? +_uVal   : 0.2;
   const _tVal   = document.getElementById('sp-t').value;     s.t     = _tVal   !== '' ? +_tVal   : 6;
-  const _datVal = document.getElementById('sp-datum').value; s.datum = _datVal !== '' ? +_datVal : 100;
+  const _datEl  = document.getElementById('sp-datum');       if(_datEl && _datEl.value !== '') s.datum = +_datEl.value;
   // Zone mode: zone_disabled is managed by the toggle, not a direct input — just preserve it
   // (do NOT overwrite from checkbox directly; toggleZoneMode manages it)
   // Type-specific limits — persist only when the field has a value
@@ -1484,7 +1484,7 @@ function drawCanvas(){
       mctx.restore();
     }
 
-  } else {
+  } else if(!S.imgMode) {
     // Default datum centred in wall
     const dw2=Math.sqrt(S.spec.datum||100)*scale*.8;
     const dh2=((S.spec.datum||100)/dw2*scale*.8)||dw2;
@@ -2320,7 +2320,7 @@ function bindCanvasEvents(){
           isPointerDown=true; wrap.style.cursor='move'; drawCanvas(); return;
         }
       }
-      // 3. Outside → start drawing a NEW datum rect (non-square; remove square constraint)
+      // 3. Outside → start drawing a NEW datum square (n square constraint)
       S.datumRect={_ox:mm.x, _oy:mm.y, x:mm.x, y:mm.y, w:0, h:0};
       isPointerDown=true; drawCanvas();
     }
@@ -2388,15 +2388,15 @@ function bindCanvasEvents(){
     }
     const pore=poreAtCanvas(p.x,p.y);
     showCanvasTip(pore,e);
-    // Datum draw: free rectangle (width × height independently), no square constraint
+    // Datum draw: enforced square (n square constraint)
     if(S.tool==='datum' && isPointerDown && S.datumRect && S.datumRect._ox!==undefined){
       const ox=S.datumRect._ox, oy=S.datumRect._oy;
       const dx=mm.x-ox, dy=mm.y-oy;
-      const nx=dx>=0?ox:mm.x;
-      const ny=dy>=0?oy:mm.y;
-      const rw=Math.max(Math.abs(dx),0.01), rh=Math.max(Math.abs(dy),0.01);
-      S.datumRect={_ox:ox,_oy:oy,x:nx,y:ny,w:rw,h:rh};
-      document.getElementById('sb-datum').textContent=`${(rw*rh).toFixed(1)} mm² (datum □)`;
+      const side=Math.max(Math.abs(dx), Math.abs(dy), 0.01);
+      const nx=dx>=0 ? ox : ox - side;
+      const ny=dy>=0 ? oy : oy - side;
+      S.datumRect={_ox:ox,_oy:oy,x:nx,y:ny,w:side,h:side};
+      document.getElementById('sb-datum').textContent=`${(side*side).toFixed(1)} mm² (datum □)`;
     }
     // Datum tool hover cursor: show resize cursor near handles, move cursor inside body
     if(S.tool==='datum' && !isPointerDown && S.datumRect && S.datumRect.w>0){
@@ -3072,8 +3072,9 @@ function getEffectiveDatum(){
   const _page = (typeof activeImagePage==='function') ? activeImagePage() : null;
   let base = S.spec.datum || 100;
   // Priority 1: user drew a datum square
-  if(S.datumRect && S.datumRect.w > 0){
-    base = S.datumRect.w * S.datumRect.h;
+  const dr = (_page && _page.datumRect && _page.datumRect.w > 0) ? _page.datumRect : (S.datumRect && S.datumRect.w > 0 ? S.datumRect : null);
+  if(dr){
+    base = dr.w * dr.h;
   } else if(S.imgMode && S.imgState.image && S.imgState.scalePxPerMm && S.imgState.fitScale){
     // Priority 2: image mode with calibrated scale → full image area
     const natPxMm = S.imgState.scalePxPerMm / (S.imgState.fitScale || 1);
@@ -3711,20 +3712,37 @@ function datumHandleAtCanvas(cx, cy){
   return null;
 }
 
-// Apply datum resize from handle name + delta-mm from original snapshot
+// Apply datum resize from handle name + delta-mm from original snapshot (enforcing square constraint)
 function _applyDatumResize(handle, dxmm, dymm, origDatum){
   let {x, y, w, h} = origDatum;
-  if(handle==='nw'){ x+=dxmm; y+=dymm; w-=dxmm; h-=dymm; }
-  else if(handle==='ne'){ w+=dxmm; y+=dymm; h-=dymm; }
-  else if(handle==='sw'){ x+=dxmm; w-=dxmm; h+=dymm; }
-  else if(handle==='se'){ w+=dxmm; h+=dymm; }
-  else if(handle==='n'){ y+=dymm; h-=dymm; }
-  else if(handle==='s'){ h+=dymm; }
-  else if(handle==='e'){ w+=dxmm; }
-  else if(handle==='w'){ x+=dxmm; w-=dxmm; }
-  // Enforce minimum 0.5 mm
-  if(w < 0.5){ if(handle.includes('w')){ x = origDatum.x + origDatum.w - 0.5; } w = 0.5; }
-  if(h < 0.5){ if(handle.includes('n')){ y = origDatum.y + origDatum.h - 0.5; } h = 0.5; }
+  let cw = w, ch = h;
+  if(handle.includes('e')) cw = w + dxmm;
+  else if(handle.includes('w')) cw = w - dxmm;
+  if(handle.includes('s')) ch = h + dymm;
+  else if(handle.includes('n')) ch = h - dymm;
+
+  let side;
+  if(handle === 'e' || handle === 'w') side = Math.max(0.5, cw);
+  else if(handle === 'n' || handle === 's') side = Math.max(0.5, ch);
+  else side = Math.max(0.5, Math.max(cw, ch));
+
+  if(handle === 'se'){
+    w = side; h = side; x = origDatum.x; y = origDatum.y;
+  } else if(handle === 'sw'){
+    w = side; h = side; x = origDatum.x + origDatum.w - side; y = origDatum.y;
+  } else if(handle === 'ne'){
+    w = side; h = side; x = origDatum.x; y = origDatum.y + origDatum.h - side;
+  } else if(handle === 'nw'){
+    w = side; h = side; x = origDatum.x + origDatum.w - side; y = origDatum.y + origDatum.h - side;
+  } else if(handle === 'e'){
+    w = side; h = side; x = origDatum.x; y = origDatum.y + origDatum.h/2 - side/2;
+  } else if(handle === 'w'){
+    w = side; h = side; x = origDatum.x + origDatum.w - side; y = origDatum.y + origDatum.h/2 - side/2;
+  } else if(handle === 's'){
+    w = side; h = side; x = origDatum.x + origDatum.w/2 - side/2; y = origDatum.y;
+  } else if(handle === 'n'){
+    w = side; h = side; x = origDatum.x + origDatum.w/2 - side/2; y = origDatum.y + origDatum.h - side;
+  }
   S.datumRect = { x, y, w, h };
 }
 
@@ -4116,7 +4134,10 @@ function _silentReEvalActivePage(){
       netPct: data.pct,
       netPoreCount: pores.length,
       netDatum: evalDatum,
-      hasExclZone: exclZonesCount > 0
+      hasExclZone: exclZonesCount > 0,
+      hasDatum: !!pageDatum,
+      datumArea: evalDatum,
+      poresInDatum: pores.length
     };
     S.verdict = page.verdict;
     S.evaluated = true;
@@ -4490,7 +4511,10 @@ async function evaluateAllSpecs(silent){
         netPct: data.pct,
         netPoreCount: pores.length,
         netDatum: data.net_datum || (pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : metrics.datum || (spec.datum||100)),
-        hasExclZone: exclZonesCount > 0
+        hasExclZone: exclZonesCount > 0,
+        hasDatum: !!pageDatum,
+        datumArea: data.net_datum || (pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : metrics.datum || (spec.datum||100)),
+        poresInDatum: pores.length
       };
       page.evaluated = true;
       const updatedMap = new Map();
@@ -4707,7 +4731,10 @@ async function runSelectedEval(mode){
         netPct: data.pct,
         netPoreCount: pores.length,
         netDatum: data.net_datum || (pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : metrics.datum || (tab.spec.datum||100)),
-        hasExclZone: exclZonesCount > 0
+        hasExclZone: exclZonesCount > 0,
+        hasDatum: !!pageDatum,
+        datumArea: data.net_datum || (pageDatum ? +(pageDatum.w*pageDatum.h).toFixed(2) : metrics.datum || (tab.spec.datum||100)),
+        poresInDatum: pores.length
       };
       page.evaluated = true;
 
@@ -5172,7 +5199,10 @@ function buildImageReportSection(tab, page, spec, specIndex, imageIndex){
     netPct: data.pct,
     netPoreCount: pores.length,
     netDatum: evalDatum,
-    hasExclZone: exclZonesCount > 0
+    hasExclZone: exclZonesCount > 0,
+    hasDatum: !!pageDatum,
+    datumArea: evalDatum,
+    poresInDatum: pores.length
   };
   page.evaluated = true;
 
@@ -5630,7 +5660,7 @@ function _renderDatumExclSection(v, lim){
         </div>
         <div>
           <div style="font-size:9px;color:var(--dim);margin-bottom:2px">Pores in Datum</div>
-          <div style="font-size:11px;font-weight:600;color:var(--tx)">${hasDatum ? (v.poresInDatum||0) : netN}</div>
+          <div style="font-size:11px;font-weight:600;color:var(--tx)">${hasDatum ? (v.poresInDatum !== undefined ? v.poresInDatum : v.netPoreCount || 0) : netN}</div>
         </div>
         <div>
           <div style="font-size:9px;color:var(--dim);margin-bottom:2px">Full Image</div>
