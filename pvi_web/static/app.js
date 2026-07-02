@@ -2316,6 +2316,8 @@ function bindCanvasEvents(){
     } else if(S.tool==='exclude_circle'){
       S._exclDraw={active:true,type:'circle',ox:mm.x,oy:mm.y,cx:mm.x,cy:mm.y,r:0};
       isPointerDown=true; drawCanvas();
+    } else if(S.tool==='exclude_wand'){
+      _executeMagicWand(mm.x, mm.y);
     } else if(S.tool==='datum' || (S.tool==='select' && S.datumRect && S.datumRect.w > 0)){
       if(S.datumRect && S.datumRect.w > 0){
         // 1. Check resize handles first
@@ -2898,8 +2900,13 @@ function setTool(t){
   if(exclRect) exclRect.classList.toggle('on', t==='exclude_rect');
   const exclCircle = document.getElementById('btn-excl-circle');
   if(exclCircle) exclCircle.classList.toggle('on', t==='exclude_circle');
+  const exclWand = document.getElementById('btn-excl-wand');
+  if(exclWand) exclWand.classList.toggle('on', t==='exclude_wand');
   const exclSel = document.getElementById('btn-excl-select');
   if(exclSel) exclSel.classList.toggle('on', t==='excl_select');
+  
+  const wandOpts = document.getElementById('wand-options');
+  if(wandOpts) wandOpts.style.display = (t==='exclude_wand') ? 'flex' : 'none';
 
   const hints={
     place:'Click to place pore · Scroll over pore: resize · Right-click: delete',
@@ -2908,13 +2915,14 @@ function setTool(t){
     datum:'Click and drag to define datum area rectangle',
     exclude_rect:'Click and drag to define rectangular exclusion zone',
     exclude_circle:'Click and drag/extend to define circular exclusion zone',
+    exclude_wand:'Click a dark region/hole to auto-detect its boundary and exclude it',
     excl_select:'Click a zone to select · Drag to move · Drag corner handles to resize · Delete key to remove',
     pan:'Click and drag to pan the canvas'
   };
   document.getElementById('canvas-hint').textContent=hints[t] || '';
   document.getElementById('sb-tool').textContent=t.toUpperCase();
   const wrap=document.getElementById('canvas-wrap');
-  const cursors={place:'crosshair',select:'grab',measure:'crosshair',datum:'cell',exclude_rect:'crosshair',exclude_circle:'crosshair',excl_select:'default',pan:'grab'};
+  const cursors={place:'crosshair',select:'grab',measure:'crosshair',datum:'cell',exclude_rect:'crosshair',exclude_circle:'crosshair',exclude_wand:'crosshair',excl_select:'default',pan:'grab'};
   wrap.style.cursor=cursors[t] || 'default';
   // Hide edit panel when leaving select mode
   if(t!=='select'){ const ep=document.getElementById('pore-edit-panel'); if(ep) ep.style.display='none'; }
@@ -6806,6 +6814,101 @@ function _polyPerimeter(contour){
     perim += Math.hypot(b[0]-a[0], b[1]-a[1]);
   }
   return perim;
+}
+
+// ── Magic Wand Auto-Exclusion Algorithm ──────────────────────────────────────
+function _executeMagicWand(clickXmm, clickYmm) {
+  if (!S.imgState || !S.imgState.image || !S.imgMode) return;
+  const page = activeImagePage();
+  if (!page) return;
+
+  const img = S.imgState.image;
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  
+  if (!S.imgState._wandData || S.imgState._wandData.w !== w) {
+    const osc = document.createElement('canvas');
+    osc.width = w; osc.height = h;
+    const ctx = osc.getContext('2d', {willReadFrequently: true});
+    ctx.drawImage(img, 0, 0);
+    S.imgState._wandData = { w, h, pixels: ctx.getImageData(0,0,w,h).data };
+  }
+  const pixels = S.imgState._wandData.pixels;
+  
+  const scale = S.imgState.scalePxPerMm / (S.imgState.fitScale || 1);
+  const px = Math.round(clickXmm * scale);
+  const py = Math.round(clickYmm * scale);
+  
+  if (px < 0 || px >= w || py < 0 || py >= h) return;
+  
+  const tolInput = document.getElementById('wand-tolerance');
+  const tol = tolInput ? parseInt(tolInput.value, 10) : 30;
+  
+  const startIdx = (py * w + px) * 4;
+  const sR = pixels[startIdx], sG = pixels[startIdx+1], sB = pixels[startIdx+2];
+  
+  const mask = new Uint8Array(w * h);
+  const q = new Uint32Array(w * h);
+  let head = 0, tail = 0;
+  
+  q[tail++] = py * w + px;
+  mask[py * w + px] = 1;
+  let area = 0;
+  
+  const match = (i) => Math.abs(pixels[i]-sR)<=tol && Math.abs(pixels[i+1]-sG)<=tol && Math.abs(pixels[i+2]-sB)<=tol;
+  
+  while(head < tail) {
+    const curr = q[head++];
+    const x = curr % w;
+    const y = Math.floor(curr / w);
+    area++;
+    
+    if(x>0){ const n=curr-1; if(!mask[n] && match(n*4)){ mask[n]=1; q[tail++]=n; } }
+    if(x<w-1){ const n=curr+1; if(!mask[n] && match(n*4)){ mask[n]=1; q[tail++]=n; } }
+    if(y>0){ const n=curr-w; if(!mask[n] && match(n*4)){ mask[n]=1; q[tail++]=n; } }
+    if(y<h-1){ const n=curr+w; if(!mask[n] && match(n*4)){ mask[n]=1; q[tail++]=n; } }
+  }
+  
+  if (area < 50) { toast('Magic Wand: Region too small'); return; }
+  
+  let startX = -1, startY = -1;
+  for(let y=0; y<h && startY===-1; y++){
+    for(let x=0; x<w; x++){
+      if(mask[y*w+x]){ startX=x; startY=y; break; }
+    }
+  }
+  
+  const points = [];
+  if (startX !== -1) {
+    const dirs = [[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]];
+    let cx = startX, cy = startY, dir = 7, count = 0;
+    while (count < w*h) {
+      points.push([cx, cy]);
+      let found = false;
+      for (let i = 0; i < 8; i++) {
+        let ndir = (dir + i) % 8;
+        let nx = cx + dirs[ndir][0], ny = cy + dirs[ndir][1];
+        if (nx>=0 && nx<w && ny>=0 && ny<h && mask[ny*w+nx]) {
+          cx = nx; cy = ny; dir = (ndir + 6) % 8; found = true; break;
+        }
+      }
+      if (!found || (cx === startX && cy === startY)) break;
+      count++;
+    }
+  }
+  
+  if (points.length < 3) return;
+  
+  const step = Math.max(1, Math.floor(points.length / 100)); // Simplify to ~100 points
+  const polyMm = points.filter((_, i) => i % step === 0).map(p => [p[0] / scale, p[1] / scale]);
+  
+  if (!page.exclusionZones) page.exclusionZones = [];
+  pushHistory();
+  page.exclusionZones.push({ type: 'polygon', points: polyMm });
+  toast('Magic Wand exclusion added');
+  S.tool = 'excl_select'; setTool('excl_select');
+  S._exclSelected = page.exclusionZones.length - 1;
+  drawCanvas(); renderExclList();
 }
 
 // ── Blob extraction with PCA + row-scan outline ──────────────────────────────

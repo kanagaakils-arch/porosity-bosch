@@ -485,6 +485,14 @@
         <span class="btn-stack__icon">⭕</span>
         <span class="btn-stack__label">Excl. Circle</span>
       </button>
+      <button class="btn-stack" id="btn-excl-wand" onclick="setTool('exclude_wand')" title="Magic Wand: Click a dark region/hole to auto-detect its boundary and exclude it" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
+        <span class="btn-stack__icon">🪄</span>
+        <span class="btn-stack__label">Magic Wand</span>
+      </button>
+      <div id="wand-options" style="display:none; align-items:center; gap:4px; margin-left:4px; margin-right:4px; border-left:1px solid rgba(239,68,68,.2); padding-left:8px;">
+        <span style="font-size:10px;color:#ef4444;">Tol:</span>
+        <input type="range" id="wand-tolerance" min="5" max="100" value="30" style="width:50px" title="Wand tolerance (lower = stricter match)">
+      </div>
       <button class="btn-stack" id="btn-excl-select" onclick="setTool('excl_select')" title="Select, move and resize existing exclusion zones" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
         <span class="btn-stack__icon">✏️</span>
         <span class="btn-stack__label">Edit Zones</span>
