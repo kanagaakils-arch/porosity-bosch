@@ -471,6 +471,7 @@
         <span id="detect-min-dia-val" style="font-size:10px;font-weight:700;width:38px">0.10mm</span>
       </div>
       <button class="btn-hz" style="font-size:9px;padding:2px 7px;position:relative" onclick="toggleDetectAdvanced()" id="btn-adv-toggle" title="Show/hide advanced parameters">⚙ Advanced ▾</button>
+      <button class="btn-hz" id="btn-detect-wand" onclick="setTool('wand_pore')" title="Magic Wand Pore: Click any dark shrinkage cavity/void to auto-detect contour and include in porosity calculation" style="color:#d97706;border:1px solid rgba(217,119,6,.4);background:rgba(217,119,6,.08);margin-left:4px">🪄 Wand Pore</button>
     </div>
     <div class="tb-sep"></div>
 
@@ -485,9 +486,9 @@
         <span class="btn-stack__icon">⭕</span>
         <span class="btn-stack__label">Excl. Circle</span>
       </button>
-      <button class="btn-stack" id="btn-excl-wand" onclick="setTool('exclude_wand')" title="Magic Wand: Click a dark region/hole to auto-detect its boundary and exclude it" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
+      <button class="btn-stack" id="btn-excl-wand" onclick="setTool('exclude_wand')" title="Magic Wand Exclude: Click a dark background/boundary to auto-detect boundary and EXCLUDE it" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
         <span class="btn-stack__icon">🪄</span>
-        <span class="btn-stack__label">Magic Wand</span>
+        <span class="btn-stack__label">Wand Excl</span>
       </button>
       <div id="wand-options" style="display:none; align-items:center; gap:4px; margin-left:4px; margin-right:4px; border-left:1px solid rgba(239,68,68,.2); padding-left:8px;">
         <span style="font-size:10px;color:#ef4444;">Tol:</span>
@@ -708,6 +709,7 @@
     <div class="tb-group">
       <span class="tb-lbl">PORES:</span>
       <button class="btn-hz" id="tool-place" onclick="setTool('place')" title="Click canvas to place pore">⊕ Place</button>
+      <button class="btn-hz" id="tool-wand-pore" onclick="setTool('wand_pore')" title="Magic Wand Pore: Click dark void/shrinkage cavity to auto-detect irregular contour and add as Pore" style="color:#d97706;border:1px solid rgba(217,119,6,.4);background:rgba(217,119,6,.08)">🪄 Wand Pore</button>
       <div class="slider-group" title="Pore diameter for next placed pore" style="color:#374151;margin-left:2px">
         <span style="font-size:9px;font-weight:700;color:var(--dim)">Φ</span>
         <input type="range" id="phi-slider" min="0.2" max="4.0" step="0.05" value="1.0" oninput="S.nextPhi=+this.value;document.getElementById('phi-disp').textContent=S.nextPhi.toFixed(2)" style="width:60px">

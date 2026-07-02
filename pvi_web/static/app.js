@@ -2896,6 +2896,10 @@ function setTool(t){
     const b=document.getElementById('tool-'+tt);
     if(b) b.classList.toggle('on',tt===t);
   });
+  const wandPore1 = document.getElementById('tool-wand-pore');
+  if(wandPore1) wandPore1.classList.toggle('on', t==='wand_pore');
+  const wandPore2 = document.getElementById('btn-detect-wand');
+  if(wandPore2) wandPore2.classList.toggle('on', t==='wand_pore');
   const exclRect = document.getElementById('btn-excl-rect');
   if(exclRect) exclRect.classList.toggle('on', t==='exclude_rect');
   const exclCircle = document.getElementById('btn-excl-circle');
@@ -2906,10 +2910,11 @@ function setTool(t){
   if(exclSel) exclSel.classList.toggle('on', t==='excl_select');
   
   const wandOpts = document.getElementById('wand-options');
-  if(wandOpts) wandOpts.style.display = (t==='exclude_wand') ? 'flex' : 'none';
+  if(wandOpts) wandOpts.style.display = (t==='exclude_wand' || t==='wand_pore') ? 'flex' : 'none';
 
   const hints={
     place:'Click to place pore · Scroll over pore: resize · Right-click: delete',
+    wand_pore:'Magic Wand Pore: Click dark void/shrinkage cavity to auto-detect contour and include as Pore',
     select:'Click pore to select + drag to move · Scroll over pore: resize · Edit panel appears below registry',
     measure:'Click point 1, then point 2 to measure edge-to-edge distance',
     datum:'Click and drag to define datum area rectangle',
@@ -2922,7 +2927,7 @@ function setTool(t){
   document.getElementById('canvas-hint').textContent=hints[t] || '';
   document.getElementById('sb-tool').textContent=t.toUpperCase();
   const wrap=document.getElementById('canvas-wrap');
-  const cursors={place:'crosshair',select:'grab',measure:'crosshair',datum:'cell',exclude_rect:'crosshair',exclude_circle:'crosshair',exclude_wand:'crosshair',excl_select:'default',pan:'grab'};
+  const cursors={place:'crosshair',wand_pore:'crosshair',select:'grab',measure:'crosshair',datum:'cell',exclude_rect:'crosshair',exclude_circle:'crosshair',exclude_wand:'crosshair',excl_select:'default',pan:'grab'};
   wrap.style.cursor=cursors[t] || 'default';
   // Hide edit panel when leaving select mode
   if(t!=='select'){ const ep=document.getElementById('pore-edit-panel'); if(ep) ep.style.display='none'; }
@@ -6949,15 +6954,15 @@ function _polyPerimeter(contour){
   return perim;
 }
 
-// ── Magic Wand Auto-Exclusion Algorithm ──────────────────────────────────────
-function _executeMagicWand(canvasX, canvasY) {
-  if (!S.imgState || !S.imgState.image || !S.imgMode) return;
+// ── Shared Magic Wand Flood-Fill & Boundary Extraction ───────────────────────
+function _wandExtractPolygonMm(canvasX, canvasY, minAreaPx = 30) {
+  if (!S.imgState || !S.imgState.image || !S.imgMode) return null;
   if (!S.imgState.scalePxPerMm) {
     if(typeof toast==='function') toast('Please set image scale first before using Magic Wand');
-    return;
+    return null;
   }
   const page = activeImagePage();
-  if (!page) return;
+  if (!page) return null;
 
   const img = S.imgState.image;
   const w = img.naturalWidth;
@@ -6971,7 +6976,7 @@ function _executeMagicWand(canvasX, canvasY) {
 
   if (px < 0 || px >= w || py < 0 || py >= h) {
     if(typeof toast==='function') toast('Click outside image boundary');
-    return;
+    return null;
   }
   
   if (!S.imgState._wandData || S.imgState._wandData.w !== w) {
@@ -7011,7 +7016,7 @@ function _executeMagicWand(canvasX, canvasY) {
     if(y<h-1){ const n=curr+w; if(!mask[n] && match(n*4)){ mask[n]=1; q[tail++]=n; } }
   }
   
-  if (area < 50) { if(typeof toast==='function') toast('Magic Wand: Region too small'); return; }
+  if (area < minAreaPx) { if(typeof toast==='function') toast('Magic Wand: Region too small'); return null; }
   
   let startX = -1, startY = -1;
   for(let y=0; y<h && startY===-1; y++){
@@ -7039,14 +7044,22 @@ function _executeMagicWand(canvasX, canvasY) {
     }
   }
   
-  if (points.length < 3) return;
+  if (points.length < 3) return null;
   
   const step = Math.max(1, Math.floor(points.length / 100)); // Simplify to ~100 points
   const polyMm = points.filter((_, i) => i % step === 0).map(p => {
     const ptMm = canvasToMm(ix + p[0] * fit, iy + p[1] * fit);
-    return { x: parseFloat(ptMm.x.toFixed(2)), y: parseFloat(ptMm.y.toFixed(2)) };
+    return { x: parseFloat(ptMm.x.toFixed(4)), y: parseFloat(ptMm.y.toFixed(4)) };
   });
-  
+  return polyMm;
+}
+
+// ── Magic Wand Auto-Exclusion Algorithm ──────────────────────────────────────
+function _executeMagicWand(canvasX, canvasY) {
+  const polyMm = _wandExtractPolygonMm(canvasX, canvasY, 50);
+  if (!polyMm || polyMm.length < 3) return;
+  const page = activeImagePage();
+  if (!page) return;
   if (!page.exclusionZones) page.exclusionZones = [];
   pushHistory();
   page.exclusionZones.push({ type: 'polygon', points: polyMm });
@@ -7054,6 +7067,44 @@ function _executeMagicWand(canvasX, canvasY) {
   S.tool = 'excl_select'; setTool('excl_select');
   S._exclSelected = page.exclusionZones.length - 1;
   drawCanvas(); renderExclList(); updatePoreRegistry();
+}
+
+// ── Magic Wand Pore Detection Algorithm ──────────────────────────────────────
+function _executeWandPore(canvasX, canvasY) {
+  const polyMm = _wandExtractPolygonMm(canvasX, canvasY, 15);
+  if (!polyMm || polyMm.length < 3) return;
+  const page = activeImagePage();
+  if (!page) return;
+  if (!page.pores) page.pores = [];
+
+  let sumX = 0, sumY = 0;
+  polyMm.forEach(p => { sumX += p.x; sumY += p.y; });
+  const centerMmX = sumX / polyMm.length;
+  const centerMmY = sumY / polyMm.length;
+  
+  const contourMm = polyMm.map(p => [+(p.x - centerMmX).toFixed(4), +(p.y - centerMmY).toFixed(4)]);
+  const areaMm2 = polyArea(polyMm);
+  const diaMm = Math.sqrt(areaMm2 / Math.PI) * 2;
+  
+  const pore = {
+    id: 'p_' + Math.random().toString(36).substr(2, 9),
+    x: +centerMmX.toFixed(3),
+    y: +centerMmY.toFixed(3),
+    dia: +diaMm.toFixed(3),
+    type: S.poreType || 'shrink',
+    zone: typeof _zoneForY === 'function' ? _zoneForY(centerMmY) : '',
+    _contour: contourMm.length >= 4 ? contourMm : null,
+    _effectiveArea: +areaMm2.toFixed(4),
+    _effectiveDia: +diaMm.toFixed(3),
+    _detectMeta: { confidence: 1.0, circularity: 0.5, aspect: 1.0, contrast: 0.5, edgeGrad: 0.5 }
+  };
+  
+  pushHistory();
+  page.pores.push(pore);
+  if(typeof toast === 'function') toast(`Wand Pore detected: ${areaMm2.toFixed(2)} mm² (Ø${diaMm.toFixed(2)} mm)`);
+  S.selectedId = pore.id;
+  setTool('select');
+  drawCanvas(); updatePoreRegistry(); updateLiveMetrics();
 }
 
 // ── Blob extraction with PCA + row-scan outline ──────────────────────────────
