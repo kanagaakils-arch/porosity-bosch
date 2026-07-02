@@ -3068,14 +3068,16 @@ function effectivePores(){
   let _ap=AP();
   const _pg = (typeof activeImagePage==='function') ? activeImagePage() : null;
   const dr = (_pg && _pg.datumRect && _pg.datumRect.w > 0) ? _pg.datumRect : (S.datumRect && S.datumRect.w > 0 ? S.datumRect : null);
-  // Normalise cropped pores: use effective dia for metric calculations
+  // Normalise cropped pores: use effective dia for area calcs, keep original for U filter
   const normalised = _ap.map(p=>{
     const cs = _poreExclCropStatus(p, _pg);
     if(cs.status==='full') return null; // fully excluded
-    if(cs.status==='partial') return Object.assign({}, p, {dia: cs.effectiveDia, _isCropped:true});
-    return p;
+    const rawDia = p._rawDia || p.dia;
+    if(cs.status==='partial') return Object.assign({}, p, {dia: cs.effectiveDia, _rawDia: rawDia, _isCropped:true});
+    return Object.assign({}, p, {_rawDia: rawDia});
   }).filter(Boolean);
-  return S.spec.u>0 ? normalised.filter(p=>(p.dia+0.005)>=S.spec.u) : normalised;
+  // Filter by ORIGINAL measured diameter (before cropping), not by the clipped effective dia
+  return S.spec.u>0 ? normalised.filter(p=>((p._rawDia||p.dia)+0.005)>=S.spec.u) : normalised;
 }
 
 
@@ -3530,7 +3532,9 @@ function _poreOverlapsDatum(p, dr){
   return !(maxX < dr.x || minX > dr.x + dr.w || maxY < dr.y || minY > dr.y + dr.h);
 }
 
-// 'full'    = pore is entirely inside a zone → exclude completely
+// 'full'    = pore is entirely inside an exclusion zone or completely outside datum → exclude completely
+// 'partial' = pore boundary crosses a zone/datum edge → crop & count with reduced area
+// 'none'    = pore is untouched by any zone/datum
 function _poreExclCropStatus(p, page){
   const _page = page || ((typeof activeImagePage==='function') ? activeImagePage() : null);
   const zones = (_page && _page.exclusionZones) || [];
@@ -3540,78 +3544,71 @@ function _poreExclCropStatus(p, page){
   const r = p.dia/2;
   const poreArea = Math.PI*r*r;
   
-  // Check if centre is inside any zone or outside datum
-  let centreInside = false;
-  if(dr && !(p.x >= dr.x && p.x <= (dr.x + dr.w) && p.y >= dr.y && p.y <= (dr.y + dr.h))) {
-    centreInside = true;
-  } else {
-    for(const z of zones){
-      if(z.type==='rect'){
-        if(p.x>=z.x&&p.x<=(z.x+z.w)&&p.y>=z.y&&p.y<=(z.y+z.h)) { centreInside=true; break; }
-      } else if(z.type==='circle'){
-        if((p.x-z.cx)**2+(p.y-z.cy)**2 <= z.r**2) { centreInside=true; break; }
-      } else if(z.type==='polygon'){
-        if(pointInPoly(p.x, p.y, z.points||[])) { centreInside=true; break; }
-      }
-    }
-  }
-
-  // Determine bounding box and polygon points if real contour exists
-  let minX = p.x - r, maxX = p.x + r, minY = p.y - r, maxY = p.y + r;
-  let polyPts = null;
-  if(p._contour && p._contour.length >= 3){
-    polyPts = p._contour.map(([dx, dy]) => ({x: p.x + dx, y: p.y + dy}));
-    minX = Math.min(...polyPts.map(pt => pt.x));
-    maxX = Math.max(...polyPts.map(pt => pt.x));
-    minY = Math.min(...polyPts.map(pt => pt.y));
-    maxY = Math.max(...polyPts.map(pt => pt.y));
-  }
-
-  // Use a 25x25 grid over the pore bounding box for accurate overlap area
-  const steps = 25;
-  const stepX = (maxX - minX) / steps;
-  const stepY = (maxY - minY) / steps;
+  // Compute overlap fraction using a 20×20 grid over the pore circle bounding box.
+  // Each grid cell is only counted if it falls inside the pore circle (consistent area basis).
+  const steps = 20;
+  const step = (2 * r) / steps;
   let insideCount = 0;
   let totalGridCells = 0;
+  let centreInside = false;
 
-  for(let i=0; i<steps; i++){
-    const px = minX + (i + 0.5) * stepX;
-    for(let j=0; j<steps; j++){
-      const py = minY + (j + 0.5) * stepY;
-      const inPore = polyPts ? pointInPoly(px, py, polyPts) : ((px - p.x)**2 + (py - p.y)**2 <= r*r);
-      if(inPore){
-        totalGridCells++;
-        let insideExcl = false;
-        if(dr && !(px >= dr.x && px <= (dr.x + dr.w) && py >= dr.y && py <= (dr.y + dr.h))) {
-          insideExcl = true;
-        } else {
-          for(let z=0; z<zones.length; z++){
-            const zone = zones[z];
-            if(zone.type==='rect'){
-              if(px>=zone.x && px<=(zone.x+zone.w) && py>=zone.y && py<=(zone.y+zone.h)){ insideExcl=true; break; }
-            } else if(zone.type==='circle'){
-              if((px-zone.cx)**2 + (py-zone.cy)**2 <= zone.r**2){ insideExcl=true; break; }
-            } else if(zone.type==='polygon'){
-              if(pointInPoly(px, py, zone.points||[])){ insideExcl=true; break; }
-            }
+  for(let i = 0; i < steps; i++){
+    const px = (p.x - r) + (i + 0.5) * step;
+    for(let j = 0; j < steps; j++){
+      const py = (p.y - r) + (j + 0.5) * step;
+      // Only sample points inside the pore circle
+      if((px - p.x)**2 + (py - p.y)**2 > r*r) continue;
+      totalGridCells++;
+      let insideExcl = false;
+      // Check datum boundary — outside datum = excluded region
+      if(dr && !(px >= dr.x && px <= (dr.x + dr.w) && py >= dr.y && py <= (dr.y + dr.h))){
+        insideExcl = true;
+      } else {
+        // Check exclusion zones — inside zone = excluded region
+        for(let z = 0; z < zones.length; z++){
+          const zone = zones[z];
+          if(zone.type === 'rect'){
+            if(px >= zone.x && px <= (zone.x+zone.w) && py >= zone.y && py <= (zone.y+zone.h)){ insideExcl=true; break; }
+          } else if(zone.type === 'circle'){
+            if((px-zone.cx)**2 + (py-zone.cy)**2 <= zone.r**2){ insideExcl=true; break; }
+          } else if(zone.type === 'polygon'){
+            if(pointInPoly(px, py, zone.points||[])){ insideExcl=true; break; }
           }
         }
-        if(insideExcl) insideCount++;
+      }
+      if(insideExcl) insideCount++;
+    }
+  }
+
+  // Check if pore centre itself is inside any exclusion zone (for centreInside flag)
+  if(zones.length){
+    for(const z of zones){
+      if(z.type==='rect'){
+        if(p.x>=z.x&&p.x<=(z.x+z.w)&&p.y>=z.y&&p.y<=(z.y+z.h)){ centreInside=true; break; }
+      } else if(z.type==='circle'){
+        if((p.x-z.cx)**2+(p.y-z.cy)**2 <= z.r**2){ centreInside=true; break; }
+      } else if(z.type==='polygon'){
+        if(pointInPoly(p.x, p.y, z.points||[])){ centreInside=true; break; }
       }
     }
   }
-  
+
   const exclFractionGrid = totalGridCells > 0 ? insideCount / totalGridCells : 0;
-  const totalIntersect = poreArea * exclFractionGrid;
-  
-  if(totalIntersect <= 0) return {status:'none', effectiveDia:p.dia, effectiveArea:poreArea, fraction:1, centreInside};
-  const effectiveArea = Math.max(0, poreArea - totalIntersect);
+  if(exclFractionGrid <= 0) return {status:'none', effectiveDia:p.dia, effectiveArea:poreArea, fraction:1, centreInside};
+
+  const effectiveArea = Math.max(0, poreArea * (1 - exclFractionGrid));
   const fraction = effectiveArea / poreArea;
-  
-  if(fraction < 0.02) return {status:'full', effectiveDia:0, effectiveArea:0, fraction:0, centreInside};
+
+  // Fully excluded: almost nothing left (<2%) OR pore centre is inside an exclusion zone
+  if(fraction < 0.02 || (centreInside && zones.length > 0)) return {status:'full', effectiveDia:0, effectiveArea:0, fraction:0, centreInside};
+  // Completely excluded by datum: the entire pore is outside
+  if(exclFractionGrid >= 0.98) return {status:'full', effectiveDia:0, effectiveArea:0, fraction:0, centreInside};
+
   const effectiveDia = 2*Math.sqrt(effectiveArea/Math.PI);
   return {status:'partial', effectiveDia, effectiveArea, fraction, centreInside};
 }
+
+
 
 // Legacy helper — keeps backward compat: true only when pore is fully inside a zone
 function _poreInExclZone(p, page){
@@ -4225,14 +4222,19 @@ function _silentReEvalActivePage(){
 // ═══════════════════════════════════════════════════════════════════════════
 function _effectivePores(pores, spec){
   const u = spec.u || 0;
-  // Normalise: for cropped pores, use _effectiveDia as the working dia so all
-  // downstream calcs (area, max-phi, gap) reflect the cropped outside-zone portion.
-  const normalised = pores.map(p =>
-    p._isCropped && p._effectiveDia != null
-      ? Object.assign({}, p, { dia: p._effectiveDia })
-      : p
-  );
-  return u > 0 ? normalised.filter(p => (p.dia+0.005) >= u) : normalised;
+  // Normalise: for cropped pores, substitute effectiveDia as working dia so area calcs
+  // reflect only the inside-datum portion. But filter by the ORIGINAL measured diameter
+  // (p._rawDia or p.dia) — a partial pore should not disappear just because its clipped
+  // diameter is slightly below U; the original measurement determines if it is counted.
+  const normalised = pores.map(p => {
+    const rawDia = p._rawDia || p.dia; // original full diameter before any cropping
+    if(p._isCropped && p._effectiveDia != null){
+      return Object.assign({}, p, { dia: p._effectiveDia, _rawDia: rawDia });
+    }
+    return Object.assign({}, p, { _rawDia: rawDia });
+  });
+  // Apply U threshold against the original (uncropped) diameter
+  return u > 0 ? normalised.filter(p => (p._rawDia + 0.005) >= u) : normalised;
 }
 
 function _getZone(y, wallH, poreOffset, specT){
@@ -4253,7 +4255,11 @@ function _calcPorosity(pores, spec, datum){
   // datum MUST be passed explicitly — never falls back to getEffectiveDatum() to
   // avoid double-subtracting exclusion area on an already-filtered pore list.
   const eff = _effectivePores(pores, spec);
-  const total = eff.reduce((s, p) => s + Math.PI * (p.dia / 2) ** 2, 0);
+  // Use effective area for cropped pores, circle area for regular pores
+  const total = eff.reduce((s, p) => {
+    const d = p.dia; // already set to effectiveDia for cropped pores by _effectivePores
+    return s + Math.PI * (d / 2) ** 2;
+  }, 0);
   return total / Math.max(datum || 0.01, 0.01) * 100;
 }
 

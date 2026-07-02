@@ -85,9 +85,19 @@ def analyse_zone(pores: List[PoreModel], spec: SpecModel, zone: str) -> dict:
 
 
 def effective_pores(pores: List[PoreModel], spec: SpecModel) -> List[PoreModel]:
-    """Exclude pores below ignore threshold U (§3.2)."""
+    """Exclude pores below ignore threshold U (§3.2).
+    Uses raw (pre-cropping) diameter so that boundary-straddling pores are not
+    eliminated by the U filter due to their clipped effective diameter."""
     u = spec.u
-    return [p for p in pores if p.dia >= u] if u > 0 else list(pores)
+    if u <= 0:
+        return list(pores)
+    result = []
+    for p in pores:
+        # Use the original measured diameter (_raw_dia) if available, else fall back to p.dia
+        raw_dia = getattr(p, '_raw_dia', p.dia)
+        if raw_dia >= u:
+            result.append(p)
+    return result
 
 
 def get_zone(y: float, wall_h_mm: float, offset_mm: float = 0.0) -> str:
@@ -384,6 +394,9 @@ def pore_excl_crop_status(p: PoreModel, zones: list, datum_rect: Optional[dict] 
     
     if fraction < 0.02:
         return {'status': 'full', 'effectiveDia': 0.0, 'effectiveArea': 0.0, 'fraction': 0.0, 'centreInside': centre_inside}
+    # If pore centre is inside an exclusion zone (not datum), treat as fully excluded
+    if centre_inside and exclusion_zones:
+        return {'status': 'full', 'effectiveDia': 0.0, 'effectiveArea': 0.0, 'fraction': 0.0, 'centreInside': centre_inside}
         
     effective_dia = 2 * math.sqrt(effective_area / math.pi)
     return {'status': 'partial', 'effectiveDia': effective_dia, 'effectiveArea': effective_area, 'fraction': fraction, 'centreInside': centre_inside}
@@ -482,6 +495,7 @@ def run_evaluation(
             )
             # Add custom markers
             p_copy._effectiveDia = cs['effectiveDia']
+            p_copy._raw_dia = p.dia  # preserve original measured diameter for U threshold
             p_copy._cropFraction = cs['fraction']
             p_copy._isCropped = True
             net_pores.append(p_copy)
@@ -495,6 +509,7 @@ def run_evaluation(
                 zone=p.zone
             )
             p_copy._effectiveDia = p.dia
+            p_copy._raw_dia = p.dia
             p_copy._cropFraction = 1.0
             p_copy._isCropped = False
             net_pores.append(p_copy)
