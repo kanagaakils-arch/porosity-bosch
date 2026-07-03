@@ -7109,26 +7109,39 @@ function _wandExtractAllComponents(canvasX, canvasY, mode) {
   // Label connected components
   const lbl = _wandLabelComponents(mask, w, h);
 
-  // Gather component stats: area, top-left pixel (for contour start)
+  // Gather component stats: area, top-left, and edge-touching flag
+  const edgeMargin = Math.max(3, Math.round(Math.min(w, h) * 0.005)); // 0.5% of shorter side
   const compStats = {};
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const l = lbl[y*w+x]; if (!l) continue;
-    if (!compStats[l]) compStats[l] = { area: 0, startX: x, startY: y };
+    if (!compStats[l]) compStats[l] = { area: 0, startX: x, startY: y, edgeTouching: false };
     compStats[l].area++;
+    // Edge-touching: within edgeMargin pixels of any image border
+    if (x <= edgeMargin || x >= w - edgeMargin || y <= edgeMargin || y >= h - edgeMargin)
+      compStats[l].edgeTouching = true;
     // Track topmost then leftmost pixel as contour start
     if (y < compStats[l].startY || (y===compStats[l].startY && x<compStats[l].startX)) {
       compStats[l].startX = x; compStats[l].startY = y;
     }
   }
 
-  // Sort by area descending, filter minimum area, cap at 15 zones
+  // ── For EXCLUSION mode (non-contiguous): keep ONLY edge-touching components ──
+  // Casting outer boundary always reaches the image border; internal grain patterns do NOT.
+  // This prevents the wand from selecting scattered dark grain pixels inside the casting.
+  const filterEdgeOnly = (mode === 'excl' && !isContiguous);
+
+  // Sort by area descending, filter minimum area, optionally restrict to edge-touching, cap at 15 zones
   const components = Object.entries(compStats)
     .filter(([, s]) => s.area >= minAreaPx)
+    .filter(([, s]) => !filterEdgeOnly || s.edgeTouching)
     .sort(([, a], [, b]) => b.area - a.area)
     .slice(0, 15);
 
   if (!components.length) {
-    if (typeof toast==='function') toast('No region large enough found — lower Min Area or raise Color Tol');
+    const hint = filterEdgeOnly
+      ? 'No edge-touching region found — try Contiguous mode or click closer to the image border'
+      : 'No region large enough found — lower Min Area or raise Color Tol';
+    if (typeof toast==='function') toast(hint);
     return null;
   }
 
@@ -7423,34 +7436,40 @@ function _loadOpenCV() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// BOUNDARY SUPPRESSOR — remove the largest blob (casting wall) before pore
-// detection to avoid false pore hits on the dark structural outer boundary.
+// BOUNDARY SUPPRESSOR — remove ALL blobs touching the image border.
+// The casting outer wall/structural boundary ALWAYS reaches the image edge.
+// Internal pores and grain never touch the border (after morphological open).
+// This is more reliable than size-based suppression which can fail when the
+// boundary is fragmented into several connected components.
 // ═══════════════════════════════════════════════════════════════════════════
-function _removeLargestBlob(bin, W, H) {
+function _removeEdgeTouchingBlobs(bin, W, H) {
+  const margin = 2; // pixels from border to consider 'edge-touching'
   // 1. Label all components
   const lbl = _labelCC(bin, W, H);
-  // 2. Count area per label
-  const area = {};
-  for (let i = 0; i < lbl.length; i++) {
-    const l = lbl[i]; if (!l) continue;
-    area[l] = (area[l] || 0) + 1;
+  // 2. Find all labels that touch the image border
+  const edgeLabels = new Set();
+  for (let x = 0; x < W; x++) {
+    for (let m = 0; m < margin; m++) {
+      const tl = lbl[m * W + x];       if (tl) edgeLabels.add(tl);
+      const bl = lbl[(H-1-m) * W + x]; if (bl) edgeLabels.add(bl);
+    }
   }
-  // 3. Find the label with the largest area
-  let maxLabel = 0, maxArea = 0;
-  for (const [l, a] of Object.entries(area)) {
-    if (a > maxArea) { maxArea = a; maxLabel = +l; }
+  for (let y = 0; y < H; y++) {
+    for (let m = 0; m < margin; m++) {
+      const ll = lbl[y * W + m];       if (ll) edgeLabels.add(ll);
+      const rl = lbl[y * W + W-1-m];   if (rl) edgeLabels.add(rl);
+    }
   }
-  // 4. The largest blob must be a significant fraction of the image to be
-  //    considered "structural". If it is < 10% of image, skip suppression
-  //    (the image is full of small pores — don't strip anything).
-  if (maxArea < W * H * 0.10) return bin;
-  // 5. Zero out largest blob pixels
+  if (!edgeLabels.size) return bin; // nothing touches border → nothing to remove
+  // 3. Zero out all edge-touching blob pixels
   const out = new Uint8Array(bin);
   for (let i = 0; i < lbl.length; i++) {
-    if (lbl[i] === maxLabel) out[i] = 0;
+    if (edgeLabels.has(lbl[i])) out[i] = 0;
   }
   return out;
 }
+// Keep old name as alias for any remaining callers
+const _removeLargestBlob = _removeEdgeTouchingBlobs;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CLAHE (Contrast-Limited Adaptive Histogram Equalization) — JS fallback
@@ -7548,10 +7567,13 @@ function autoDetectPores(){
       const blurPasses=+(document.getElementById('detect-blur')?.value||1);
       for(let b=0;b<blurPasses;b++) gray=_gaussianBlur5(gray,W,H);
 
-      // CLAHE — improves local contrast for far better Otsu thresholding
-      // (critical for images with uneven illumination like cross-section X-rays)
-      const tileSize = Math.max(8, Math.round(Math.min(W,H) / 12));
-      const claheImg = _clahe(gray, W, H, tileSize, tileSize, 3.0);
+      // CLAHE — improves local contrast for far better Otsu thresholding.
+      // IMPORTANT: tile size must be LARGER than the expected pore size so CLAHE
+      // normalises illumination but does NOT enhance individual grain boundaries.
+      // tileSize = min_dim/6 targets illumination-level contrast (not grain-level).
+      const tileSize = Math.max(24, Math.round(Math.min(W,H) / 6));
+      // clipLimit 2.0 (conservative) to avoid amplifying casting grain texture
+      const claheImg = _clahe(gray, W, H, tileSize, tileSize, 2.0);
 
       // Sensitivity and Otsu (on CLAHE-equalized image)
       const sens=+document.getElementById('detect-threshold').value;
@@ -7568,9 +7590,9 @@ function autoDetectPores(){
       // Morphological opening (removes small noise bridges) — radius=1 always
       processed=_open(processed,W,H,1);
 
-      // ── Boundary Suppression: remove the largest dark blob (casting wall)
-      // before blob detection to prevent the outer boundary being reported as pores.
-      processed = _removeLargestBlob(processed, W, H);
+      // ── Boundary Suppression: remove ALL blobs touching the image border.
+      // The casting outer wall always extends to the image edge; pores never do.
+      processed = _removeEdgeTouchingBlobs(processed, W, H);
 
       // ── Physical Exclusion Masking during Tracing ──
       // Wipe out pores that fall inside exclusion zones so they are never traced.
@@ -7640,25 +7662,20 @@ function autoDetectPores(){
       // Filter: size, aspect, area, edge
       const imgWMm=W/dsNatPxMm, imgHMm=H/dsNatPxMm;
       const maxAspect=+(document.getElementById('detect-aspect')?.value||8);
-      let valid=blobs.filter(b=>{
+      // Scale-aware minimum: enforce that blob area >= circle of minDiaMm
+      const minPhysAreaPx = Math.PI * Math.pow(minDiaMm * dsNatPxMm / 2, 2);
+      const valid=blobs.filter(b=>{
         if(b.dia<minPxDs||b.dia>maxPxDs) return false;
         if(b.area>maxBlobAreaPx) return false;
+        if(b.area<minPhysAreaPx*0.25) return false; // reject sub-grain noise
         if(b.aspect>=maxAspect) return false;
-        if(edgeReject && b.edgeTouching) return false;
+        // Edge-touching blobs are boundary fragments — always reject
+        if(b.edgeTouching) return false;
         const xMm=b.cx/dsNatPxMm, yMm=b.cy/dsNatPxMm;
         if(xMm<0||xMm>imgWMm||yMm<0||yMm>imgHMm) return false;
         return true;
       });
-      if(!valid.length){
-        valid=blobs.filter(b=>{
-          if(b.dia<minPxDs*0.5||b.dia>maxPxDs*1.5) return false;
-          if(b.area>maxBlobAreaPx*3) return false;
-          if(b.aspect>=maxAspect*2) return false;
-          const xMm=b.cx/dsNatPxMm, yMm=b.cy/dsNatPxMm;
-          if(xMm<0||xMm>imgWMm||yMm<0||yMm>imgHMm) return false;
-          return true;
-        });
-      }
+      // Note: removed over-permissive 0.5× fallback — it accepted grain-level noise.
 
       // Exclusion zones are an evaluation mask, not a destructive detection filter.
       const exclZones = activeImagePage().exclusionZones || [];
