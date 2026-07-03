@@ -2318,6 +2318,10 @@ function bindCanvasEvents(){
       isPointerDown=true; drawCanvas();
     } else if(S.tool==='exclude_wand'){
       _executeMagicWand(p.x, p.y);
+    } else if(S.tool==='wand_pore'){
+      // Wand Pore always uses contiguous flood-fill (never global select)
+      // to capture the exact clicked void rather than scattered similar pixels.
+      _executeWandPore(p.x, p.y);
     } else if(S.tool==='datum' || (S.tool==='select' && S.datumRect && S.datumRect.w > 0)){
       if(S.datumRect && S.datumRect.w > 0){
         // 1. Check resize handles first
@@ -2682,7 +2686,9 @@ function poreAtCanvas(cx,cy){
   const extra = S.imgMode ? 14 : 4;
   return AP().slice().reverse().find(p=>{
     const c=mmToCanvas(p.x,p.y);
-    return Math.hypot(cx-c.x,cy-c.y)<=p.dia*hitScale/2+extra;
+    // Use _effectiveDia when available (wand pores with traced contour) for correct hit radius
+    const dia = p._effectiveDia || p.dia || 0.1;
+    return Math.hypot(cx-c.x,cy-c.y)<=dia*hitScale/2+extra;
   })||null;
 }
 
@@ -2900,6 +2906,9 @@ function setTool(t){
   if(wandPore1) wandPore1.classList.toggle('on', t==='wand_pore');
   const wandPore2 = document.getElementById('btn-detect-wand');
   if(wandPore2) wandPore2.classList.toggle('on', t==='wand_pore');
+  // New select button in DETECT group
+  const selImg = document.getElementById('tool-select-img');
+  if(selImg) selImg.classList.toggle('on', t==='select');
   const exclRect = document.getElementById('btn-excl-rect');
   if(exclRect) exclRect.classList.toggle('on', t==='exclude_rect');
   const exclCircle = document.getElementById('btn-excl-circle');
@@ -2909,8 +2918,9 @@ function setTool(t){
   const exclSel = document.getElementById('btn-excl-select');
   if(exclSel) exclSel.classList.toggle('on', t==='excl_select');
   
+  // Wand options (tol/min-area/contiguous) only for Wand Excl — Wand Pore always uses flood-fill
   const wandOpts = document.getElementById('wand-options');
-  if(wandOpts) wandOpts.style.display = (t==='exclude_wand' || t==='wand_pore') ? 'flex' : 'none';
+  if(wandOpts) wandOpts.style.display = (t==='exclude_wand') ? 'flex' : 'none';
 
   const hints={
     place:'Click to place pore · Scroll over pore: resize · Right-click: delete',
@@ -3094,9 +3104,147 @@ function _editExclReg(idx, prop, val) {
 // ═══════════════════════════════════════════════════
 // PORE REGISTRY
 // ═══════════════════════════════════════════════════
+// ── Area Breakdown: updates the sidebar area analysis panel ─────────────────
+function _updateAreaBreakdown() {
+  const el = id => document.getElementById(id);
+  if (!el('area-image')) return; // panel not in DOM yet
+
+  const page = activeImagePage();
+  const img = S.imgState && S.imgState.image;
+  const scale = S.imgState && S.imgState.scalePxPerMm; // display px per mm
+  const fit   = (S.imgState && S.imgState.fitScale) || 1;
+  const natPxMm = scale ? scale / fit : null;
+
+  // Full image area
+  let imgAreaMm2 = null;
+  if (img && natPxMm) {
+    imgAreaMm2 = (img.naturalWidth / natPxMm) * (img.naturalHeight / natPxMm);
+    el('area-image').textContent = imgAreaMm2.toFixed(1) + ' mm²';
+  } else {
+    el('area-image').textContent = '—';
+  }
+
+  // Datum area
+  const dr = S.datumRect;
+  let datumAreaMm2 = null;
+  if (dr && dr.w > 0) {
+    datumAreaMm2 = Math.abs(dr.w) * Math.abs(dr.h);
+    el('area-datum').textContent = datumAreaMm2.toFixed(2) + ' mm²';
+  } else {
+    el('area-datum').textContent = '—';
+  }
+
+  // Exclusion zones
+  const zones = (page && page.exclusionZones) || [];
+  let totalExclInsideDatumMm2 = 0;
+  const exclRowsEl = el('area-excl-rows');
+  if (exclRowsEl) {
+    exclRowsEl.innerHTML = '';
+    zones.forEach((z, zi) => {
+      let areaMm2 = 0;
+      if (z.type === 'rect') areaMm2 = Math.abs(z.w) * Math.abs(z.h);
+      else if (z.type === 'circle') areaMm2 = Math.PI * z.r * z.r;
+      else if (z.type === 'polygon' && z.points && z.points.length >= 3)
+        areaMm2 = polyArea(z.points);
+      // Check if exclusion zone center overlaps datum
+      let cx = 0, cy = 0;
+      if (z.type === 'rect')    { cx = z.x + z.w/2; cy = z.y + z.h/2; }
+      else if (z.type === 'circle') { cx = z.cx; cy = z.cy; }
+      else if (z.points && z.points.length) {
+        cx = z.points.reduce((s,p)=>s+p.x,0)/z.points.length;
+        cy = z.points.reduce((s,p)=>s+p.y,0)/z.points.length;
+      }
+      const inDatum = dr && dr.w > 0 && cx >= dr.x && cx <= dr.x+dr.w && cy >= dr.y && cy <= dr.y+dr.h;
+      if (inDatum) totalExclInsideDatumMm2 += areaMm2;
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:3px';
+      row.innerHTML = `
+        <div style="display:flex;align-items:center;gap:4px">
+          <div style="width:8px;height:8px;border-radius:2px;background:#ef4444;flex-shrink:0;opacity:${inDatum?1:0.4}"></div>
+          <span style="font-size:9px;color:var(--dim)">Excl #${zi+1} <span style="font-size:8px;opacity:.6">${z.type}</span>${inDatum?' (in datum)':''}</span>
+        </div>
+        <span style="font-size:9px;font-weight:700;color:#ef4444;font-family:monospace">${areaMm2.toFixed(2)} mm²</span>`;
+      exclRowsEl.appendChild(row);
+    });
+  }
+
+  // Net inspection area = datum - exclusions inside datum (or image area if no datum)
+  const netEl = el('area-net');
+  if (datumAreaMm2 !== null) {
+    const net = Math.max(0, datumAreaMm2 - totalExclInsideDatumMm2);
+    netEl.textContent = net.toFixed(2) + ' mm²';
+  } else if (imgAreaMm2 !== null) {
+    const totalExclMm2 = zones.reduce((sum, z) => {
+      if (z.type === 'rect') return sum + Math.abs(z.w) * Math.abs(z.h);
+      if (z.type === 'circle') return sum + Math.PI * z.r * z.r;
+      if (z.type === 'polygon' && z.points) return sum + polyArea(z.points);
+      return sum;
+    }, 0);
+    const net = Math.max(0, imgAreaMm2 - totalExclMm2);
+    netEl.textContent = net.toFixed(2) + ' mm² (no datum)';
+  } else {
+    netEl.textContent = '—';
+  }
+
+  // ── Mini thumbnails ────────────────────────────────────────────────────
+  _renderAreaThumbs(img, zones, dr, fit, natPxMm);
+}
+
+function _renderAreaThumbs(img, zones, dr, fit, natPxMm) {
+  const W = 60, H = 40;
+  ['thumb-image','thumb-excl','thumb-datum'].forEach(id => {
+    const c = document.getElementById(id); if (!c) return;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0,0,W,H);
+    if (!img) return;
+    // Scale factor: fit image into 60×40
+    const sc = Math.min(W / img.naturalWidth, H / img.naturalHeight);
+    const dw = img.naturalWidth * sc, dh = img.naturalHeight * sc;
+    const ox = (W-dw)/2, oy = (H-dh)/2;
+    if (id === 'thumb-image') {
+      ctx.drawImage(img, ox, oy, dw, dh);
+    } else if (id === 'thumb-excl') {
+      // Dim image + highlight exclusion zones
+      ctx.globalAlpha = 0.35; ctx.drawImage(img, ox, oy, dw, dh); ctx.globalAlpha = 1;
+      if (!natPxMm) return;
+      ctx.fillStyle = 'rgba(239,68,68,0.55)';
+      ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 0.8;
+      zones.forEach(z => {
+        ctx.beginPath();
+        if (z.type === 'rect') {
+          ctx.rect(ox + z.x*natPxMm*sc, oy + z.y*natPxMm*sc, z.w*natPxMm*sc, z.h*natPxMm*sc);
+        } else if (z.type === 'circle') {
+          ctx.arc(ox+z.cx*natPxMm*sc, oy+z.cy*natPxMm*sc, z.r*natPxMm*sc, 0, 2*Math.PI);
+        } else if (z.type === 'polygon' && z.points && z.points.length > 2) {
+          ctx.moveTo(ox+z.points[0].x*natPxMm*sc, oy+z.points[0].y*natPxMm*sc);
+          z.points.slice(1).forEach(p => ctx.lineTo(ox+p.x*natPxMm*sc, oy+p.y*natPxMm*sc));
+          ctx.closePath();
+        }
+        ctx.fill(); ctx.stroke();
+      });
+    } else if (id === 'thumb-datum') {
+      ctx.globalAlpha = 0.35; ctx.drawImage(img, ox, oy, dw, dh); ctx.globalAlpha = 1;
+      if (dr && dr.w > 0 && natPxMm) {
+        ctx.fillStyle = 'rgba(34,197,94,0.25)';
+        ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 0.8; ctx.setLineDash([2,2]);
+        ctx.fillRect(ox+dr.x*natPxMm*sc, oy+dr.y*natPxMm*sc, dr.w*natPxMm*sc, dr.h*natPxMm*sc);
+        ctx.strokeRect(ox+dr.x*natPxMm*sc, oy+dr.y*natPxMm*sc, dr.w*natPxMm*sc, dr.h*natPxMm*sc);
+        ctx.setLineDash([]);
+      }
+    }
+  });
+}
+
 function updatePoreRegistry(){
   if(typeof renderDatumRegistry === 'function') renderDatumRegistry();
   if(typeof renderExclRegistry === 'function') renderExclRegistry();
+
+  // ── Area Breakdown Panel ─────────────────────────────────────────────
+  _updateAreaBreakdown();
+
+
   const reg=document.getElementById('pore-registry');
   const eff=effectivePores();
   const evalPores=getPoresForEvaluation(AP());
@@ -3112,6 +3260,7 @@ function updatePoreRegistry(){
   renderImageTabs();
   if(!AP().length){
     reg.innerHTML='<div style="font-size:10px;color:var(--dim);text-align:center;padding:16px">No pores · click canvas to place</div>';
+
     return;
   }
   reg.innerHTML=AP().map((p,i)=>{
@@ -7191,38 +7340,76 @@ function _executeMagicWand(canvasX, canvasY) {
 }
 
 // ── Magic Wand Pore Detection Algorithm ──────────────────────────────────────
+// ALWAYS uses contiguous flood-fill from the click point (not global select).
+// The contiguous checkbox in wand-options only applies to Wand Excl.
 function _executeWandPore(canvasX, canvasY) {
-  const polyMm = _wandExtractPolygonMm(canvasX, canvasY, 15);
-  if (!polyMm || polyMm.length < 3) return;
+  if (!S.imgState || !S.imgState.image || !S.imgMode) return;
+  if (!S.imgState.scalePxPerMm) { toast('Set image scale first', 'warn'); return; }
   const page = activeImagePage();
   if (!page) return;
-  if (!page.pores) page.pores = [];
+
+  const fit = S.imgState.fitScale || 1;
+  const ix = S.imgState.imgX !== undefined ? S.imgState.imgX : 0;
+  const iy = S.imgState.imgY !== undefined ? S.imgState.imgY : 0;
+  const { w, h, pixels } = _wandGetPixels();
+
+  const sx = Math.round((canvasX - ix) / fit);
+  const sy = Math.round((canvasY - iy) / fit);
+  if (sx < 0 || sx >= w || sy < 0 || sy >= h) { toast('Click inside the image', 'warn'); return; }
+
+  const tolInput = document.getElementById('wand-tolerance');
+  const tol = tolInput ? +tolInput.value : 40;
+
+  // Always use flood-fill (contiguous) for pore detection
+  const mask = _wandFloodFill(pixels, w, h, sx, sy, tol);
+
+  // Find the topmost pixel for contour tracing
+  let startX = -1, startY = -1;
+  for (let y = 0; y < h && startY === -1; y++)
+    for (let x = 0; x < w; x++) if (mask[y*w+x]) { startX=x; startY=y; break; }
+  if (startX === -1) { toast('No region found — try a higher tolerance', 'warn'); return; }
+
+  // Count area
+  let areaPx = 0; for (let i = 0; i < mask.length; i++) areaPx += mask[i];
+  const minArea = Math.max(30, (S.imgState.scalePxPerMm / (S.imgState.fitScale||1)) ** 2 * 0.005);
+  if (areaPx < minArea) { toast('Region too small — click directly on the dark void', 'warn'); return; }
+
+  // Trace contour
+  const pts = _wandTraceContour(mask, w, h, startX, startY, 200);
+  if (!pts || pts.length < 3) { toast('Could not trace pore boundary', 'warn'); return; }
+
+  const polyMm = pts.map(([px2, py2]) => {
+    const mm = canvasToMm(ix + px2 * fit, iy + py2 * fit);
+    return { x: parseFloat(mm.x.toFixed(4)), y: parseFloat(mm.y.toFixed(4)) };
+  });
+  if (polyMm.length < 3) return;
 
   let sumX = 0, sumY = 0;
   polyMm.forEach(p => { sumX += p.x; sumY += p.y; });
   const centerMmX = sumX / polyMm.length;
   const centerMmY = sumY / polyMm.length;
-  
+
   const contourMm = polyMm.map(p => [+(p.x - centerMmX).toFixed(4), +(p.y - centerMmY).toFixed(4)]);
   const areaMm2 = polyArea(polyMm);
   const diaMm = Math.sqrt(areaMm2 / Math.PI) * 2;
-  
+
+  if (!page.pores) page.pores = [];
   const pore = {
     id: 'p_' + Math.random().toString(36).substr(2, 9),
     x: +centerMmX.toFixed(3),
     y: +centerMmY.toFixed(3),
     dia: +diaMm.toFixed(3),
     type: S.poreType || 'shrink',
-    zone: typeof _zoneForY === 'function' ? _zoneForY(centerMmY) : '',
+    zone: typeof getPoreZone === 'function' ? getPoreZone({ x: centerMmX, y: centerMmY, dia: diaMm }) : '',
     _contour: contourMm.length >= 4 ? contourMm : null,
     _effectiveArea: +areaMm2.toFixed(4),
     _effectiveDia: +diaMm.toFixed(3),
     _detectMeta: { confidence: 1.0, circularity: 0.5, aspect: 1.0, contrast: 0.5, edgeGrad: 0.5 }
   };
-  
+
   pushHistory();
   page.pores.push(pore);
-  if(typeof toast === 'function') toast(`Wand Pore detected: ${areaMm2.toFixed(2)} mm² (Ø${diaMm.toFixed(2)} mm)`);
+  toast(`🪄 Wand Pore: ${areaMm2.toFixed(3)} mm² · Ø${diaMm.toFixed(3)} mm`);
   S.selectedId = pore.id;
   setTool('select');
   drawCanvas(); updatePoreRegistry(); updateLiveMetrics();
@@ -7527,8 +7714,12 @@ function autoDetectPores(){
   if(!S.imgState.scalePxPerMm){toast('Set Scale first — draw a reference line','warn');return;}
 
   const btn=document.getElementById('btn-autodetect-top');
-
-  btn.textContent='⏳ Detecting…'; btn.disabled=true;
+  const btnTb=document.getElementById('btn-autodetect-tb');
+  const _setDetecting=(v)=>{
+    if(btn){ btn.textContent=v?'⏳ Detecting…':'🔍 Auto Detect'; btn.disabled=v; }
+    if(btnTb){ btnTb.textContent=v?'⏳ Detecting…':'🔍 Auto-Detect'; btnTb.disabled=v; }
+  };
+  _setDetecting(true);
 
   setTimeout(()=>{
     try{
@@ -7701,7 +7892,7 @@ function autoDetectPores(){
         toast(`No pores detected — ${hint} (Otsu=${globalOtsu})`, 'warn');
         S.imgState.autoDetected = true;
         updateHeaderButtons();
-        btn.textContent='🔍 Auto-Detect'; btn.disabled=false; return;
+        _setDetecting(false); return;
       }
 
       pushHistory();
@@ -7759,7 +7950,7 @@ function autoDetectPores(){
       toast('Detection error: '+e.message,'err');
       console.error(e);
     }
-    btn.textContent='🔍 Auto-Detect'; btn.disabled=false;
+    _setDetecting(false);
   },20);
 }
 

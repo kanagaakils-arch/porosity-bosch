@@ -400,13 +400,13 @@
     </button>
   </div>
 
-  <!-- IMAGE TOOLBAR -->
+  <!-- IMAGE TOOLBAR — redesigned for better UX -->
   <div id="img-toolbar" style="position:relative;overflow:visible" class="show">
 
-    <!-- 2. PREPARE — crop, rotate, flip -->
+    <!-- ① PREPARE — image editing tools -->
     <div class="tb-group">
       <span class="tb-lbl">PREPARE:</span>
-      <button class="btn-stack" id="btn-crop" onclick="imgToolActivate('crop')">
+      <button class="btn-stack" id="btn-crop" onclick="imgToolActivate('crop')" title="Crop image">
         <span class="btn-stack__icon" style="color:#ef4444">✂️</span>
         <span class="btn-stack__label">Crop</span>
       </button>
@@ -414,7 +414,7 @@
         <span class="btn-stack__icon">✅</span>
         <span class="btn-stack__label">Apply</span>
       </button>
-      <button class="btn-stack" id="btn-cancelcrop" style="display:none;color:#ef4444" onclick="cancelCrop()" title="Cancel crop selection (Esc)">
+      <button class="btn-stack" id="btn-cancelcrop" style="display:none;color:#ef4444" onclick="cancelCrop()" title="Cancel crop (Esc)">
         <span class="btn-stack__icon">✕</span>
         <span class="btn-stack__label">Cancel</span>
       </button>
@@ -437,82 +437,122 @@
     </div>
     <div class="tb-sep"></div>
 
-    <!-- 4. ENHANCE — brightness / contrast for better detection -->
+    <!-- ② ENHANCE — brightness / contrast -->
     <div class="tb-group">
       <span class="tb-lbl">ENHANCE:</span>
-      <div class="slider-group" style="color:#eab308">
-        <span style="font-size:12px">☀️</span>
-        <input type="range" id="img-brightness" min="0" max="200" value="100" step="5" oninput="applyImageFilters()" style="width:60px">
+      <div class="slider-group" style="color:#eab308" title="Brightness">
+        <span style="font-size:11px">☀️</span>
+        <input type="range" id="img-brightness" min="0" max="200" value="100" step="5" oninput="applyImageFilters()" style="width:55px">
       </div>
-      <div class="slider-group" style="color:#4b5563;margin-left:4px">
-        <span style="font-size:12px">◑</span>
-        <input type="range" id="img-contrast" min="0" max="200" value="100" step="5" oninput="applyImageFilters()" style="width:60px">
+      <div class="slider-group" style="color:#4b5563;margin-left:4px" title="Contrast">
+        <span style="font-size:11px">◑</span>
+        <input type="range" id="img-contrast" min="0" max="200" value="100" step="5" oninput="applyImageFilters()" style="width:55px">
       </div>
     </div>
     <div class="tb-sep"></div>
 
-    <!-- 5. DETECT — run auto-detection -->
-    <div class="tb-group">
-      <span class="tb-lbl">DETECT:</span>
-      <div style="display:flex;gap:3px;align-items:center">
-        <span style="font-size:9px;color:var(--dim)">Preset:</span>
-        <button class="btn-hz" style="font-size:9px;padding:2px 6px" onclick="setDetectPreset('fine')" title="Fine: sensitive, for small gas pores">Fine</button>
-        <button class="btn-hz" style="font-size:9px;padding:2px 6px" onclick="setDetectPreset('balanced')" title="Balanced: good starting point for most castings">Balanced</button>
-        <button class="btn-hz" style="font-size:9px;padding:2px 6px" onclick="setDetectPreset('coarse')" title="Coarse: large shrinkage voids, ignores micro-pores">Coarse</button>
+    <!-- ③ DETECT — auto-detect + manual pore tools -->
+    <div class="tb-group" style="background:rgba(139,92,246,.05);border:1px solid rgba(139,92,246,.18);border-radius:6px;padding:2px 6px;margin:1px 0">
+      <span class="tb-lbl" style="color:#8b5cf6">DETECT:</span>
+
+      <!-- Presets -->
+      <div style="display:flex;gap:2px;align-items:center">
+        <span style="font-size:8px;color:var(--dim)">Preset:</span>
+        <button class="btn-hz" style="font-size:9px;padding:2px 5px" onclick="setDetectPreset('fine')" title="Fine: sensitive, small gas pores">Fine</button>
+        <button class="btn-hz" style="font-size:9px;padding:2px 5px" onclick="setDetectPreset('balanced')" title="Balanced: good for most castings">Balanced</button>
+        <button class="btn-hz" style="font-size:9px;padding:2px 5px" onclick="setDetectPreset('coarse')" title="Coarse: large shrinkage voids">Coarse</button>
       </div>
+
+      <!-- Threshold -->
       <div class="slider-group" title="Detection threshold — 50=Auto (Otsu)" style="color:#8b5cf6">
-        <span style="font-size:9px;font-weight:700">Threshold</span>
-        <input type="range" id="detect-threshold" min="10" max="90" value="50" step="5" oninput="document.getElementById('detect-sens-val').textContent=this.value+(this.value=='50'?' (Auto)':this.value>50?' +'+(this.value-50):' '+(this.value-50))" style="width:56px">
-        <span id="detect-sens-val" style="font-size:10px;font-weight:700;min-width:52px">50 (Auto)</span>
+        <span style="font-size:9px;font-weight:700">Thresh</span>
+        <input type="range" id="detect-threshold" min="10" max="90" value="50" step="5"
+          oninput="document.getElementById('detect-sens-val').textContent=this.value+(this.value=='50'?' (Auto)':this.value>50?' +'+(this.value-50):' '+(this.value-50))"
+          style="width:50px">
+        <span id="detect-sens-val" style="font-size:9px;font-weight:700;min-width:48px">50 (Auto)</span>
       </div>
-      <div class="slider-group" title="Minimum pore diameter to detect (mm)" style="color:#0b7285">
+
+      <!-- Min diameter -->
+      <div class="slider-group" title="Minimum pore diameter (mm)" style="color:#0b7285">
         <span style="font-size:9px;font-weight:700">Min Φ</span>
-        <input type="range" id="detect-min-dia" min="0.05" max="2.0" value="0.1" step="0.05" oninput="document.getElementById('detect-min-dia-val').textContent=parseFloat(this.value).toFixed(2)+'mm'" style="width:48px">
-        <span id="detect-min-dia-val" style="font-size:10px;font-weight:700;width:38px">0.10mm</span>
+        <input type="range" id="detect-min-dia" min="0.05" max="2.0" value="0.1" step="0.05"
+          oninput="document.getElementById('detect-min-dia-val').textContent=parseFloat(this.value).toFixed(2)+'mm'"
+          style="width:44px">
+        <span id="detect-min-dia-val" style="font-size:9px;font-weight:700;width:36px">0.10mm</span>
       </div>
-      <button class="btn-hz" style="font-size:9px;padding:2px 7px;position:relative" onclick="toggleDetectAdvanced()" id="btn-adv-toggle" title="Show/hide advanced parameters">⚙ Advanced ▾</button>
-      <button class="btn-hz" id="btn-detect-wand" onclick="setTool('wand_pore')" title="Magic Wand Pore: Click any dark shrinkage cavity/void to auto-detect contour and include in porosity calculation" style="color:#d97706;border:1px solid rgba(217,119,6,.4);background:rgba(217,119,6,.08);margin-left:4px">🪄 Wand Pore</button>
+
+      <!-- Advanced toggle -->
+      <button class="btn-hz" style="font-size:9px;padding:2px 7px" onclick="toggleDetectAdvanced()" id="btn-adv-toggle" title="Advanced detection parameters">⚙ Adv ▾</button>
+
+      <!-- Vertical divider -->
+      <div style="width:1px;height:22px;background:rgba(139,92,246,.2);margin:0 3px;flex-shrink:0"></div>
+
+      <!-- Auto-detect -->
+      <button class="btn-hz" id="btn-autodetect-tb" onclick="autoDetectPores()"
+        style="color:#8b5cf6;border-color:rgba(139,92,246,.5);background:rgba(139,92,246,.1);font-weight:700;padding:3px 9px"
+        title="Auto-detect all pores">🔍 Auto-Detect</button>
+
+      <!-- Wand Pore — contiguous flood-fill click to trace individual pore -->
+      <button class="btn-hz" id="btn-detect-wand" onclick="setTool('wand_pore')"
+        style="color:#d97706;border:1px solid rgba(217,119,6,.4);background:rgba(217,119,6,.08);padding:3px 8px"
+        title="Magic Wand Pore: Click any dark shrinkage/void to trace its contour as a pore">🪄 Wand Pore</button>
+
+      <!-- Select / Arrow -->
+      <button class="btn-hz" id="tool-select-img" onclick="setTool('select')"
+        style="color:#22c55e;border:1px solid rgba(34,197,94,.35);background:rgba(34,197,94,.06);padding:3px 8px"
+        title="Select tool — click to select, drag to move pores">↖ Select</button>
     </div>
     <div class="tb-sep"></div>
 
-    <!-- 5b. EXCLUDE — mark holes/structural features to exclude from detection -->
+    <!-- ④ EXCLUDE — mark zones to remove from analysis -->
     <div class="tb-group" style="background:rgba(239,68,68,.04);border:1px solid rgba(239,68,68,.15);border-radius:6px;padding:2px 6px;margin:1px 0">
       <span class="tb-lbl" style="color:#ef4444">EXCLUDE:</span>
-      <button class="btn-stack" id="btn-excl-rect" onclick="setTool('exclude_rect')" title="Draw exclusion zone rectangle — detected pores inside will be ignored" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
-        <span class="btn-stack__icon">🚫</span>
-        <span class="btn-stack__label">Excl. Rect</span>
+      <button class="btn-stack" id="btn-excl-rect" onclick="setTool('exclude_rect')"
+        title="Draw rectangle exclusion zone" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
+        <span class="btn-stack__icon">▭</span>
+        <span class="btn-stack__label">Rect</span>
       </button>
-      <button class="btn-stack" id="btn-excl-circle" onclick="setTool('exclude_circle')" title="Draw exclusion zone circle — detected pores inside will be ignored" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
+      <button class="btn-stack" id="btn-excl-circle" onclick="setTool('exclude_circle')"
+        title="Draw circle exclusion zone" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
         <span class="btn-stack__icon">⭕</span>
-        <span class="btn-stack__label">Excl. Circle</span>
+        <span class="btn-stack__label">Circle</span>
       </button>
-      <button class="btn-stack" id="btn-excl-wand" onclick="setTool('exclude_wand')" title="Magic Wand Exclude: Click a dark background/boundary to auto-detect boundary and EXCLUDE it" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
+      <button class="btn-stack" id="btn-excl-wand" onclick="setTool('exclude_wand')"
+        title="Magic Wand: click boundary to auto-detect edge-touching exclusion zone" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
         <span class="btn-stack__icon">🪄</span>
         <span class="btn-stack__label">Wand Excl</span>
       </button>
-      <div id="wand-options" style="display:none; align-items:center; gap:6px; margin-left:4px; margin-right:4px; border-left:1px solid rgba(239,68,68,.2); padding-left:8px; flex-wrap:wrap;">
+
+      <!-- Wand options (shared by Wand Excl only) -->
+      <div id="wand-options" style="display:none; align-items:center; gap:5px; margin-left:4px; border-left:1px solid rgba(239,68,68,.2); padding-left:7px; flex-wrap:wrap;">
         <div style="display:flex;align-items:center;gap:3px;">
-          <span style="font-size:9px;color:#ef4444;font-weight:700;">Color Tol:</span>
-          <input type="range" id="wand-tolerance" min="5" max="120" value="40" style="width:52px" oninput="document.getElementById('wand-tol-val').textContent=this.value" title="Color tolerance — higher=select more similar shades">
-          <span id="wand-tol-val" style="font-size:9px;font-weight:700;color:#ef4444;width:22px">40</span>
+          <span style="font-size:9px;color:#ef4444;font-weight:700;">Tol:</span>
+          <input type="range" id="wand-tolerance" min="5" max="120" value="40" style="width:46px"
+            oninput="document.getElementById('wand-tol-val').textContent=this.value"
+            title="Color tolerance — higher selects more similar shades">
+          <span id="wand-tol-val" style="font-size:9px;font-weight:700;color:#ef4444;width:20px">40</span>
         </div>
         <div style="display:flex;align-items:center;gap:3px;">
-          <span style="font-size:9px;color:#ef4444;font-weight:700;">Min Area:</span>
-          <input type="range" id="wand-min-area" min="50" max="5000" value="200" step="50" style="width:48px" oninput="document.getElementById('wand-area-val').textContent=this.value+'px'" title="Minimum pixel area — smaller regions are ignored">
-          <span id="wand-area-val" style="font-size:9px;font-weight:700;color:#ef4444;width:34px">200px</span>
+          <span style="font-size:9px;color:#ef4444;font-weight:700;">Min:</span>
+          <input type="range" id="wand-min-area" min="50" max="5000" value="200" step="50" style="width:42px"
+            oninput="document.getElementById('wand-area-val').textContent=this.value+'px'"
+            title="Minimum pixel area — smaller regions are ignored">
+          <span id="wand-area-val" style="font-size:9px;font-weight:700;color:#ef4444;width:32px">200px</span>
         </div>
-        <div style="display:flex;align-items:center;gap:3px;" title="Contiguous: select only connected region (flood-fill). Non-contiguous: select ALL similar colors anywhere in image (Photoshop style)">
-          <label style="font-size:9px;color:#ef4444;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:2px;">
-            <input type="checkbox" id="wand-contiguous" style="width:10px;height:10px;accent-color:#ef4444;">
-            Contiguous
-          </label>
-        </div>
+        <label style="font-size:9px;color:#ef4444;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:2px;"
+          title="Contiguous: only connected region. Non-contiguous: global color match (keep for edge-connected boundary detection)">
+          <input type="checkbox" id="wand-contiguous" style="width:10px;height:10px;accent-color:#ef4444;">
+          Contiguous
+        </label>
       </div>
-      <button class="btn-stack" id="btn-excl-select" onclick="setTool('excl_select')" title="Select, move and resize existing exclusion zones" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
+
+      <button class="btn-stack" id="btn-excl-select" onclick="setTool('excl_select')"
+        title="Edit existing exclusion zones" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
         <span class="btn-stack__icon">✏️</span>
         <span class="btn-stack__label">Edit Zones</span>
       </button>
-      <button class="btn-stack" onclick="clearExclusionZones()" title="Remove all exclusion zones" style="color:#ef4444;border-color:rgba(239,68,68,.25)">
+      <button class="btn-stack" onclick="clearExclusionZones()"
+        title="Remove all exclusion zones" style="color:#ef4444;border-color:rgba(239,68,68,.25)">
         <span class="btn-stack__icon">🔄</span>
         <span class="btn-stack__label">Clear All</span>
       </button>
@@ -520,7 +560,28 @@
     </div>
     <div class="tb-sep"></div>
 
-    <!-- 6. EXPORT -->
+    <!-- ⑤ MEASURE — datum + gap measurement -->
+    <div class="tb-group">
+      <span class="tb-lbl">MEASURE:</span>
+      <button class="btn-hz" id="tool-measure" onclick="setTool('measure')" title="Measure edge-to-edge gap between pores">⟷ Gap</button>
+      <button class="btn-hz" id="tool-datum" onclick="setTool('datum')" title="Draw datum reference area for porosity %">□ Datum</button>
+      <button class="btn-hz" id="btn-clear-datum" onclick="clearDatum()" style="display:none;color:#ef4444" title="Remove datum square">✕ Datum</button>
+    </div>
+    <div class="tb-sep"></div>
+
+    <!-- ⑥ LINKS -->
+    <div class="tb-group">
+      <span class="tb-lbl">LINKS:</span>
+      <div class="slider-group" style="color:#f59e0b">
+        <input type="range" id="link-range" min="0" max="20" step="0.5" value="0"
+          oninput="document.getElementById('link-disp').textContent=this.value==0?'Nearest':this.value+'mm';if(typeof drawCanvas==='function') drawCanvas();"
+          style="width:55px">
+        <span id="link-disp" style="font-size:10px;font-weight:700;width:38px">Nearest</span>
+      </div>
+    </div>
+    <div class="tb-sep"></div>
+
+    <!-- ⑦ EXPORT -->
     <div class="tb-group">
       <span class="tb-lbl">EXPORT:</span>
       <button class="btn-stack" onclick="downloadAnnotatedImage()">
@@ -528,246 +589,15 @@
         <span class="btn-stack__label">PNG</span>
       </button>
     </div>
-    <!-- ADVANCED PANEL — Monochrome clean design -->
-    <div id="detect-advanced" style="display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:300;
-      width:480px;background:var(--c2);border:1px solid var(--bd2);border-radius:10px;
-      box-shadow:0 12px 32px rgba(0,0,0,.35);overflow:hidden;font-family:var(--fs)">
 
-      <!-- Header -->
-      <div style="padding:11px 14px 10px;border-bottom:1px solid var(--bd);
-        display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <div style="font-size:11px;font-weight:700;color:var(--tx)">⚙ Advanced Detection Parameters</div>
-          <div style="font-size:9px;color:var(--dim);margin-top:2px">Adjust only when presets give inaccurate results</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <button onclick="_resetAdvancedDefaults()" style="font-size:9px;padding:3px 9px;background:transparent;border:1px solid var(--bd2);
-              border-radius:5px;color:var(--dim);cursor:pointer">↺ Defaults</button>
-          <button onclick="toggleDetectAdvanced()" style="font-size:11px;padding:2px 8px;background:var(--c3);border:1px solid var(--bd);
-              border-radius:5px;color:var(--dim);cursor:pointer">✕</button>
-        </div>
-      </div>
-
-      <!-- 2-column grid -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--bd)">
-
-        <!-- ASPECT RATIO -->
-        <div style="background:var(--c2);padding:12px 14px;position:relative" onmouseover="this.style.background='var(--c3)'" onmouseout="this.style.background='var(--c2)'">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-            <div>
-              <div style="font-size:10px;font-weight:700;color:var(--tx)">Aspect Ratio</div>
-              <div style="font-size:8px;color:var(--dim);margin-top:1px">shape filter</div>
-            </div>
-            <span id="detect-aspect-val" style="font-size:18px;font-weight:800;color:var(--tx);font-variant-numeric:tabular-nums;line-height:1">6</span>
-          </div>
-          <!-- Track bar -->
-          <div style="height:3px;background:var(--bd2);border-radius:2px;margin-bottom:4px;position:relative">
-            <div id="adv-aspect-pip" style="position:absolute;top:50%;transform:translate(-50%,-50%);
-              width:10px;height:10px;border-radius:50%;background:var(--tx);left:40%;transition:left .1s"></div>
-          </div>
-          <input type="range" id="detect-aspect" min="2" max="12" value="6" step="1" oninput="document.getElementById('detect-aspect-val').textContent=this.value;
-              document.getElementById('adv-aspect-pip').style.left=((this.value-2)/10*100)+'%'" style="width:100%;margin:0;height:18px;opacity:0;position:absolute;left:0;right:0;cursor:pointer;margin-top:-11px">
-          <div style="display:flex;justify-content:space-between;font-size:7px;color:var(--dim)">
-            <span>2 strict</span><span>12 loose</span></div>
-          <div style="font-size:8px;color:var(--dim);margin-top:7px;padding-top:7px;border-top:1px solid var(--bd);line-height:1.5">
-            Max blob elongation. Rejects cracks &amp; edge smears.</div>
-        </div>
-
-        <!-- NOISE BLUR -->
-        <div style="background:var(--c2);padding:12px 14px;position:relative" onmouseover="this.style.background='var(--c3)'" onmouseout="this.style.background='var(--c2)'">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-            <div>
-              <div style="font-size:10px;font-weight:700;color:var(--tx)">Noise Blur</div>
-              <div style="font-size:8px;color:var(--dim);margin-top:1px">pre-process</div>
-            </div>
-            <span id="detect-blur-val" style="font-size:18px;font-weight:800;color:var(--tx);font-variant-numeric:tabular-nums;line-height:1">1</span>
-          </div>
-          <div style="height:3px;background:var(--bd2);border-radius:2px;margin-bottom:4px;position:relative">
-            <div id="adv-blur-pip" style="position:absolute;top:50%;transform:translate(-50%,-50%);
-              width:10px;height:10px;border-radius:50%;background:var(--tx);left:33%;transition:left .1s"></div>
-          </div>
-          <input type="range" id="detect-blur" min="0" max="3" value="1" step="1" oninput="document.getElementById('detect-blur-val').textContent=this.value;
-              document.getElementById('adv-blur-pip').style.left=(this.value/3*100)+'%'" style="width:100%;margin:0;height:18px;opacity:0;position:absolute;left:0;right:0;cursor:pointer;margin-top:-11px">
-          <div style="display:flex;justify-content:space-between;font-size:7px;color:var(--dim)">
-            <span>0 off</span><span>3 heavy</span></div>
-          <div style="font-size:8px;color:var(--dim);margin-top:7px;padding-top:7px;border-top:1px solid var(--bd);line-height:1.5">
-            Gaussian blur before thresholding. Reduces false micro-detections.</div>
-        </div>
-
-        <!-- MORPHOLOGICAL CLOSING -->
-        <div style="background:var(--c2);padding:12px 14px;position:relative" onmouseover="this.style.background='var(--c3)'" onmouseout="this.style.background='var(--c2)'">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-            <div>
-              <div style="font-size:10px;font-weight:700;color:var(--tx)">Closing</div>
-              <div style="font-size:8px;color:var(--dim);margin-top:1px">fill holes</div>
-            </div>
-            <span id="detect-close-val" style="font-size:18px;font-weight:800;color:var(--tx);font-variant-numeric:tabular-nums;line-height:1">2</span>
-          </div>
-          <div style="height:3px;background:var(--bd2);border-radius:2px;margin-bottom:4px;position:relative">
-            <div id="adv-close-pip" style="position:absolute;top:50%;transform:translate(-50%,-50%);
-              width:10px;height:10px;border-radius:50%;background:var(--tx);left:40%;transition:left .1s"></div>
-          </div>
-          <input type="range" id="detect-close" min="0" max="5" value="2" step="1" oninput="document.getElementById('detect-close-val').textContent=this.value;
-              document.getElementById('adv-close-pip').style.left=(this.value/5*100)+'%'" style="width:100%;margin:0;height:18px;opacity:0;position:absolute;left:0;right:0;cursor:pointer;margin-top:-11px">
-          <div style="display:flex;justify-content:space-between;font-size:7px;color:var(--dim)">
-            <span>0 off</span><span>5 max fill</span></div>
-          <div style="font-size:8px;color:var(--dim);margin-top:7px;padding-top:7px;border-top:1px solid var(--bd);line-height:1.5">
-            Fills specks inside pore blobs. High values may merge adjacent pores.</div>
-        </div>
-
-        <!-- CONTOUR POINTS -->
-        <div style="background:var(--c2);padding:12px 14px;position:relative" onmouseover="this.style.background='var(--c3)'" onmouseout="this.style.background='var(--c2)'">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-            <div>
-              <div style="font-size:10px;font-weight:700;color:var(--tx)">Contour Pts</div>
-              <div style="font-size:8px;color:var(--dim);margin-top:1px">shape accuracy</div>
-            </div>
-            <span id="detect-curve-val" style="font-size:18px;font-weight:800;color:var(--tx);font-variant-numeric:tabular-nums;line-height:1">32</span>
-          </div>
-          <div style="height:3px;background:var(--bd2);border-radius:2px;margin-bottom:4px;position:relative">
-            <div id="adv-curve-pip" style="position:absolute;top:50%;transform:translate(-50%,-50%);
-              width:10px;height:10px;border-radius:50%;background:var(--tx);left:29%;transition:left .1s"></div>
-          </div>
-          <input type="range" id="detect-curve" min="12" max="80" value="32" step="4" oninput="document.getElementById('detect-curve-val').textContent=this.value;
-              document.getElementById('adv-curve-pip').style.left=((this.value-12)/68*100)+'%'" style="width:100%;margin:0;height:18px;opacity:0;position:absolute;left:0;right:0;cursor:pointer;margin-top:-11px">
-          <div style="display:flex;justify-content:space-between;font-size:7px;color:var(--dim)">
-            <span>12 fast</span><span>80 precise</span></div>
-          <div style="font-size:8px;color:var(--dim);margin-top:7px;padding-top:7px;border-top:1px solid var(--bd);line-height:1.5">
-            Polygon points per pore outline. Higher = smoother for large voids.</div>
-        </div>
-      </div>
-
-
-      <!-- EDGE REJECT + MAX AREA ROW -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--bd)">
-
-        <!-- EDGE REJECT TOGGLE -->
-        <div class="adv-toggle-row">
-          <div>
-            <div style="font-size:10px;font-weight:700;color:var(--tx)">Edge Reject</div>
-            <div style="font-size:8px;color:var(--dim);margin-top:1px">border filter</div>
-            <div style="font-size:8px;color:var(--dim);margin-top:7px;padding-top:7px;border-top:1px solid var(--bd);line-height:1.5">
-              Rejects blobs touching image borders (partial features).</div>
-          </div>
-          <input type="checkbox" class="adv-toggle-switch" id="detect-edge-reject">
-        </div>
-
-        <!-- MAX AREA % -->
-        <div style="background:var(--c2);padding:12px 14px;position:relative" onmouseover="this.style.background='var(--c3)'" onmouseout="this.style.background='var(--c2)'">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-            <div>
-              <div style="font-size:10px;font-weight:700;color:var(--tx)">Max Area %</div>
-              <div style="font-size:8px;color:var(--dim);margin-top:1px">hole filter</div>
-            </div>
-            <span id="detect-max-area-val" style="font-size:18px;font-weight:800;color:var(--tx);font-variant-numeric:tabular-nums;line-height:1">15%</span>
-          </div>
-          <div style="height:3px;background:var(--bd2);border-radius:2px;margin-bottom:4px;position:relative">
-            <div id="adv-max-area-pip" style="position:absolute;top:50%;transform:translate(-50%,-50%);
-              width:10px;height:10px;border-radius:50%;background:var(--tx);left:48%;transition:left .1s"></div>
-          </div>
-          <input type="range" id="detect-max-area" min="1" max="30" value="15" step="1" oninput="document.getElementById('detect-max-area-val').textContent=this.value+'%';
-              document.getElementById('adv-max-area-pip').style.left=((this.value-1)/29*100)+'%'" style="width:100%;margin:0;height:18px;opacity:0;position:absolute;left:0;right:0;cursor:pointer;margin-top:-11px">
-          <div style="display:flex;justify-content:space-between;font-size:7px;color:var(--dim)">
-            <span>1% strict</span><span>30% loose</span></div>
-          <div style="font-size:8px;color:var(--dim);margin-top:7px;padding-top:7px;border-top:1px solid var(--bd);line-height:1.5">
-            Largest blob allowed as % of image. Rejects structural holes &amp; large features.</div>
-        </div>
-      </div>
-
-      <!-- EXCLUSION ZONES LIST -->
-      <div style="padding:8px 14px;border-top:1px solid var(--bd)">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <div style="font-size:10px;font-weight:700;color:var(--tx)">🚫 Exclusion Zones</div>
-          <div style="display:flex;gap:4px">
-            <button onclick="setTool('excl_select')" title="Edit/move zones" style="font-size:8px;padding:2px 8px;background:transparent;border:1px solid rgba(239,68,68,.3);border-radius:4px;color:#ef4444;cursor:pointer">✏️ Edit</button>
-            <button onclick="clearExclusionZones()" style="font-size:8px;padding:2px 8px;background:transparent;border:1px solid rgba(239,68,68,.3);border-radius:4px;color:#ef4444;cursor:pointer">Clear All</button>
-          </div>
-        </div>
-        <div id="excl-zone-list" style="max-height:160px;overflow-y:auto">
-          <div style="font-size:9px;color:var(--dim);font-style:italic">No exclusion zones — use 🚫 Excl. Zone tool to draw</div>
-        </div>
-        <div id="excl-edit-panel" class="excl-edit-panel" style="display:none"></div>
-      </div>
-
-      <!-- Footer tip -->
-      <div style="padding:8px 14px;border-top:1px solid var(--bd)">
-        <div style="font-size:8px;color:var(--dim);line-height:1.6">
-          <strong style="color:var(--tx)">When to adjust:</strong>
-          Cracks detected → lower Aspect ·
-          False dots → raise Blur ·
-          Hollow pores → raise Closing ·
-          Holes detected → draw Excl. Zone or lower Max Area %
-        </div>
-      </div>
-    </div>
-    <div style="margin-left:auto;text-align:right;position:relative">
-      <span id="img-overlay-info" style="font-size:9px;color:var(--dim)">Image 1 — upload to begin</span>
-    </div>
-  </div>
-  <input type="file" id="img-file-input" accept="image/*" style="display:none" onchange="loadImageFile(event)">
-
-  <!-- CANVAS TOOLBAR -->
-  <div id="canvas-toolbar">
-
-    <!-- 1. VIEW — navigation always first -->
-    <div class="tb-group">
-      <span class="tb-lbl">VIEW:</span>
-      <button class="btn-hz" id="tool-pan" onclick="setTool('pan')" title="Pan / drag canvas">⛶ Pan</button>
-      <button class="btn-hz" onclick="resetView()" title="Fit to window">⊡ Fit</button>
-      <button class="btn-hz" onclick="zoom(1.2)" style="padding:4px 8px" title="Zoom in">+</button>
-      <button class="btn-hz" onclick="zoom(1/1.2)" style="padding:4px 8px" title="Zoom out">−</button>
-    </div>
-    <div class="tb-sep"></div>
-
-    <!-- 2. PORES — core annotation tools -->
-    <div class="tb-group">
-      <span class="tb-lbl">PORES:</span>
-      <button class="btn-hz" id="tool-place" onclick="setTool('place')" title="Click canvas to place pore">⊕ Place</button>
-      <button class="btn-hz" id="tool-wand-pore" onclick="setTool('wand_pore')" title="Magic Wand Pore: Click dark void/shrinkage cavity to auto-detect irregular contour and add as Pore" style="color:#d97706;border:1px solid rgba(217,119,6,.4);background:rgba(217,119,6,.08)">🪄 Wand Pore</button>
-      <div class="slider-group" title="Pore diameter for next placed pore" style="color:#374151;margin-left:2px">
-        <span style="font-size:9px;font-weight:700;color:var(--dim)">Φ</span>
-        <input type="range" id="phi-slider" min="0.2" max="4.0" step="0.05" value="1.0" oninput="S.nextPhi=+this.value;document.getElementById('phi-disp').textContent=S.nextPhi.toFixed(2)" style="width:60px">
-        <span id="phi-disp" style="font-size:11px;font-weight:700;width:28px">1.00</span>
-      </div>
-      <div class="tb-sep" style="height:18px;margin:0 4px"></div>
-      <button class="btn-hz" id="tool-select" onclick="setTool('select')" title="Select and edit existing pores">↖ Select</button>
-    </div>
-    <div class="tb-sep"></div>
-
-    <!-- 3. TYPE — classify pore type (paired with Place) -->
-    <div class="tb-group">
-      <span class="tb-lbl">TYPE:</span>
-      <button class="btn-hz on" id="type-gas" onclick="setPoreType('gas')" style="color:#3b82f6">● Gas</button>
-      <button class="btn-hz" id="type-shrink" onclick="setPoreType('shrink')" style="color:#d97706">● Shrink</button>
-    </div>
-    <div class="tb-sep"></div>
-
-    <!-- 4. MEASURE — analysis tools -->
-    <div class="tb-group">
-      <span class="tb-lbl">MEASURE:</span>
-      <button class="btn-hz" id="tool-measure" onclick="setTool('measure')" title="Measure edge-to-edge gap between two pores">⟷ Gap</button>
-      <button class="btn-hz" id="tool-datum" onclick="setTool('datum')" title="Draw datum reference area for porosity %">□ Datum</button>
-      <button class="btn-hz" id="btn-clear-datum" onclick="clearDatum()" style="display:none;color:#ef4444" title="Remove datum square">✕ Datum</button>
-    </div>
-    <div class="tb-sep"></div>
-
-    <!-- 5. LINKS — pore grouping radius -->
-    <div class="tb-group">
-      <span class="tb-lbl">LINKS:</span>
-      <div class="slider-group" style="color:#f59e0b">
-        <input type="range" id="link-range" min="0" max="20" step="0.5" value="0" oninput="document.getElementById('link-disp').textContent=this.value==0?'Nearest':this.value+'mm';if(typeof drawCanvas==='function') drawCanvas();" style="width:60px">
-        <span id="link-disp" style="font-size:10px;font-weight:700;width:40px">Nearest</span>
-      </div>
-    </div>
-    <div class="tb-sep"></div>
-
-    <!-- 6. HISTORY — right-aligned -->
+    <!-- ⑧ HISTORY — right-aligned -->
     <div class="tb-group" style="margin-left:auto">
-      <button class="btn-hz" onclick="undoPore()" id="btn-undo" disabled="" title="Undo last action">↩ Undo</button>
-      <button class="btn-hz" onclick="redoPore()" id="btn-redo" disabled="" title="Redo">↪ Redo</button>
+      <button class="btn-hz" onclick="undoPore()" id="btn-undo" disabled title="Undo last action">↩ Undo</button>
+      <button class="btn-hz" onclick="redoPore()" id="btn-redo" disabled title="Redo">↪ Redo</button>
       <button class="btn-hz" onclick="clearAllPores()" style="color:#ef4444" title="Clear all pores">✕ Clear</button>
     </div>
-  </div>
+
+
   <!-- Scale input overlay — upgraded -->
   <div id="scale-input-overlay" style="display:none;position:absolute;z-index:50;
     background:var(--c2);border:1.5px solid var(--amb);border-radius:var(--r2);
@@ -807,11 +637,66 @@
     </div>
 
     <!-- Middle panel: Pore Registry -->
-    <div id="panel-registry" style="width:240px;background:var(--c1);border-left:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0">
+    <div id="panel-registry" style="width:260px;background:var(--c1);border-left:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0">
       <div style="padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between">
         <div class="pp-title" style="margin:0">Inspection Registry</div>
         <div style="font-size:10px;color:var(--dim)" id="reg-count">0 pores (0 effective)</div>
       </div>
+
+      <!-- ── Area Breakdown Panel ── -->
+      <div id="area-breakdown" style="border-bottom:1px solid var(--bd);padding:8px 10px;background:rgba(255,255,255,.02)">
+        <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">📐 Area Analysis</div>
+
+        <!-- Image area row -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+          <div style="display:flex;align-items:center;gap:4px">
+            <div style="width:8px;height:8px;border-radius:2px;background:#4b5563;flex-shrink:0"></div>
+            <span style="font-size:9px;color:var(--dim)">Full Image</span>
+          </div>
+          <span style="font-size:9px;font-weight:700;color:var(--tx);font-family:monospace" id="area-image">—</span>
+        </div>
+
+        <!-- Datum area row -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+          <div style="display:flex;align-items:center;gap:4px">
+            <div style="width:8px;height:8px;border-radius:2px;background:#22c55e;flex-shrink:0"></div>
+            <span style="font-size:9px;color:var(--dim)">Datum Area</span>
+          </div>
+          <span style="font-size:9px;font-weight:700;color:#22c55e;font-family:monospace" id="area-datum">—</span>
+        </div>
+
+        <!-- Exclusion rows -->
+        <div id="area-excl-rows"></div>
+
+        <!-- Divider -->
+        <div style="border-top:1px solid var(--bd);margin:5px 0"></div>
+
+        <!-- Net inspection area (key metric) -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;background:rgba(139,92,246,.1);border-radius:5px;border:1px solid rgba(139,92,246,.2)">
+          <div style="display:flex;align-items:center;gap:4px">
+            <div style="width:8px;height:8px;border-radius:2px;background:#8b5cf6;flex-shrink:0"></div>
+            <span style="font-size:9px;font-weight:700;color:#8b5cf6">Net Inspect Area</span>
+          </div>
+          <span style="font-size:9px;font-weight:700;color:#8b5cf6;font-family:monospace" id="area-net">—</span>
+        </div>
+
+        <!-- Mini canvas thumbnails row -->
+        <div style="display:flex;gap:5px;margin-top:7px" id="area-thumbs-row">
+          <div style="flex:1;text-align:center">
+            <div style="font-size:8px;color:var(--dim);margin-bottom:2px">Image</div>
+            <canvas id="thumb-image" width="60" height="40" style="width:60px;height:40px;border:1px solid var(--bd);border-radius:3px;display:block;margin:0 auto;background:#111"></canvas>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div style="font-size:8px;color:var(--dim);margin-bottom:2px">Excl. Zones</div>
+            <canvas id="thumb-excl" width="60" height="40" style="width:60px;height:40px;border:1px solid rgba(239,68,68,.3);border-radius:3px;display:block;margin:0 auto;background:#111"></canvas>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div style="font-size:8px;color:var(--dim);margin-bottom:2px">Datum</div>
+            <canvas id="thumb-datum" width="60" height="40" style="width:60px;height:40px;border:1px solid rgba(34,197,94,.3);border-radius:3px;display:block;margin:0 auto;background:#111"></canvas>
+          </div>
+        </div>
+      </div>
+
       <div class="scrollable" style="flex:1;overflow-y:auto">
         <div id="datum-registry-section" style="border-bottom:1px solid var(--bd)"></div>
         <div id="excl-registry-section" style="border-bottom:1px solid var(--bd)"></div>
