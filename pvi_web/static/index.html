@@ -384,6 +384,7 @@
       </div>
     </div>
     <div class="ph-right" style="display:flex; gap:8px; align-items:center;">
+      <input type="file" id="img-file-input" accept="image/*" style="display:none" onchange="loadImageFile(event)">
       <button class="btn btn-sec" id="btn-upload-top" onclick="document.getElementById('img-file-input').click()" title="Upload Image">📁 Upload Image</button>
       <button class="btn btn-sec" id="btn-scale-tool-top" onclick="imgToolActivate('scale_line')" title="Set physical scale of the image (px/mm)" disabled>📐 Set Scale</button>
       <button class="btn btn-sec" id="btn-autodetect-top" onclick="autoDetectPores()" title="Automatically trace pores based on detection settings" style="color:#8b5cf6; border-color:rgba(139,92,246,0.5)" disabled>🔍 Auto Detect</button>
