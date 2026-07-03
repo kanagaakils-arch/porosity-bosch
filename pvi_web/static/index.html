@@ -384,6 +384,7 @@
       </div>
     </div>
     <div class="ph-right" style="display:flex; gap:8px; align-items:center;">
+      <div id="img-scale-info" class="img-scale-pill" style="display:none;margin-right:8px"></div>
       <input type="file" id="img-file-input" accept="image/*" style="display:none" onchange="loadImageFile(event)">
       <button class="btn btn-sec" id="btn-upload-top" onclick="document.getElementById('img-file-input').click()" title="Upload Image">📁 Upload Image</button>
       <button class="btn btn-sec" id="btn-scale-tool-top" onclick="imgToolActivate('scale_line')" title="Set physical scale of the image (px/mm)" disabled>📐 Set Scale</button>
