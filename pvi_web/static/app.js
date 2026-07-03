@@ -6954,116 +6954,224 @@ function _polyPerimeter(contour){
   return perim;
 }
 
-// ── Shared Magic Wand Flood-Fill & Boundary Extraction ───────────────────────
-function _wandExtractPolygonMm(canvasX, canvasY, minAreaPx = 30) {
-  if (!S.imgState || !S.imgState.image || !S.imgMode) return null;
-  if (!S.imgState.scalePxPerMm) {
-    if(typeof toast==='function') toast('Please set image scale first before using Magic Wand');
-    return null;
-  }
-  const page = activeImagePage();
-  if (!page) return null;
+// ═══════════════════════════════════════════════════════════════════════════
+// MAGIC WAND — Photoshop-quality color selection (contiguous + non-contiguous)
+// ═══════════════════════════════════════════════════════════════════════════
 
+// ── Perceptual color distance (LAB-lite approximation) ────────────────────
+// Weighting: lightness differences are twice as important as color shifts
+function _wandColorDist(pixels, i, sR, sG, sB) {
+  const dR = pixels[i]   - sR;
+  const dG = pixels[i+1] - sG;
+  const dB = pixels[i+2] - sB;
+  // sRGB to perceptual luminance weight (BT.709)
+  const dL = 0.2126*dR + 0.7152*dG + 0.0722*dB;
+  const dCr = dR - dL;
+  const dCg = dG - dL;
+  // Emphasize luminance difference 2x
+  return Math.sqrt(2*dL*dL + dCr*dCr + dCg*dCg);
+}
+
+// ── Get (or build) cached pixel data for the current image ─────────────────
+function _wandGetPixels() {
   const img = S.imgState.image;
-  const w = img.naturalWidth;
-  const h = img.naturalHeight;
-  const fit = S.imgState.fitScale || 1;
-  const ix = S.imgState.imgX !== undefined ? S.imgState.imgX : 0;
-  const iy = S.imgState.imgY !== undefined ? S.imgState.imgY : 0;
-
-  const px = Math.round((canvasX - ix) / fit);
-  const py = Math.round((canvasY - iy) / fit);
-
-  if (px < 0 || px >= w || py < 0 || py >= h) {
-    if(typeof toast==='function') toast('Click outside image boundary');
-    return null;
-  }
-  
-  if (!S.imgState._wandData || S.imgState._wandData.w !== w) {
+  const w = img.naturalWidth, h = img.naturalHeight;
+  if (!S.imgState._wandData || S.imgState._wandData.w !== w || S.imgState._wandData.h !== h) {
     const osc = document.createElement('canvas');
     osc.width = w; osc.height = h;
     const ctx = osc.getContext('2d', {willReadFrequently: true});
     ctx.drawImage(img, 0, 0);
     S.imgState._wandData = { w, h, pixels: ctx.getImageData(0,0,w,h).data };
   }
-  const pixels = S.imgState._wandData.pixels;
-  
-  const tolInput = document.getElementById('wand-tolerance');
-  const tol = tolInput ? parseInt(tolInput.value, 10) : 30;
-  
-  const startIdx = (py * w + px) * 4;
-  const sR = pixels[startIdx], sG = pixels[startIdx+1], sB = pixels[startIdx+2];
-  
-  const mask = new Uint8Array(w * h);
-  const q = new Uint32Array(w * h);
-  let head = 0, tail = 0;
-  
-  q[tail++] = py * w + px;
-  mask[py * w + px] = 1;
-  let area = 0;
-  
-  const match = (i) => Math.abs(pixels[i]-sR)<=tol && Math.abs(pixels[i+1]-sG)<=tol && Math.abs(pixels[i+2]-sB)<=tol;
-  
-  while(head < tail) {
-    const curr = q[head++];
-    const x = curr % w;
-    const y = Math.floor(curr / w);
-    area++;
-    
-    if(x>0){ const n=curr-1; if(!mask[n] && match(n*4)){ mask[n]=1; q[tail++]=n; } }
-    if(x<w-1){ const n=curr+1; if(!mask[n] && match(n*4)){ mask[n]=1; q[tail++]=n; } }
-    if(y>0){ const n=curr-w; if(!mask[n] && match(n*4)){ mask[n]=1; q[tail++]=n; } }
-    if(y<h-1){ const n=curr+w; if(!mask[n] && match(n*4)){ mask[n]=1; q[tail++]=n; } }
-  }
-  
-  if (area < minAreaPx) { if(typeof toast==='function') toast('Magic Wand: Region too small'); return null; }
-  
-  let startX = -1, startY = -1;
-  for(let y=0; y<h && startY===-1; y++){
-    for(let x=0; x<w; x++){
-      if(mask[y*w+x]){ startX=x; startY=y; break; }
-    }
-  }
-  
-  const points = [];
-  if (startX !== -1) {
-    const dirs = [[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]];
-    let cx = startX, cy = startY, dir = 7, count = 0;
-    while (count < w*h) {
-      points.push([cx, cy]);
-      let found = false;
-      for (let i = 0; i < 8; i++) {
-        let ndir = (dir + i) % 8;
-        let nx = cx + dirs[ndir][0], ny = cy + dirs[ndir][1];
-        if (nx>=0 && nx<w && ny>=0 && ny<h && mask[ny*w+nx]) {
-          cx = nx; cy = ny; dir = (ndir + 6) % 8; found = true; break;
-        }
-      }
-      if (!found || (cx === startX && cy === startY)) break;
-      count++;
-    }
-  }
-  
-  if (points.length < 3) return null;
-  
-  const step = Math.max(1, Math.floor(points.length / 100)); // Simplify to ~100 points
-  const polyMm = points.filter((_, i) => i % step === 0).map(p => {
-    const ptMm = canvasToMm(ix + p[0] * fit, iy + p[1] * fit);
-    return { x: parseFloat(ptMm.x.toFixed(4)), y: parseFloat(ptMm.y.toFixed(4)) };
-  });
-  return polyMm;
+  return S.imgState._wandData;
 }
 
-// ── Magic Wand Auto-Exclusion Algorithm ──────────────────────────────────────
+// ── Contiguous flood-fill mask ────────────────────────────────────────────
+function _wandFloodFill(pixels, w, h, sx, sy, tol) {
+  const mask = new Uint8Array(w * h);
+  const sIdx = (sy * w + sx) * 4;
+  const sR = pixels[sIdx], sG = pixels[sIdx+1], sB = pixels[sIdx+2];
+  const q = new Uint32Array(w * h);
+  let head = 0, tail = 0;
+  const start = sy * w + sx;
+  q[tail++] = start;
+  mask[start] = 1;
+  while (head < tail) {
+    const curr = q[head++];
+    const x = curr % w, y = (curr / w) | 0;
+    const nb = [curr-1, curr+1, curr-w, curr+w];
+    const valid = [x>0, x<w-1, y>0, y<h-1];
+    for (let d = 0; d < 4; d++) {
+      if (!valid[d]) continue;
+      const n = nb[d];
+      if (mask[n]) continue;
+      if (_wandColorDist(pixels, n*4, sR, sG, sB) <= tol) {
+        mask[n] = 1; q[tail++] = n;
+      }
+    }
+  }
+  return mask;
+}
+
+// ── Non-contiguous global color selection ─────────────────────────────────
+// Photoshop: "Contiguous" unchecked — selects every pixel matching the
+// clicked color anywhere in the image, not just connected neighbors.
+function _wandGlobalSelect(pixels, w, h, sx, sy, tol) {
+  const mask = new Uint8Array(w * h);
+  const sIdx = (sy * w + sx) * 4;
+  const sR = pixels[sIdx], sG = pixels[sIdx+1], sB = pixels[sIdx+2];
+  const total = w * h;
+  for (let i = 0; i < total; i++) {
+    if (_wandColorDist(pixels, i*4, sR, sG, sB) <= tol) mask[i] = 1;
+  }
+  return mask;
+}
+
+// ── Moore neighborhood contour tracing (for a single connected component) ─
+// Returns a simplified polygon in image pixels (array of [x, y])
+function _wandTraceContour(mask, w, h, startX, startY, maxPts) {
+  const dirs = [[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]];
+  const points = [];
+  let cx = startX, cy = startY, dir = 7, count = 0;
+  const limit = Math.min(w * h, 100000);
+  while (count < limit) {
+    points.push([cx, cy]);
+    let found = false;
+    for (let i = 0; i < 8; i++) {
+      const ndir = (dir + i) % 8;
+      const nx = cx + dirs[ndir][0], ny = cy + dirs[ndir][1];
+      if (nx >= 0 && nx < w && ny >= 0 && ny < h && mask[ny*w+nx]) {
+        cx = nx; cy = ny; dir = (ndir + 6) % 8; found = true; break;
+      }
+    }
+    if (!found || (cx === startX && cy === startY && count > 0)) break;
+    count++;
+  }
+  if (points.length < 3) return null;
+  // Adaptive simplification to maxPts
+  const step = Math.max(1, Math.floor(points.length / maxPts));
+  return points.filter((_, i) => i % step === 0);
+}
+
+// ── Label all connected components in a mask (union-find) ─────────────────
+function _wandLabelComponents(mask, w, h) {
+  const lbl = new Int32Array(w * h);
+  const par = [0]; let next = 1;
+  const find = x => { while(par[x]!==x) x=par[x]=par[par[x]]; return x; };
+  const union = (a,b) => { par[find(a)]=find(b); };
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y*w+x; if (!mask[i]) continue;
+    const up = y>0 ? lbl[(y-1)*w+x] : 0;
+    const le = x>0 ? lbl[y*w+x-1] : 0;
+    if (!up && !le) { par.push(next); lbl[i]=next++; }
+    else if (up && !le) lbl[i]=up;
+    else if (!up && le) lbl[i]=le;
+    else { lbl[i]=up; if(up!==le) union(up,le); }
+  }
+  for (let i = 0; i < lbl.length; i++) if (lbl[i]) lbl[i]=find(lbl[i]);
+  return lbl;
+}
+
+// ── Main wand entry: returns array of { polyMm, areaPx } per component ────
+// mode: 'excl' (exclusion zone) or 'pore' (wand pore)
+function _wandExtractAllComponents(canvasX, canvasY, mode) {
+  if (!S.imgState || !S.imgState.image || !S.imgMode) return null;
+  if (!S.imgState.scalePxPerMm) {
+    if (typeof toast==='function') toast('Set image scale first before using Magic Wand');
+    return null;
+  }
+  const page = activeImagePage();
+  if (!page) return null;
+
+  const fit = S.imgState.fitScale || 1;
+  const ix = S.imgState.imgX !== undefined ? S.imgState.imgX : 0;
+  const iy = S.imgState.imgY !== undefined ? S.imgState.imgY : 0;
+  const { w, h, pixels } = _wandGetPixels();
+
+  const sx = Math.round((canvasX - ix) / fit);
+  const sy = Math.round((canvasY - iy) / fit);
+  if (sx < 0 || sx >= w || sy < 0 || sy >= h) {
+    if (typeof toast==='function') toast('Click is outside image boundary');
+    return null;
+  }
+
+  const tolInput = document.getElementById('wand-tolerance');
+  const tol = tolInput ? +tolInput.value : 40;
+  const minAreaEl = document.getElementById('wand-min-area');
+  const minAreaPx = minAreaEl ? +minAreaEl.value : 200;
+  const isContiguous = document.getElementById('wand-contiguous')?.checked || false;
+
+  // Build mask
+  const mask = isContiguous
+    ? _wandFloodFill(pixels, w, h, sx, sy, tol)
+    : _wandGlobalSelect(pixels, w, h, sx, sy, tol);
+
+  // Label connected components
+  const lbl = _wandLabelComponents(mask, w, h);
+
+  // Gather component stats: area, top-left pixel (for contour start)
+  const compStats = {};
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const l = lbl[y*w+x]; if (!l) continue;
+    if (!compStats[l]) compStats[l] = { area: 0, startX: x, startY: y };
+    compStats[l].area++;
+    // Track topmost then leftmost pixel as contour start
+    if (y < compStats[l].startY || (y===compStats[l].startY && x<compStats[l].startX)) {
+      compStats[l].startX = x; compStats[l].startY = y;
+    }
+  }
+
+  // Sort by area descending, filter minimum area, cap at 15 zones
+  const components = Object.entries(compStats)
+    .filter(([, s]) => s.area >= minAreaPx)
+    .sort(([, a], [, b]) => b.area - a.area)
+    .slice(0, 15);
+
+  if (!components.length) {
+    if (typeof toast==='function') toast('No region large enough found — lower Min Area or raise Color Tol');
+    return null;
+  }
+
+  // For each component: trace contour → convert to mm polygons
+  const results = [];
+  for (const [, stat] of components) {
+    const pts = _wandTraceContour(mask, w, h, stat.startX, stat.startY, 150);
+    if (!pts || pts.length < 3) continue;
+    const polyMm = pts.map(([px2, py2]) => {
+      const mm = canvasToMm(ix + px2 * fit, iy + py2 * fit);
+      return { x: parseFloat(mm.x.toFixed(4)), y: parseFloat(mm.y.toFixed(4)) };
+    });
+    if (polyMm.length >= 3) results.push({ polyMm, areaPx: stat.area });
+  }
+  return results.length ? results : null;
+}
+
+// ── Legacy single-polygon extraction (used by _executeWandPore) ─────────────
+function _wandExtractPolygonMm(canvasX, canvasY, minAreaPx = 30) {
+  const comps = _wandExtractAllComponents(canvasX, canvasY, 'pore');
+  if (!comps || !comps.length) return null;
+  // Return the largest component (most likely the clicked pore)
+  return comps[0].polyMm;
+}
+
+// ── Magic Wand Auto-Exclusion (Photoshop-style, multi-component) ────────────
 function _executeMagicWand(canvasX, canvasY) {
-  const polyMm = _wandExtractPolygonMm(canvasX, canvasY, 50);
-  if (!polyMm || polyMm.length < 3) return;
+  const comps = _wandExtractAllComponents(canvasX, canvasY, 'excl');
+  if (!comps || !comps.length) return;
   const page = activeImagePage();
   if (!page) return;
   if (!page.exclusionZones) page.exclusionZones = [];
   pushHistory();
-  page.exclusionZones.push({ type: 'polygon', points: polyMm });
-  if(typeof toast==='function') toast('Magic Wand exclusion added');
+  let added = 0;
+  for (const { polyMm } of comps) {
+    if (polyMm.length >= 3) {
+      page.exclusionZones.push({ type: 'polygon', points: polyMm });
+      added++;
+    }
+  }
+  if (!added) { toast('No valid zones created', 'warn'); return; }
+  const modeLabel = document.getElementById('wand-contiguous')?.checked ? 'contiguous' : 'global';
+  toast(`🪄 Magic Wand: ${added} exclusion zone${added>1?'s':''} created (${modeLabel} mode)`);
   S.tool = 'excl_select'; setTool('excl_select');
   S._exclSelected = page.exclusionZones.length - 1;
   drawCanvas(); renderExclList(); updatePoreRegistry();
@@ -7285,11 +7393,122 @@ function resetImageFilters(){
   applyImageFilters();
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// OPENCV.JS LAZY LOADER
+// ═══════════════════════════════════════════════════════════════════════════
+let _cvLoading = null;
+function _loadOpenCV() {
+  if (typeof cv !== 'undefined' && cv.Mat) return Promise.resolve(cv);
+  if (_cvLoading) return _cvLoading;
+  _cvLoading = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    // OpenCV.js 4.8.0 – official CDN, async=false so it fully initialises before onload fires
+    script.src = 'https://docs.opencv.org/4.8.0/opencv.js';
+    script.async = false;
+    script.onload = () => {
+      // cv may still be initialising (WASM); wait for cv.ready
+      if (typeof cv !== 'undefined' && cv.onRuntimeInitialized !== undefined) {
+        if (cv.Mat) { resolve(cv); return; }
+        cv.onRuntimeInitialized = () => resolve(cv);
+      } else if (typeof cv !== 'undefined') {
+        resolve(cv);
+      } else {
+        reject(new Error('OpenCV did not load'));
+      }
+    };
+    script.onerror = () => reject(new Error('Failed to fetch opencv.js'));
+    document.head.appendChild(script);
+  });
+  return _cvLoading;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BOUNDARY SUPPRESSOR — remove the largest blob (casting wall) before pore
+// detection to avoid false pore hits on the dark structural outer boundary.
+// ═══════════════════════════════════════════════════════════════════════════
+function _removeLargestBlob(bin, W, H) {
+  // 1. Label all components
+  const lbl = _labelCC(bin, W, H);
+  // 2. Count area per label
+  const area = {};
+  for (let i = 0; i < lbl.length; i++) {
+    const l = lbl[i]; if (!l) continue;
+    area[l] = (area[l] || 0) + 1;
+  }
+  // 3. Find the label with the largest area
+  let maxLabel = 0, maxArea = 0;
+  for (const [l, a] of Object.entries(area)) {
+    if (a > maxArea) { maxArea = a; maxLabel = +l; }
+  }
+  // 4. The largest blob must be a significant fraction of the image to be
+  //    considered "structural". If it is < 10% of image, skip suppression
+  //    (the image is full of small pores — don't strip anything).
+  if (maxArea < W * H * 0.10) return bin;
+  // 5. Zero out largest blob pixels
+  const out = new Uint8Array(bin);
+  for (let i = 0; i < lbl.length; i++) {
+    if (lbl[i] === maxLabel) out[i] = 0;
+  }
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLAHE (Contrast-Limited Adaptive Histogram Equalization) — JS fallback
+// improves local contrast in low-contrast regions for far better Otsu results
+// ═══════════════════════════════════════════════════════════════════════════
+function _clahe(gray, w, h, tileW = 8, tileH = 8, clipLimit = 3.0) {
+  const out = new Uint8Array(w * h);
+  const numX = Math.ceil(w / tileW), numY = Math.ceil(h / tileH);
+  // Build and clip histogram for each tile, then build LUT
+  const luts = [];
+  for (let ty = 0; ty < numY; ty++) {
+    luts[ty] = [];
+    for (let tx = 0; tx < numX; tx++) {
+      const x0 = tx * tileW, y0 = ty * tileH;
+      const x1 = Math.min(x0 + tileW, w), y1 = Math.min(y0 + tileH, h);
+      const hist = new Int32Array(256);
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) hist[gray[y*w+x]]++;
+      // Clip
+      const n = (x1-x0)*(y1-y0);
+      const clip = Math.max(1, Math.round(clipLimit * n / 256));
+      let excess = 0;
+      for (let i = 0; i < 256; i++) { if (hist[i] > clip) { excess += hist[i]-clip; hist[i]=clip; } }
+      const add = (excess / 256) | 0;
+      for (let i = 0; i < 256; i++) hist[i] = Math.min(hist[i] + add, clip);
+      // CDF → LUT
+      const lut = new Uint8Array(256);
+      let cdf = 0, cdfMin = -1;
+      for (let i = 0; i < 256; i++) {
+        cdf += hist[i];
+        if (cdfMin === -1 && cdf > 0) cdfMin = cdf;
+        lut[i] = Math.round((cdf - cdfMin) / Math.max(1, n - cdfMin) * 255);
+      }
+      luts[ty][tx] = lut;
+    }
+  }
+  // Bilinear interpolation of LUT values
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const tx = (x - tileW/2) / tileW, ty2 = (y - tileH/2) / tileH;
+    const tx0 = Math.max(0, Math.floor(tx)), ty0 = Math.max(0, Math.floor(ty2));
+    const tx1 = Math.min(numX-1, tx0+1), ty1 = Math.min(numY-1, ty0+1);
+    const fx = tx - tx0, fy = ty2 - ty0;
+    const v = gray[y*w+x];
+    const v00 = luts[ty0][tx0][v], v01 = luts[ty0][tx1][v];
+    const v10 = luts[ty1][tx0][v], v11 = luts[ty1][tx1][v];
+    out[y*w+x] = Math.round(
+      v00*(1-fx)*(1-fy) + v01*fx*(1-fy) +
+      v10*(1-fx)*fy     + v11*fx*fy
+    );
+  }
+  return out;
+}
+
 function autoDetectPores(){
   if(!S.imgState.image){toast('Upload an image first','warn');return;}
   if(!S.imgState.scalePxPerMm){toast('Set Scale first — draw a reference line','warn');return;}
 
   const btn=document.getElementById('btn-autodetect-top');
+
   btn.textContent='⏳ Detecting…'; btn.disabled=true;
 
   setTimeout(()=>{
@@ -7329,13 +7548,18 @@ function autoDetectPores(){
       const blurPasses=+(document.getElementById('detect-blur')?.value||1);
       for(let b=0;b<blurPasses;b++) gray=_gaussianBlur5(gray,W,H);
 
-      // Sensitivity and Otsu
-      const sens=+document.getElementById('detect-threshold').value;
-      const globalOtsu=_otsu(gray,W*H);
+      // CLAHE — improves local contrast for far better Otsu thresholding
+      // (critical for images with uneven illumination like cross-section X-rays)
+      const tileSize = Math.max(8, Math.round(Math.min(W,H) / 12));
+      const claheImg = _clahe(gray, W, H, tileSize, tileSize, 3.0);
 
-      // Adaptive threshold — smaller blocks for finer local adaptation
+      // Sensitivity and Otsu (on CLAHE-equalized image)
+      const sens=+document.getElementById('detect-threshold').value;
+      const globalOtsu=_otsu(claheImg,W*H);
+
+      // Adaptive threshold on CLAHE image — smaller blocks for finer local adaptation
       const blockSize=Math.max(20,Math.round(Math.min(W,H)/16));
-      const bin=_adaptiveThreshold(gray,W,H,blockSize,globalOtsu,sens);
+      const bin=_adaptiveThreshold(claheImg,W,H,blockSize,globalOtsu,sens);
 
       // Morphological closing (fills micro-holes in pores)
       const dilR=+(document.getElementById('detect-close')?.value||2);
@@ -7343,6 +7567,10 @@ function autoDetectPores(){
 
       // Morphological opening (removes small noise bridges) — radius=1 always
       processed=_open(processed,W,H,1);
+
+      // ── Boundary Suppression: remove the largest dark blob (casting wall)
+      // before blob detection to prevent the outer boundary being reported as pores.
+      processed = _removeLargestBlob(processed, W, H);
 
       // ── Physical Exclusion Masking during Tracing ──
       // Wipe out pores that fall inside exclusion zones so they are never traced.
@@ -7506,7 +7734,7 @@ function autoDetectPores(){
       }
       S.imgState.autoDetected = true;
       drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
-      let msg = `✅ ${added} pore${added>1?'s':''} detected · ${gasCount} gas · ${shrinkCount} shrink · Otsu=${globalOtsu}`;
+      let msg = `✅ ${added} pore${added>1?'s':''} detected · ${gasCount} gas · ${shrinkCount} shrink · Otsu=${globalOtsu} · 🔬 CLAHE+BndSup`;
       if(exclCount) msg += ` · ${exclCount} in excl. zones`;
       if(holeCount) msg += ` · ${holeCount} holes excluded`;
       toast(msg);

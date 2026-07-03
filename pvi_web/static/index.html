@@ -490,9 +490,23 @@
         <span class="btn-stack__icon">🪄</span>
         <span class="btn-stack__label">Wand Excl</span>
       </button>
-      <div id="wand-options" style="display:none; align-items:center; gap:4px; margin-left:4px; margin-right:4px; border-left:1px solid rgba(239,68,68,.2); padding-left:8px;">
-        <span style="font-size:10px;color:#ef4444;">Tol:</span>
-        <input type="range" id="wand-tolerance" min="5" max="100" value="30" style="width:50px" title="Wand tolerance (lower = stricter match)">
+      <div id="wand-options" style="display:none; align-items:center; gap:6px; margin-left:4px; margin-right:4px; border-left:1px solid rgba(239,68,68,.2); padding-left:8px; flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:3px;">
+          <span style="font-size:9px;color:#ef4444;font-weight:700;">Color Tol:</span>
+          <input type="range" id="wand-tolerance" min="5" max="120" value="40" style="width:52px" oninput="document.getElementById('wand-tol-val').textContent=this.value" title="Color tolerance — higher=select more similar shades">
+          <span id="wand-tol-val" style="font-size:9px;font-weight:700;color:#ef4444;width:22px">40</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:3px;">
+          <span style="font-size:9px;color:#ef4444;font-weight:700;">Min Area:</span>
+          <input type="range" id="wand-min-area" min="50" max="5000" value="200" step="50" style="width:48px" oninput="document.getElementById('wand-area-val').textContent=this.value+'px'" title="Minimum pixel area — smaller regions are ignored">
+          <span id="wand-area-val" style="font-size:9px;font-weight:700;color:#ef4444;width:34px">200px</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:3px;" title="Contiguous: select only connected region (flood-fill). Non-contiguous: select ALL similar colors anywhere in image (Photoshop style)">
+          <label style="font-size:9px;color:#ef4444;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:2px;">
+            <input type="checkbox" id="wand-contiguous" style="width:10px;height:10px;accent-color:#ef4444;">
+            Contiguous
+          </label>
+        </div>
       </div>
       <button class="btn-stack" id="btn-excl-select" onclick="setTool('excl_select')" title="Select, move and resize existing exclusion zones" style="color:#ef4444;border-color:rgba(239,68,68,.35)">
         <span class="btn-stack__icon">✏️</span>
