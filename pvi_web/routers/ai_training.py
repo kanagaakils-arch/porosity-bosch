@@ -258,6 +258,22 @@ class AnalyzeRequest(BaseModel):
     image_base64: str   # data-URL or raw base64
 
 
+def _safe_json(obj):
+    """Recursively convert numpy scalars to native Python types for JSON safety."""
+    import numpy as np
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, dict):
+        return {k: _safe_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_safe_json(v) for v in obj]
+    return obj
+
+
 @router.post("/analyze")
 def analyze_image(req: AnalyzeRequest):
     """Run YOLOv8n ONNX inference on the uploaded image."""
@@ -286,14 +302,16 @@ def analyze_image(req: AnalyzeRequest):
         from PIL import Image as PILImage
 
         pil_img = PILImage.open(io.BytesIO(img_bytes)).convert("RGB")
-        orig_w, orig_h = pil_img.size
+        orig_w, orig_h = int(pil_img.size[0]), int(pil_img.size[1])
 
         # Letterbox to 640x640
         scale  = min(640 / orig_w, 640 / orig_h)
-        nw, nh = int(orig_w * scale), int(orig_h * scale)
+        nw     = int(orig_w * scale)
+        nh     = int(orig_h * scale)
         resized = pil_img.resize((nw, nh), PILImage.BILINEAR)
         padded  = PILImage.new("RGB", (640, 640), (114, 114, 114))
-        pad_x, pad_y = (640 - nw) // 2, (640 - nh) // 2
+        pad_x   = (640 - nw) // 2
+        pad_y   = (640 - nh) // 2
         padded.paste(resized, (pad_x, pad_y))
 
         arr = np.array(padded, dtype=np.float32) / 255.0
@@ -301,43 +319,53 @@ def analyze_image(req: AnalyzeRequest):
 
         sess    = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
         outputs = sess.run(None, {sess.get_inputs()[0].name: arr})
-        pred    = outputs[0][0].T  # (8400, nc+4)
+        pred    = outputs[0][0].T  # shape: (8400, 4 + num_classes)
 
         conf_thresh = 0.25
-        boxes, confs = [], []
+        boxes: list = []
+        confs: list = []
+
         for row in pred:
-            x_c, y_c, w, h = row[0], row[1], row[2], row[3]
             cls_conf = float(np.max(row[4:]))
             if cls_conf < conf_thresh:
                 continue
-            x1 = max(0.0, (x_c - w/2 - pad_x) / scale)
-            y1 = max(0.0, (y_c - h/2 - pad_y) / scale)
-            x2 = min(float(orig_w), (x_c + w/2 - pad_x) / scale)
-            y2 = min(float(orig_h), (y_c + h/2 - pad_y) / scale)
+            # Convert from padded-640 space to original image space
+            x_c = float(row[0])
+            y_c = float(row[1])
+            w   = float(row[2])
+            h   = float(row[3])
+            x1 = max(0.0, (x_c - w / 2 - pad_x) / scale)
+            y1 = max(0.0, (y_c - h / 2 - pad_y) / scale)
+            x2 = min(float(orig_w), (x_c + w / 2 - pad_x) / scale)
+            y2 = min(float(orig_h), (y_c + h / 2 - pad_y) / scale)
             if x2 > x1 and y2 > y1:
                 boxes.append([x1, y1, x2, y2])
                 confs.append(cls_conf)
 
-        # NMS
-        def nms(boxes: list, confs: list, iou_thr: float) -> list:
-            if not boxes:
+        # Simple NMS
+        def nms(bxs: list, cfs: list, iou_thr: float) -> list:
+            if not bxs:
                 return []
-            order = sorted(range(len(confs)), key=lambda i: -confs[i])
+            order = sorted(range(len(cfs)), key=lambda i: -cfs[i])
             keep: List[int] = []
             while order:
                 i = order.pop(0)
                 keep.append(i)
                 new_order = []
                 for j in order:
-                    b1, b2 = boxes[i], boxes[j]
-                    inter = max(0, min(b1[2],b2[2])-max(b1[0],b2[0])) * max(0, min(b1[3],b2[3])-max(b1[1],b2[1]))
-                    iou = inter / max(1e-6, (b1[2]-b1[0])*(b1[3]-b1[1]) + (b2[2]-b2[0])*(b2[3]-b2[1]) - inter)
-                    if iou < iou_thr:
+                    b1, b2 = bxs[i], bxs[j]
+                    inter = (max(0.0, min(b1[2], b2[2]) - max(b1[0], b2[0])) *
+                             max(0.0, min(b1[3], b2[3]) - max(b1[1], b2[1])))
+                    union = ((b1[2]-b1[0])*(b1[3]-b1[1]) +
+                             (b2[2]-b2[0])*(b2[3]-b2[1]) - inter)
+                    if inter / max(1e-6, union) < iou_thr:
                         new_order.append(j)
                 order = new_order
             return keep
 
         keep = nms(boxes, confs, 0.45)
+
+        # Build detections - ALL values explicitly cast to native Python float
         detections = sorted(
             [{"x1": round(boxes[i][0],1), "y1": round(boxes[i][1],1),
               "x2": round(boxes[i][2],1), "y2": round(boxes[i][3],1),
