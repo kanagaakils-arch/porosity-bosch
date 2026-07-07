@@ -30,11 +30,25 @@ for d in (IMG_DIR, LBL_DIR, MODEL_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+def _normalize_record(r: Dict[str, Any]) -> Dict[str, Any]:
+    """Coerce any legacy key names to the canonical schema."""
+    return {
+        "id":         r.get("id", ""),
+        "ts":         r.get("ts") or r.get("timestamp", ""),
+        "submitter":  r.get("submitter") or r.get("submitted_by", "Unknown"),
+        "notes":      r.get("notes", ""),
+        "pore_count": r.get("pore_count") if r.get("pore_count") is not None
+                      else r.get("porosity_count", 0),
+        "img_file":   r.get("img_file") or r.get("filename", ""),
+        "lbl_file":   r.get("lbl_file", ""),
+    }
+
+
 def _load_db() -> List[Dict[str, Any]]:
     if DB_FILE.exists():
         try:
-            return json.loads(DB_FILE.read_text())
+            raw = json.loads(DB_FILE.read_text())
+            return [_normalize_record(r) for r in raw]
         except Exception:
             pass
     return []
@@ -125,19 +139,29 @@ def get_history():
 # ── GET /api/ai/stats ─────────────────────────────────────────────────────────
 @router.get("/stats")
 def get_stats():
-    """Summary stats for the admin panel."""
-    records  = _load_db()
-    by_user: Dict[str, int] = {}
-    for r in records:
-        by_user[r["submitter"]] = by_user.get(r["submitter"], 0) + 1
+    """Summary stats for the admin panel — always returns valid JSON."""
+    try:
+        records = _load_db()
+        by_user: Dict[str, int] = {}
+        total_pores = 0
+        for r in records:
+            name = r.get("submitter") or "Unknown"
+            by_user[name] = by_user.get(name, 0) + 1
+            total_pores += int(r.get("pore_count") or 0)
 
-    return JSONResponse({
-        "total_submissions": len(records),
-        "total_pores":       sum(r["pore_count"] for r in records),
-        "by_user":           by_user,
-        "model_version":     _current_model_version() or "No model yet",
-        "ready_to_train":    len(records) >= 20,
-    })
+        return JSONResponse({
+            "total_submissions": len(records),
+            "total_pores":       total_pores,
+            "by_user":           by_user,
+            "model_version":     _current_model_version() or "No model yet",
+            "ready_to_train":    len(records) >= 20,
+        })
+    except Exception as exc:
+        import traceback
+        return JSONResponse(
+            {"error": str(exc), "detail": traceback.format_exc()},
+            status_code=500
+        )
 
 
 # ── DELETE /api/ai/submission/{sid} ──────────────────────────────────────────
