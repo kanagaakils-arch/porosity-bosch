@@ -1,5 +1,22 @@
-fastapi>=0.115.0
-uvicorn[standard]>=0.30.0
+# Porosity Inspector — Python dependencies
+# Install with: pip install -r requirements.txt
+
+# Web server
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
 python-multipart>=0.0.9
-reportlab>=4.0.0
-pydantic>=2.0.0
+
+# AI Training (YOLOv8)
+ultralytics>=8.1.0
+
+# ONNX model export & inference
+onnx>=1.15.0
+onnxruntime>=1.17.0
+
+# Image processing
+Pillow>=10.2.0
+numpy>=1.24.0
+opencv-python-headless>=4.9.0
+
+# Utilities
+aiofiles>=23.2.1

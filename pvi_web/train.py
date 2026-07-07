@@ -43,18 +43,52 @@ def save_status(data: dict) -> None:
     except Exception as e:
         log(f"Warning: could not save status JSON: {e}")
 
-def check_dependencies() -> bool:
+def auto_install(package: str, import_name: str | None = None) -> bool:
+    """Try to import a package; if missing, install it via pip and retry."""
+    name = import_name or package
     try:
-        import ultralytics  # noqa
+        __import__(name)
         return True
     except ImportError:
-        log("ERROR: ultralytics not installed.")
+        log(f"Package '{package}' not found — installing automatically…")
         save_status({
-            "status": "error",
-            "message": "❌ ERROR: ultralytics package not installed on server.",
-            "progress_pct": 0
+            "status": "installing",
+            "message": f"📦 Installing {package}… please wait (one-time setup)",
+            "progress_pct": 2
         })
-        return False
+        try:
+            import subprocess
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", package, "--quiet"],
+                capture_output=True, text=True, timeout=300
+            )
+            if result.returncode != 0:
+                raise RuntimeError(result.stderr.strip() or "pip failed")
+            log(f"✅ Successfully installed '{package}'.")
+            __import__(name)
+            return True
+        except Exception as e:
+            log(f"ERROR: Could not install '{package}': {e}")
+            save_status({
+                "status": "error",
+                "message": f"❌ Could not install '{package}' automatically.\n"
+                           f"Please run: pip install {package}\nError: {e}",
+                "progress_pct": 0
+            })
+            return False
+
+
+def check_dependencies() -> bool:
+    """Ensure ultralytics and onnx are installed, auto-installing if needed."""
+    ok = True
+    if not auto_install("ultralytics"):
+        ok = False
+    if not auto_install("onnx"):
+        ok = False
+    if not auto_install("onnxruntime"):
+        ok = False
+    return ok
+
 
 def prepare_dataset() -> tuple[int, int]:
     log("Preparing dataset…")
