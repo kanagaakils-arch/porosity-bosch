@@ -255,7 +255,9 @@ def trigger_retrain():
 
 # ── POST /api/ai/analyze ──────────────────────────────────────────────────────
 class AnalyzeRequest(BaseModel):
-    image_base64: str   # data-URL or raw base64
+    image_base64:  str    # data-URL or raw base64
+    conf_threshold: float = 0.05   # lower = more detections; 0.05 works well for small datasets
+
 
 
 def _safe_json(obj):
@@ -321,7 +323,7 @@ def analyze_image(req: AnalyzeRequest):
         outputs = sess.run(None, {sess.get_inputs()[0].name: arr})
         pred    = outputs[0][0].T  # shape: (8400, 4 + num_classes)
 
-        conf_thresh = 0.25
+        conf_thresh = float(max(0.01, min(0.95, req.conf_threshold)))
         boxes: list = []
         confs: list = []
 
