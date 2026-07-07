@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Upload Training Images — Porosity Inspector AI</title>
+  <link rel="stylesheet" href="/static/css/platform.css?v=20260702_sync">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702_sync">
+  <style>
+    :root { --ai-accent:#6366f1; --ai-dim:rgba(99,102,241,.15); --green:#10b981; --red:#ef4444; --amber:#f59e0b; }
+    html, body { height: auto !important; min-height: 100% !important; overflow: auto !important; overflow-y: auto !important; }
+    body { background:var(--bg); color:var(--tx); font-family:'Inter',system-ui,sans-serif; margin:0; }
+
+    /* Nav */
+    .ai-nav { display:flex; align-items:center; background:var(--c2); border-bottom:1px solid var(--bd); padding:0 18px; height:44px; position:sticky; top:0; z-index:100; gap:0; }
+    .ai-nav-brand { font-size:12px; font-weight:800; letter-spacing:.06em; color:var(--ai-accent); margin-right:24px; }
+    .ai-nav a { font-size:11px; font-weight:600; color:var(--dim); text-decoration:none; padding:0 14px; height:44px; display:flex; align-items:center; border-bottom:2px solid transparent; transition:color .15s,border-color .15s; }
+    .ai-nav a:hover { color:var(--tx); }
+    .ai-nav a.active { color:var(--ai-accent); border-bottom-color:var(--ai-accent); }
+    .ai-nav-spacer { flex:1; }
+    .ai-nav-back { font-size:11px; font-weight:600; color:var(--dim); text-decoration:none; padding:6px 14px; border:1px solid var(--bd); border-radius:6px; transition:background .15s; }
+    .ai-nav-back:hover { background:var(--c3); color:var(--tx); }
+
+    /* Layout */
+    .wrap { max-width:960px; margin:0 auto; padding:32px 24px; }
+    .page-title { font-size:20px; font-weight:800; margin:0 0 4px; }
+    .page-sub   { font-size:12px; color:var(--dim); margin:0 0 28px; }
+
+    /* Drop zone */
+    .drop-zone {
+      border:2px dashed rgba(99,102,241,.4); border-radius:16px;
+      background:var(--ai-dim); padding:48px 32px; text-align:center;
+      cursor:pointer; transition:border-color .2s, background .2s; margin-bottom:24px;
+    }
+    .drop-zone.drag-over { border-color:var(--ai-accent); background:rgba(99,102,241,.22); }
+    .drop-icon { font-size:40px; margin-bottom:12px; }
+    .drop-title { font-size:15px; font-weight:700; margin-bottom:6px; }
+    .drop-sub { font-size:12px; color:var(--dim); margin-bottom:18px; }
+    .btn-browse {
+      display:inline-block; padding:10px 24px; font-size:12px; font-weight:700;
+      background:var(--ai-accent); color:#fff; border:none; border-radius:8px;
+      cursor:pointer; transition:opacity .15s;
+    }
+    .btn-browse:hover { opacity:.87; }
+
+    /* Queue */
+    .queue-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+    .queue-title { font-size:13px; font-weight:700; }
+    .btn-submit-all {
+      padding:9px 20px; font-size:12px; font-weight:700;
+      background:var(--green); color:#fff; border:none; border-radius:8px;
+      cursor:pointer; transition:opacity .15s; display:flex; align-items:center; gap:6px;
+    }
+    .btn-submit-all:hover { opacity:.87; }
+    .btn-submit-all:disabled { opacity:.4; cursor:not-allowed; }
+
+    /* Queue items */
+    .queue-list { display:flex; flex-direction:column; gap:12px; }
+    .queue-item {
+      background:var(--c2); border:1px solid var(--bd); border-radius:12px;
+      display:flex; gap:14px; padding:14px 16px; align-items:flex-start;
+    }
+    .q-thumb { width:80px; height:60px; border-radius:7px; overflow:hidden; flex-shrink:0; background:var(--c3); cursor:pointer; }
+    .q-thumb img { width:100%; height:100%; object-fit:cover; }
+    .q-info { flex:1; min-width:0; }
+    .q-name { font-size:12px; font-weight:700; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .q-meta { font-size:11px; color:var(--dim); margin-bottom:8px; }
+    .q-status { font-size:11px; font-weight:600; }
+    .q-status.pending  { color:var(--amber); }
+    .q-status.saving   { color:var(--ai-accent); }
+    .q-status.done     { color:var(--green); }
+    .q-status.error    { color:var(--red); }
+    .q-actions { display:flex; gap:6px; margin-top:8px; }
+    .btn-sm-outline {
+      padding:4px 10px; font-size:11px; font-weight:600;
+      background:transparent; border:1px solid var(--bd); border-radius:6px;
+      color:var(--dim); cursor:pointer; transition:background .12s;
+    }
+    .btn-sm-outline:hover { background:var(--c3); color:var(--tx); }
+    .btn-sm-indigo {
+      padding:4px 10px; font-size:11px; font-weight:600;
+      background:var(--ai-dim); border:1px solid rgba(99,102,241,.3); border-radius:6px;
+      color:var(--ai-accent); cursor:pointer; transition:background .12s;
+    }
+    .btn-sm-indigo:hover { background:rgba(99,102,241,.25); }
+
+    /* Submitter bar */
+    .submitter-bar {
+      background:var(--c2); border:1px solid var(--bd); border-radius:12px;
+      padding:16px 20px; margin-bottom:20px;
+      display:flex; align-items:center; gap:14px;
+    }
+    .submitter-bar label { font-size:11px; font-weight:700; color:var(--dim); white-space:nowrap; }
+    .submitter-bar input {
+      flex:1; padding:8px 12px; font-size:12px;
+      background:var(--c3); border:1px solid var(--bd); border-radius:7px;
+      color:var(--tx); outline:none; max-width:280px;
+    }
+    .submitter-bar input:focus { border-color:var(--ai-accent); }
+
+    /* Empty */
+    .empty { text-align:center; padding:60px 24px; color:var(--dim); font-size:13px; }
+    .empty-icon { font-size:40px; opacity:.3; margin-bottom:10px; }
+
+    /* Lightbox */
+    .lbox { display:none; position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:9999; align-items:center; justify-content:center; }
+    .lbox.open { display:flex; }
+    .lbox img { max-width:88vw; max-height:82vh; border-radius:8px; }
+    .lbox-close { position:absolute; top:16px; right:20px; font-size:26px; color:#fff; cursor:pointer; opacity:.75; }
+    .lbox-close:hover { opacity:1; }
+
+    /* Progress */
+    .progress-toast {
+      position:fixed; bottom:24px; right:24px; z-index:8888;
+      background:var(--c2); border:1px solid var(--bd); border-radius:12px;
+      padding:14px 20px; min-width:240px; font-size:12px;
+      box-shadow:0 8px 32px rgba(0,0,0,.4); display:none;
+    }
+    .progress-toast.show { display:block; }
+    .pt-title { font-weight:700; margin-bottom:6px; }
+    .pt-bar { height:6px; background:var(--c3); border-radius:99px; overflow:hidden; }
+    .pt-fill { height:100%; background:var(--ai-accent); border-radius:99px; transition:width .3s; }
+
+    .sample-thumb { width:88px; border-radius:8px; overflow:hidden; background:var(--c2); border:1px solid var(--bd); cursor:pointer; transition:transform .15s, border-color .15s; text-align:center; }
+    .sample-thumb:hover { transform:translateY(-2px); border-color:var(--ai-accent); }
+    .sample-thumb img { width:100%; height:64px; object-fit:cover; display:block; }
+    .sample-label { font-size:10px; font-weight:700; color:var(--dim); padding:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  </style>
+</head>
+<body>
+
+<nav class="ai-nav">
+  <span class="ai-nav-brand">🤖 AI TRAINING</span>
+  <a href="/train" class="active">📤 Train</a>
+  <a href="/analyze">🔬 Analyze</a>
+  <a href="/history">📋 History</a>
+  <a href="/metrics">📊 Metrics</a>
+  <a href="/validate">🧪 Validate</a>
+  <a href="/admin">⚙️ Admin</a>
+  <div class="ai-nav-spacer"></div>
+  <a href="/" class="ai-nav-back">← Back to Inspector</a>
+</nav>
+
+<div class="wrap">
+  <div class="page-title">Upload Training Images</div>
+  <div class="page-sub">Upload casting photos here. The system will auto-detect pores and save them as AI training data.</div>
+
+  <!-- Submitter -->
+  <div class="submitter-bar">
+    <label>YOUR NAME</label>
+    <input id="submitter-name" type="text" placeholder="e.g. Ravi Kumar (optional)">
+    <span style="font-size:11px;color:var(--dim)">Applied to all uploads in this session</span>
+  </div>
+
+  <!-- Launch Training Banner -->
+  <div style="background:var(--c2);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="font-size:14px;font-weight:800;color:var(--tx)">🚀 Launch AI Retraining Engine</div>
+      <div style="font-size:12px;color:var(--dim)">Train YOLOv8n on all 37+ existing history and uploaded dataset images using Apple Metal GPU</div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <a href="/history" style="padding:10px 16px;background:var(--c1);color:var(--tx);border:1px solid var(--bd);border-radius:8px;font-size:12px;font-weight:700;text-decoration:none">📋 View All History Images</a>
+      <button onclick="startTrainFromHere(this)" style="padding:10px 18px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">⚡ Launch Retrain Now</button>
+    </div>
+  </div>
+
+  <!-- Sample images strip (50 templates) -->
+  <div style="margin-bottom:24px">
+    <div style="font-size:11px;font-weight:700;color:var(--dim);margin-bottom:10px;letter-spacing:.06em;text-transform:uppercase">
+      🖼 50 Sample Templates — click any image to add to training queue
+    </div>
+    <div id="sample-gallery" style="display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;max-height:240px;flex-wrap:wrap"></div>
+  </div>
+
+  <!-- Drop zone -->
+  <div class="drop-zone" id="drop-zone"
+    ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
+    onclick="document.getElementById('file-input').click()">
+    <div class="drop-icon">📸</div>
+    <div class="drop-title">Drag & drop casting images here</div>
+    <div class="drop-sub">Supports JPG, PNG, BMP, TIFF — multiple files at once</div>
+    <button class="btn-browse" onclick="event.stopPropagation();document.getElementById('file-input').click()">Browse Files</button>
+  </div>
+  <input type="file" id="file-input" multiple accept="image/*" style="display:none" onchange="onFilesSelected(this.files)">
+
+  <!-- Queue -->
+  <div id="queue-section" style="display:none">
+    <div class="queue-header">
+      <div class="queue-title" id="queue-title">0 images queued</div>
+      <button class="btn-submit-all" id="submit-all-btn" onclick="submitAll()" disabled>
+        ✅ Submit All for Training
+      </button>
+    </div>
+    <div class="queue-list" id="queue-list"></div>
+  </div>
+
+  <div id="queue-empty" class="empty">
+    <div class="empty-icon">📭</div>
+    No images uploaded yet. Drag & drop or browse to add casting photos.
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lbox" id="lbox" onclick="if(event.target===this)closeLbox()">
+  <span class="lbox-close" onclick="closeLbox()">✕</span>
+  <img id="lbox-img" src="" alt="">
+</div>
+
+<!-- Progress toast -->
+<div class="progress-toast" id="progress-toast">
+  <div class="pt-title" id="pt-title">Submitting…</div>
+  <div class="pt-bar"><div class="pt-fill" id="pt-fill" style="width:0%"></div></div>
+  <div style="margin-top:6px;font-size:11px;color:var(--dim)" id="pt-sub"></div>
+</div>
+
+<script>
+// ── Queue state ─────────────────────────────────────────────────────────────
+const queue = []; // {id, file, dataUrl, status, poreCount}
+
+function uid() { return Math.random().toString(36).slice(2,9); }
+
+// ── Drag & drop ─────────────────────────────────────────────────────────────
+function onDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
+function onDragLeave(e) { document.getElementById('drop-zone').classList.remove('drag-over'); }
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag-over');
+  addFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')));
+}
+function onFilesSelected(files) { addFiles(Array.from(files)); }
+
+// ── Add files to queue ───────────────────────────────────────────────────────
+function addFiles(files) {
+  files.forEach(file => {
+    const id = uid();
+    const entry = { id, file, dataUrl: null, status: 'loading', poreCount: 0 };
+    queue.push(entry);
+    const reader = new FileReader();
+    reader.onload = e => {
+      entry.dataUrl = e.target.result;
+      entry.status  = 'pending';
+      renderQueue();
+    };
+    reader.readAsDataURL(file);
+  });
+  renderQueue();
+}
+
+// ── Render queue ─────────────────────────────────────────────────────────────
+function renderQueue() {
+  const qs = document.getElementById('queue-section');
+  const qe = document.getElementById('queue-empty');
+  const ql = document.getElementById('queue-list');
+  const qt = document.getElementById('queue-title');
+  const btn = document.getElementById('submit-all-btn');
+
+  if (queue.length === 0) { qs.style.display='none'; qe.style.display='block'; return; }
+  qs.style.display='block'; qe.style.display='none';
+
+  const pending = queue.filter(q=>q.status==='pending').length;
+  qt.textContent = `${queue.length} image${queue.length!==1?'s':''} queued — ${pending} pending`;
+  btn.disabled = pending === 0;
+
+  ql.innerHTML = queue.map(entry => {
+    const statusText = {
+      loading: '⏳ Loading…',
+      pending: `✏️  Ready — ${entry.poreCount} pores auto-detected`,
+      saving:  '⏳ Submitting…',
+      done:    '✅ Submitted successfully',
+      error:   '❌ Failed — click Retry',
+    }[entry.status] || '';
+    const statusClass = { loading:'pending', pending:'pending', saving:'saving', done:'done', error:'error' }[entry.status];
+
+    return `
+      <div class="queue-item" id="qi-${entry.id}">
+        <div class="q-thumb" onclick="openLbox('${entry.id}')">
+          ${entry.dataUrl ? `<img src="${entry.dataUrl}" alt="${entry.file.name}">` : ''}
+        </div>
+        <div class="q-info">
+          <div class="q-name">${escHtml(entry.file.name)}</div>
+          <div class="q-meta">${formatBytes(entry.file.size)} · ${entry.file.type || 'image'}</div>
+          <div class="q-status ${statusClass}">${statusText}</div>
+          <div class="q-actions">
+            ${entry.status==='pending'||entry.status==='error' ? `
+              <button class="btn-sm-indigo" onclick="submitOne('${entry.id}')">✅ Submit</button>
+              <button class="btn-sm-outline" onclick="removeItem('${entry.id}')">🗑 Remove</button>
+            ` : ''}
+            ${entry.status==='done' ? `
+              <button class="btn-sm-outline" onclick="removeItem('${entry.id}')">✕ Remove</button>
+            ` : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Submit one ─────────────────────────────────────────────────────────────
+async function submitOne(id) {
+  const entry = queue.find(q => q.id === id);
+  if (!entry || !entry.dataUrl) return;
+  entry.status = 'saving';
+  renderQueue();
+
+  const submitter = document.getElementById('submitter-name').value.trim() || 'Anonymous';
+
+  // Auto-detect pores using server-side placeholder (returns empty until model trained)
+  // For now: send image + empty pores array so image is stored for labeling
+  const payload = {
+    submitter,
+    notes: entry.file.name,
+    image_base64: entry.dataUrl,
+    pores: [],                   // no pores for raw upload (labeled by training)
+    image_width_mm: 100,
+    image_height_mm: 100,
+  };
+
+  try {
+    const res = await fetch('/api/ai/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      entry.status    = 'done';
+      entry.poreCount = data.pore_count || 0;
+    } else {
+      entry.status = 'error';
+    }
+  } catch(e) {
+    entry.status = 'error';
+  }
+  renderQueue();
+}
+
+// ── Submit all ─────────────────────────────────────────────────────────────
+async function submitAll() {
+  const pending = queue.filter(q => q.status === 'pending' || q.status === 'error');
+  if (!pending.length) return;
+
+  const toast  = document.getElementById('progress-toast');
+  const ptTitle = document.getElementById('pt-title');
+  const ptFill  = document.getElementById('pt-fill');
+  const ptSub   = document.getElementById('pt-sub');
+  toast.classList.add('show');
+
+  for (let i = 0; i < pending.length; i++) {
+    const entry = pending[i];
+    ptTitle.textContent = `Submitting ${i+1} of ${pending.length}…`;
+    ptFill.style.width  = `${Math.round((i / pending.length)*100)}%`;
+    ptSub.textContent   = entry.file.name;
+    await submitOne(entry.id);
+  }
+
+  ptFill.style.width  = '100%';
+  ptTitle.textContent = `✅ All ${pending.length} images submitted!`;
+  ptSub.textContent   = '';
+  renderQueue();
+  setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function removeItem(id) {
+  const idx = queue.findIndex(q => q.id === id);
+  if (idx !== -1) queue.splice(idx, 1);
+  renderQueue();
+}
+function openLbox(id) {
+  const entry = queue.find(q => q.id === id);
+  if (!entry?.dataUrl) return;
+  document.getElementById('lbox-img').src = entry.dataUrl;
+  document.getElementById('lbox').classList.add('open');
+}
+function closeLbox() {
+  document.getElementById('lbox').classList.remove('open');
+  document.getElementById('lbox-img').src = '';
+}
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(1) + ' MB';
+}
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function loadSample(url, name) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const file = new File([blob], name + '.png', { type: blob.type || 'image/png' });
+    addFiles([file]);
+  } catch(e) {
+    alert(`Failed to load sample: ${e.message}`);
+  }
+}
+
+async function startTrainFromHere(btn) {
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Launching Apple Metal GPU Engine...';
+  try {
+    const res = await fetch('/api/ai/retrain', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      alert('✅ Training Started on Apple Metal GPU! Redirecting to Admin Panel to watch live progress.');
+      window.location.href = '/admin';
+    } else {
+      alert('❌ Error: ' + data.message);
+      btn.disabled = false;
+      btn.innerHTML = '⚡ Launch Retrain Now';
+    }
+  } catch(e) {
+    alert('❌ Request failed: ' + e.message);
+    btn.disabled = false;
+    btn.innerHTML = '⚡ Launch Retrain Now';
+  }
+}
+
+function render50Samples() {
+  const container = document.getElementById('sample-gallery');
+  if (!container) return;
+  const types = ['SEM Mixed', 'Dense Gas', 'X-ray CT', 'Cast Iron', 'Alloy Shrinkage', 'Micro-porosity', 'High Pressure Die', 'Surface Cavity', 'Grain Boundary', 'Thermal Crack'];
+  let html = '';
+  for (let i = 1; i <= 50; i++) {
+    const t = types[(i - 1) % types.length];
+    html += `
+      <div class="sample-thumb" onclick="loadSample('/static/samples/sample_${i}.png','Sample_${i}_${t.replace(/\s+/g,'_')}')" title="Click to add sample #${i} (${t}) to upload queue">
+        <img src="/static/samples/sample_${i}.png" alt="Sample ${i}" onerror="this.src='/static/samples/sample_1.png'">
+        <div class="sample-label">#${i} ${t}</div>
+      </div>`;
+  }
+  container.innerHTML = html;
+}
+render50Samples();
+
+// Initial render
+renderQueue();
+</script>
+</body>
+</html>

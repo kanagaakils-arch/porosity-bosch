@@ -1,12 +1,40 @@
+# Python
 __pycache__/
-*.py[cod]
+*.pyc
 *.pyo
+*.pyd
 .Python
-.venv/
-venv/
-env/
-.env
-.DS_Store
-*.log
-.streamlit/
+*.egg-info/
+dist/
+build/
+*.egg
 
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Model weights (large binary files — use Git LFS or store separately)
+pvi_web/data/models/*.pt
+pvi_web/data/models/*.onnx
+
+# Training artifacts (generated at runtime)
+pvi_web/data/runs/
+pvi_web/data/yolo_dataset/
+pvi_web/data/train.log
+pvi_web/data/train_status.json
+
+# Uploaded images / labels (user data — should not be committed)
+pvi_web/data/images/
+pvi_web/data/labels/
+pvi_web/data/submissions.json
+
+# IDE / OS
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Logs
+*.log

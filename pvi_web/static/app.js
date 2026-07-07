@@ -50,6 +50,7 @@ const S = {
   tool: 'select',      // place | select | measure | datum
   measurePt1: null,
   datumRect: null,     // {x,y,w,h} in mm (wall-relative)
+  datumMode: 'square', // 'square' | 'rect'
   // Canvas state
   cv: { scale: 50, panX: 0, panY: 0, W: 0, H: 0,
         wallTop: 0,  // px from canvas top (base, before pan)
@@ -139,6 +140,7 @@ function makeImagePage(index){
     evaluated: false,
     verdict: null,
     datumRect: null,         // per-image datum zone — never shared across tabs
+    datumMode: 'square',     // per-image datum mode
     imgOffsetMm: 0           // mm offset from Surface A for cropped images
   };
 }
@@ -167,6 +169,7 @@ Workspace.specs[0].images[0].imgState = S.imgState;
 Workspace.specs[0].images[0].history = S.history;
 Workspace.specs[0].images[0].redoHistory = S.redoHistory;
 Workspace.specs[0].images[0].datumRect = S.datumRect;  // sync initial datum
+Workspace.specs[0].images[0].datumMode = S.datumMode;  // sync initial mode
 
 function activeSpecTab(){ return Workspace.specs[Workspace.activeSpec]; }
 function activeImagePage(){ const tab=activeSpecTab(); return tab.images[tab.activeImage]; }
@@ -184,6 +187,7 @@ function bindActiveWorkspace(){
   S.verdict = S.imgMode ? page.verdict : tab.verdict;
   // Restore per-image datum — prevents cross-tab leakage
   S.datumRect = (page.datumRect !== undefined) ? page.datumRect : null;
+  S.datumMode = page.datumMode || 'square';
 }
 
 function persistActiveResults(){
@@ -195,6 +199,7 @@ function persistActiveResults(){
   page.verdict = S.imgMode ? S.verdict : page.verdict;
   // Save datum per image-page so it is never shared across spec tabs or image tabs
   page.datumRect = S.datumRect || null;
+  page.datumMode = S.datumMode || 'square';
 }
 
 function setToggleValue(gid, value){
@@ -298,9 +303,12 @@ function updateImageControlsUI(){
       info.style.display='none';
     }
   }
-  document.getElementById('img-overlay-info').textContent = S.imgState.image
-    ? `${activeImagePage().name} · ${S.imgState.image.naturalWidth}×${S.imgState.image.naturalHeight}px`
-    : `${activeImagePage().name} — upload to begin`;
+  const overlayInfo = document.getElementById('img-overlay-info');
+  if (overlayInfo) {
+    overlayInfo.textContent = S.imgState.image
+      ? `${activeImagePage().name} · ${S.imgState.image.naturalWidth}×${S.imgState.image.naturalHeight}px`
+      : `${activeImagePage().name} — upload to begin`;
+  }
   document.getElementById('btn-undo').disabled=!S.history.length;
   document.getElementById('btn-redo').disabled=!S.redoHistory.length;
 }
@@ -342,7 +350,7 @@ function refreshWorkspaceUI(){
   if(typeof refreshImgOffsetUI === 'function') refreshImgOffsetUI();
   if(typeof renderExclList === 'function') renderExclList();
   if(typeof updateExclZoneBadge === 'function') updateExclZoneBadge();
-  if(mctx) drawCanvas();
+  if(typeof drawCanvas === 'function') drawCanvas();
 }
 
 // ── Image Position in Wall — Upgraded JS Engine ─────────────────────────────
@@ -603,6 +611,40 @@ function switchSpecTab(index){
   updateHeaderButtons();
 }
 
+function switchRegistryTab(tab) {
+  const isReg = tab === 'regions';
+  document.getElementById('tab-btn-regions').style.cssText = `flex:1;padding:6px 0;font-size:10px;font-weight:700;cursor:pointer;border:none;background:var(--c${isReg?'1':'2'});color:var(--${isReg?'tx':'dim'});border-bottom:2px solid ${isReg?'#8b5cf6':'transparent'}`;
+  document.getElementById('tab-btn-pores').style.cssText = `flex:1;padding:6px 0;font-size:10px;font-weight:700;cursor:pointer;border:none;background:var(--c${!isReg?'1':'2'});color:var(--${!isReg?'tx':'dim'});border-bottom:2px solid ${!isReg?'#8b5cf6':'transparent'}`;
+  document.getElementById('tab-content-regions').style.display = isReg ? 'block' : 'none';
+  document.getElementById('tab-content-pores').style.display = !isReg ? 'block' : 'none';
+}
+
+// ── Registry panel tab switcher ──────────────────────────────────────────────
+let _regTab = 'analysis'; // default tab
+function switchRegTab(tab) {
+  _regTab = tab;
+  const tabAnalysis   = document.getElementById('reg-tab-analysis');
+  const tabPorelist   = document.getElementById('reg-tab-porelist');
+  const panelAnalysis = document.getElementById('reg-panel-analysis');
+  const panelPorelist = document.getElementById('reg-panel-porelist');
+  if (!panelAnalysis || !panelPorelist) return;
+
+  const activeStyle   = 'font-size:9px;font-weight:700;padding:4px 10px;border:1px solid var(--bd2);border-bottom:none;border-radius:4px 4px 0 0;background:var(--c1);color:var(--tx);cursor:pointer;letter-spacing:.04em';
+  const inactiveStyle = 'font-size:9px;font-weight:700;padding:4px 10px;border:1px solid var(--bd2);border-bottom:1px solid var(--c1);border-radius:4px 4px 0 0;background:var(--c3);color:var(--dim);cursor:pointer;letter-spacing:.04em';
+
+  if (tab === 'analysis') {
+    if (tabAnalysis)   tabAnalysis.style.cssText   = activeStyle;
+    if (tabPorelist)   tabPorelist.style.cssText   = inactiveStyle;
+    panelAnalysis.style.display = 'flex';
+    panelPorelist.style.display = 'none';
+  } else {
+    if (tabPorelist)   tabPorelist.style.cssText   = activeStyle;
+    if (tabAnalysis)   tabAnalysis.style.cssText   = inactiveStyle;
+    panelPorelist.style.display = 'flex';
+    panelAnalysis.style.display = 'none';
+  }
+}
+
 function switchImageTab(index){
   persistActiveResults();
   activeSpecTab().activeImage=index;
@@ -749,19 +791,21 @@ function nav(id, opts={}){
   page.style.pointerEvents='auto';
   const nb=document.getElementById('nb-'+id);
   if(nb) nb.classList.add('on');
-  if(['spec','meas','verdict','presets','ref'].includes(id)){
+  if(['spec','meas','verdict','presets','ref','area'].includes(id)){
     const routeLabel = {
       spec:'Tool 01 / Drawing Spec',
       meas:'Tool 01 / Measurement',
       verdict:'Tool 01 / Verdict',
       presets:'Tool 01 / Presets',
-      ref:'Tool 01 / Quick Ref'
+      ref:'Tool 01 / Quick Ref',
+      area:'Tool 01 / Area & Pores'
     }[id];
     setPlatformContext('porosity', opts.platformRoute || routeLabel);
   }
   if(id==='meas'){ requestAnimationFrame(initCanvas); }
   if(id==='verdict'){ renderVerdict(); }
   if(id==='ref'){ buildRef(); }
+  if(id==='area'){ if(typeof renderAreaTab==='function') renderAreaTab(); }
   
   // Wait a tick for DOM updates
   setTimeout(updateHeaderButtons, 0);
@@ -2119,6 +2163,11 @@ function bindCanvasEvents(){
       else if(S.imgState.imgTool){
         imgToolActivate(S.imgState.imgTool); // toggles off
       }
+      // Priority 6: return to Select mode from any active canvas tool
+      else if(S.tool && S.tool !== 'select' && S.tool !== 'place'){
+        setTool('select');
+        toast('Esc → Select mode');
+      }
     }
     if((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey){ e.preventDefault(); undoPore(); }
     if((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))){ e.preventDefault(); redoPore(); }
@@ -2895,54 +2944,75 @@ function setPoreType(t){
   });
 }
 function setTool(t){
-  S.tool=t; S.measurePt1=null;
-  // Clear excl selection/edit state if leaving excl_select
-  if(t!=='excl_select'){ S._exclSelected=null; S._exclEditPts=null; S._exclRotating=null; }
-  ['place','select','measure','datum','pan'].forEach(tt=>{
-    const b=document.getElementById('tool-'+tt);
-    if(b) b.classList.toggle('on',tt===t);
-  });
-  const wandPore1 = document.getElementById('tool-wand-pore');
-  if(wandPore1) wandPore1.classList.toggle('on', t==='wand_pore');
-  const wandPore2 = document.getElementById('btn-detect-wand');
-  if(wandPore2) wandPore2.classList.toggle('on', t==='wand_pore');
-  // New select button in DETECT group
-  const selImg = document.getElementById('tool-select-img');
-  if(selImg) selImg.classList.toggle('on', t==='select');
-  const exclRect = document.getElementById('btn-excl-rect');
-  if(exclRect) exclRect.classList.toggle('on', t==='exclude_rect');
-  const exclCircle = document.getElementById('btn-excl-circle');
-  if(exclCircle) exclCircle.classList.toggle('on', t==='exclude_circle');
-  const exclWand = document.getElementById('btn-excl-wand');
-  if(exclWand) exclWand.classList.toggle('on', t==='exclude_wand');
-  const exclSel = document.getElementById('btn-excl-select');
-  if(exclSel) exclSel.classList.toggle('on', t==='excl_select');
-  
-  // Wand options (tol/min-area/contiguous) only for Wand Excl — Wand Pore always uses flood-fill
-  const wandOpts = document.getElementById('wand-options');
-  if(wandOpts) wandOpts.style.display = (t==='exclude_wand') ? 'flex' : 'none';
+  S.tool = t;
+  S.measurePt1 = null;
 
-  const hints={
-    place:'Click to place pore · Scroll over pore: resize · Right-click: delete',
-    wand_pore:'Magic Wand Pore: Click dark void/shrinkage cavity to auto-detect contour and include as Pore',
-    select:'Click pore to select + drag to move · Scroll over pore: resize · Edit panel appears below registry',
-    measure:'Click point 1, then point 2 to measure edge-to-edge distance',
-    datum:'Click and drag to define datum area rectangle',
-    exclude_rect:'Click and drag to define rectangular exclusion zone',
-    exclude_circle:'Click and drag/extend to define circular exclusion zone',
-    exclude_wand:'Click a dark region/hole to auto-detect its boundary and exclude it',
-    excl_select:'Click a zone to select · Drag to move · Drag corner handles to resize · Delete key to remove',
-    pan:'Click and drag to pan the canvas'
+  // Clear excl selection/edit state when leaving excl_select
+  if(t !== 'excl_select'){ S._exclSelected = null; S._exclEditPts = null; S._exclRotating = null; }
+
+  // ── Master list of all toggleable toolbar buttons ──────────────────────────
+  // Format: [elementId, activeWhen]
+  const allToolBtns = [
+    // ACTIONS row
+    ['tool-select-img',    t === 'select'],
+    // DETECT row
+    ['btn-detect-wand',    t === 'wand_pore'],
+    ['tool-measure',       t === 'measure'],
+    ['tool-datum',         t === 'datum'],
+    // EXCL row
+    ['btn-excl-rect',      t === 'exclude_rect'],
+    ['btn-excl-circle',    t === 'exclude_circle'],
+    ['btn-excl-wand',      t === 'exclude_wand'],
+    ['btn-excl-select',    t === 'excl_select'],
+    // Legacy sidebar tool buttons (if present)
+    ['tool-place',         t === 'place'],
+    ['tool-select',        t === 'select'],
+    ['tool-pan',           t === 'pan'],
+    ['tool-wand-pore',     t === 'wand_pore'],
+  ];
+
+  allToolBtns.forEach(([id, active]) => {
+    const el = document.getElementById(id);
+    if(el) el.classList.toggle('on', active);
+  });
+
+  // Wand excl options panel — show only when exclude_wand active
+  const wandOpts = document.getElementById('wand-options');
+  if(wandOpts) wandOpts.style.display = (t === 'exclude_wand') ? 'flex' : 'none';
+
+  // Hint bar and tool breadcrumb
+  const hints = {
+    place:          'Click to place pore · Scroll over pore: resize · Right-click: delete',
+    wand_pore:      'Wand Pore: click dark void/shrinkage cavity to flood-fill and add as pore',
+    select:         'Select: click pore to select · drag to move · scroll to resize · works on all pores & excl zones',
+    measure:        'Gap: click point 1, then point 2 to measure edge-to-edge distance (A×Φs check)',
+    datum:          'Datum: click and drag to draw the VW50093 inspection reference rectangle',
+    exclude_rect:   'Excl Rect: click and drag to mask a rectangular region — pores inside are ignored',
+    exclude_circle: 'Excl Circle: click and drag to mask a circular region — ideal for bore holes',
+    exclude_wand:   'Excl Wand: click a bright boundary region to auto-trace and exclude it',
+    excl_select:    'Excl Select: click a zone to select · drag to move · drag corners to resize · Del to remove',
+    pan:            'Pan: click and drag to scroll the canvas view',
   };
-  document.getElementById('canvas-hint').textContent=hints[t] || '';
-  document.getElementById('sb-tool').textContent=t.toUpperCase();
-  const wrap=document.getElementById('canvas-wrap');
-  const cursors={place:'crosshair',wand_pore:'crosshair',select:'grab',measure:'crosshair',datum:'cell',exclude_rect:'crosshair',exclude_circle:'crosshair',exclude_wand:'crosshair',excl_select:'default',pan:'grab'};
-  wrap.style.cursor=cursors[t] || 'default';
-  // Hide edit panel when leaving select mode
-  if(t!=='select'){ const ep=document.getElementById('pore-edit-panel'); if(ep) ep.style.display='none'; }
-  // Refresh excl list to show/hide edit panel
-  if(typeof renderExclList==='function') renderExclList();
+  const hintEl = document.getElementById('canvas-hint');
+  if(hintEl) hintEl.textContent = hints[t] || '';
+  const toolLbl = document.getElementById('sb-tool');
+  if(toolLbl) toolLbl.textContent = t.replace(/_/g,' ').toUpperCase();
+
+  // Canvas cursor
+  const cursors = {
+    place:'crosshair', wand_pore:'crosshair', select:'grab',
+    measure:'crosshair', datum:'cell',
+    exclude_rect:'crosshair', exclude_circle:'crosshair', exclude_wand:'crosshair',
+    excl_select:'default', pan:'grab'
+  };
+  const wrap = document.getElementById('canvas-wrap');
+  if(wrap) wrap.style.cursor = cursors[t] || 'default';
+
+  // Hide pore edit panel when leaving select
+  if(t !== 'select'){ const ep = document.getElementById('pore-edit-panel'); if(ep) ep.style.display = 'none'; }
+
+  // Refresh excl list overlay
+  if(typeof renderExclList === 'function') renderExclList();
 }
 
 // ═══════════════════════════════════════════════════
@@ -2973,6 +3043,17 @@ function hideTip(){ document.getElementById('ctip').style.display='none'; }
 // ═══════════════════════════════════════════════════
 // DATUM & EXCLUSION ZONES REGISTRY (EDITABLE)
 // ═══════════════════════════════════════════════════
+function toggleDatumMode() {
+  S.datumMode = (S.datumMode === 'rect') ? 'square' : 'rect';
+  const page = activeImagePage(); if(page) page.datumMode = S.datumMode;
+  if (S.datumMode === 'square' && S.datumRect && S.datumRect.w > 0) {
+    const side = Math.max(Math.abs(S.datumRect.w), Math.abs(S.datumRect.h));
+    S.datumRect.w = side; S.datumRect.h = side;
+    drawCanvas(); updateLiveMetrics();
+  }
+  updatePoreRegistry();
+}
+
 function renderDatumRegistry() {
   const cont = document.getElementById('datum-registry-section');
   if (!cont) return;
@@ -2994,31 +3075,43 @@ function renderDatumRegistry() {
   const area = Math.abs(r.w * r.h);
   const cx = r.x + r.w / 2;
   const cy = r.y + r.h / 2;
+  const isRect = S.datumMode === 'rect';
   cont.innerHTML = `
     <div style="padding:6px 12px;background:rgba(255,255,255,.03);font-size:10px;font-weight:700;color:var(--tx);display:flex;justify-content:space-between;align-items:center">
       <span>📐 Datum / Inspection Area</span>
-      <button onclick="S.datumRect=null;drawCanvas();updateLiveMetrics();updatePoreRegistry();" style="font-size:8px;padding:2px 6px;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:3px;cursor:pointer">✕ Remove</button>
+      <div style="display:flex;gap:4px">
+        <button onclick="toggleDatumMode()" title="Toggle between Square (W=H) and Rectangle mode" style="font-size:8px;padding:2px 6px;background:${isRect?'var(--c3)':'var(--primary-b)'};color:${isRect?'var(--dim)':'var(--primary)'};border:1px solid ${isRect?'var(--bd)':'var(--primary)'};border-radius:3px;cursor:pointer">${isRect?'🔓 Custom Rect':'🔒 Square (W=H)'}</button>
+        <button onclick="S.datumRect=null;drawCanvas();updateLiveMetrics();updatePoreRegistry();" style="font-size:8px;padding:2px 6px;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:3px;cursor:pointer">✕ Remove</button>
+      </div>
     </div>
     <div style="padding:8px 12px;font-size:9px;color:var(--tx);display:grid;grid-template-columns:1fr 1fr;gap:6px">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <span style="color:var(--dim)">Width:</span>
-        <input type="number" step="0.1" min="0.1" value="${Math.abs(r.w).toFixed(2)}" onchange="_editDatumReg('w',+this.value)" style="width:50px;font-size:9px;padding:2px 4px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"> mm
+        <div style="display:flex;align-items:center;gap:2px">
+          <button onclick="_editDatumReg('w', Math.max(0.1, ${Math.abs(r.w) - 0.5}))" style="padding:1px 4px;font-size:8px;background:var(--c3);border:1px solid var(--bd);color:var(--dim);cursor:pointer;border-radius:2px">-</button>
+          <input type="number" step="0.1" min="0.1" value="${Math.abs(r.w).toFixed(2)}" onchange="_editDatumReg('w',+this.value)" style="width:44px;font-size:9px;padding:2px 4px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right">
+          <button onclick="_editDatumReg('w', ${Math.abs(r.w) + 0.5})" style="padding:1px 4px;font-size:8px;background:var(--c3);border:1px solid var(--bd);color:var(--dim);cursor:pointer;border-radius:2px">+</button> mm
+        </div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between">
         <span style="color:var(--dim)">Height:</span>
-        <input type="number" step="0.1" min="0.1" value="${Math.abs(r.h).toFixed(2)}" onchange="_editDatumReg('h',+this.value)" style="width:50px;font-size:9px;padding:2px 4px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"> mm
+        <div style="display:flex;align-items:center;gap:2px">
+          <button onclick="_editDatumReg('h', Math.max(0.1, ${Math.abs(r.h) - 0.5}))" style="padding:1px 4px;font-size:8px;background:var(--c3);border:1px solid var(--bd);color:var(--dim);cursor:pointer;border-radius:2px">-</button>
+          <input type="number" step="0.1" min="0.1" value="${Math.abs(r.h).toFixed(2)}" onchange="_editDatumReg('h',+this.value)" style="width:44px;font-size:9px;padding:2px 4px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right">
+          <button onclick="_editDatumReg('h', ${Math.abs(r.h) + 0.5})" style="padding:1px 4px;font-size:8px;background:var(--c3);border:1px solid var(--bd);color:var(--dim);cursor:pointer;border-radius:2px">+</button> mm
+        </div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between">
         <span style="color:var(--dim)">Center X:</span>
-        <input type="number" step="0.1" value="${cx.toFixed(2)}" onchange="_editDatumReg('cx',+this.value)" style="width:50px;font-size:9px;padding:2px 4px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"> mm
+        <input type="number" step="0.1" value="${cx.toFixed(2)}" onchange="_editDatumReg('cx',+this.value)" style="width:48px;font-size:9px;padding:2px 4px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"> mm
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between">
         <span style="color:var(--dim)">Center Y:</span>
-        <input type="number" step="0.1" value="${cy.toFixed(2)}" onchange="_editDatumReg('cy',+this.value)" style="width:50px;font-size:9px;padding:2px 4px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"> mm
+        <input type="number" step="0.1" value="${cy.toFixed(2)}" onchange="_editDatumReg('cy',+this.value)" style="width:48px;font-size:9px;padding:2px 4px;background:var(--c2);border:1px solid var(--bd);color:var(--tx);text-align:right"> mm
       </div>
       <div style="grid-column:span 2;display:flex;justify-content:space-between;padding-top:4px;border-top:1px dashed var(--bd)">
         <span style="color:var(--dim)">Total Area:</span>
-        <b style="color:var(--g)">${area.toFixed(2)} mm²</b>
+        <b style="color:var(--g)">${area.toFixed(2)} mm² ${isRect ? '(Rectangle)' : '(Square □)'}</b>
       </div>
     </div>`;
 }
@@ -3026,8 +3119,14 @@ function renderDatumRegistry() {
 function _editDatumReg(prop, val) {
   if (!S.datumRect || S.datumRect.w <= 0) return;
   pushHistory();
-  if (prop === 'w') { S.datumRect.w = val; }
-  else if (prop === 'h') { S.datumRect.h = val; }
+  if (prop === 'w') {
+    S.datumRect.w = val;
+    if (S.datumMode !== 'rect') S.datumRect.h = val;
+  }
+  else if (prop === 'h') {
+    S.datumRect.h = val;
+    if (S.datumMode !== 'rect') S.datumRect.w = val;
+  }
   else if (prop === 'cx') { S.datumRect.x = val - S.datumRect.w / 2; }
   else if (prop === 'cy') { S.datumRect.y = val - S.datumRect.h / 2; }
   drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
@@ -3146,16 +3245,35 @@ function _updateAreaBreakdown() {
       else if (z.type === 'circle') areaMm2 = Math.PI * z.r * z.r;
       else if (z.type === 'polygon' && z.points && z.points.length >= 3)
         areaMm2 = polyArea(z.points);
-      // Check if exclusion zone center overlaps datum
-      let cx = 0, cy = 0;
-      if (z.type === 'rect')    { cx = z.x + z.w/2; cy = z.y + z.h/2; }
-      else if (z.type === 'circle') { cx = z.cx; cy = z.cy; }
-      else if (z.points && z.points.length) {
-        cx = z.points.reduce((s,p)=>s+p.x,0)/z.points.length;
-        cy = z.points.reduce((s,p)=>s+p.y,0)/z.points.length;
+      let overlapAreaMm2 = 0;
+      if (dr && dr.w !== 0 && dr.h !== 0) {
+        const drX = Math.min(dr.x, dr.x + dr.w), drW = Math.abs(dr.w);
+        const drY = Math.min(dr.y, dr.y + dr.h), drH = Math.abs(dr.h);
+        
+        let pts = [];
+        if (z.type === 'rect') {
+          const zX = Math.min(z.x, z.x + z.w), zW = Math.abs(z.w);
+          const zY = Math.min(z.y, z.y + z.h), zH = Math.abs(z.h);
+          pts = [
+            {x: zX, y: zY}, {x: zX+zW, y: zY},
+            {x: zX+zW, y: zY+zH}, {x: zX, y: zY+zH}
+          ];
+        } else if (z.type === 'circle') {
+          for(let i=0; i<32; i++){
+            const a = (i/32)*Math.PI*2;
+            pts.push({x: z.cx + z.r*Math.cos(a), y: z.cy + z.r*Math.sin(a)});
+          }
+        } else if (z.type === 'polygon' && z.points) {
+          pts = z.points;
+        }
+        
+        if (pts.length > 0) {
+          const clipped = _clipPolyToRect(pts, drX, drY, drW, drH);
+          if (clipped && clipped.length >= 3) overlapAreaMm2 = polyArea(clipped);
+        }
       }
-      const inDatum = dr && dr.w > 0 && cx >= dr.x && cx <= dr.x+dr.w && cy >= dr.y && cy <= dr.y+dr.h;
-      if (inDatum) totalExclInsideDatumMm2 += areaMm2;
+      totalExclInsideDatumMm2 += overlapAreaMm2;
+      const inDatum = overlapAreaMm2 > 0;
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:3px';
       row.innerHTML = `
@@ -3170,20 +3288,83 @@ function _updateAreaBreakdown() {
 
   // Net inspection area = datum - exclusions inside datum (or image area if no datum)
   const netEl = el('area-net');
+  let netValMm2 = 0;
+  let totalExclMm2 = 0;
   if (datumAreaMm2 !== null) {
-    const net = Math.max(0, datumAreaMm2 - totalExclInsideDatumMm2);
-    netEl.textContent = net.toFixed(2) + ' mm²';
+    netValMm2 = Math.max(0, datumAreaMm2 - totalExclInsideDatumMm2);
+    netEl.textContent = netValMm2.toFixed(2) + ' mm²';
   } else if (imgAreaMm2 !== null) {
-    const totalExclMm2 = zones.reduce((sum, z) => {
+    totalExclMm2 = zones.reduce((sum, z) => {
       if (z.type === 'rect') return sum + Math.abs(z.w) * Math.abs(z.h);
       if (z.type === 'circle') return sum + Math.PI * z.r * z.r;
       if (z.type === 'polygon' && z.points) return sum + polyArea(z.points);
       return sum;
     }, 0);
-    const net = Math.max(0, imgAreaMm2 - totalExclMm2);
-    netEl.textContent = net.toFixed(2) + ' mm² (no datum)';
+    netValMm2 = Math.max(0, imgAreaMm2 - totalExclMm2);
+    netEl.textContent = netValMm2.toFixed(2) + ' mm² (no datum)';
   } else {
     netEl.textContent = '—';
+  }
+  
+  S.areaMetrics = {
+    imgAreaMm2,
+    datumAreaMm2,
+    totalExclInsideDatumMm2,
+    totalExclMm2,
+    netValMm2
+  };
+
+  // --- Porosity Analysis ---
+  const allPores = (typeof AP === 'function' ? AP() : []) || [];
+  
+  // 1. Full Image Pores
+  if (imgAreaMm2 !== null && el('stat-image')) {
+    let count = 0, area = 0, max = 0;
+    allPores.forEach(p => {
+      count++;
+      area += (p.trueArea || Math.PI*Math.pow(p.dia/2, 2));
+      if (p.dia > max) max = p.dia;
+    });
+    const pct = (area / imgAreaMm2) * 100;
+    el('stat-image').innerHTML = `${count} pores &nbsp;|&nbsp; Max Φ: ${max.toFixed(2)} mm &nbsp;|&nbsp; <b style="color:var(--tx)">${pct.toFixed(2)}%</b>`;
+  } else if (el('stat-image')) {
+    el('stat-image').innerHTML = '';
+  }
+  
+  // 2. Datum Pores (unfiltered by exclusions)
+  if (datumAreaMm2 !== null && el('stat-datum')) {
+    let count = 0, area = 0, max = 0;
+    const drX = dr && dr.w ? Math.min(dr.x, dr.x + dr.w) : 0;
+    const drY = dr && dr.h ? Math.min(dr.y, dr.y + dr.h) : 0;
+    const drW = dr && dr.w ? Math.abs(dr.w) : 0;
+    const drH = dr && dr.h ? Math.abs(dr.h) : 0;
+    
+    allPores.forEach(p => {
+      if (p.x >= drX && p.x <= drX + drW && p.y >= drY && p.y <= drY + drH) {
+        count++;
+        area += (p.trueArea || Math.PI*Math.pow(p.dia/2, 2));
+        if (p.dia > max) max = p.dia;
+      }
+    });
+    const pct = (area / datumAreaMm2) * 100;
+    el('stat-datum').innerHTML = `${count} pores &nbsp;|&nbsp; Max Φ: ${max.toFixed(2)} mm &nbsp;|&nbsp; <b>${pct.toFixed(2)}%</b>`;
+  } else if (el('stat-datum')) {
+    el('stat-datum').innerHTML = '';
+  }
+  
+  // 3. Net Pores (filtered by both datum & exclusions)
+  if (netValMm2 > 0 && el('stat-net')) {
+    let count = 0, area = 0, max = 0;
+    const evalPores = getPoresForEvaluation(allPores, page);
+    evalPores.forEach(p => {
+      count++;
+      area += (p._effectiveArea || Math.PI*Math.pow(p._effectiveDia/2, 2));
+      if (p._effectiveDia > max) max = p._effectiveDia;
+    });
+    const pct = (area / netValMm2) * 100;
+    el('stat-net').innerHTML = `${count} pores &nbsp;|&nbsp; Max Φ: ${max.toFixed(2)} mm &nbsp;|&nbsp; <b>${pct.toFixed(2)}%</b>`;
+  } else if (el('stat-net')) {
+    el('stat-net').innerHTML = '';
   }
 
   // ── Mini thumbnails ────────────────────────────────────────────────────
@@ -3297,6 +3478,8 @@ function selectPore(id){
   S.selectedId=S.selectedId===id?null:id;
   // Switch to Select tool so user can drag/edit the pore
   if(S.selectedId && S.tool==='place') setTool('select');
+  // Auto-switch to Pore List tab when selecting so the edit panel is visible
+  if(S.selectedId) switchRegTab('porelist');
   drawCanvas(); updatePoreRegistry(); showEditPanel();
   // Scroll edit panel into view
   if(S.selectedId){
@@ -3883,14 +4066,19 @@ function _poreExclCropStatus(p, page){
       totalGridCells++;
       let insideExcl = false;
       // Check datum boundary — outside datum = excluded region
-      if(dr && !(px >= dr.x && px <= (dr.x + dr.w) && py >= dr.y && py <= (dr.y + dr.h))){
-        insideExcl = true;
-      } else {
+      if(dr) {
+        const drX = Math.min(dr.x, dr.x + dr.w), drW = Math.abs(dr.w);
+        const drY = Math.min(dr.y, dr.y + dr.h), drH = Math.abs(dr.h);
+        if(!(px >= drX && px <= (drX + drW) && py >= drY && py <= (drY + drH))) insideExcl = true;
+      }
+      if(!insideExcl) {
         // Check exclusion zones — inside zone = excluded region
         for(let z = 0; z < zones.length; z++){
           const zone = zones[z];
           if(zone.type === 'rect'){
-            if(px >= zone.x && px <= (zone.x+zone.w) && py >= zone.y && py <= (zone.y+zone.h)){ insideExcl=true; break; }
+            const zX = Math.min(zone.x, zone.x + zone.w), zW = Math.abs(zone.w);
+            const zY = Math.min(zone.y, zone.y + zone.h), zH = Math.abs(zone.h);
+            if(px >= zX && px <= (zX+zW) && py >= zY && py <= (zY+zH)){ insideExcl=true; break; }
           } else if(zone.type === 'circle'){
             if((px-zone.cx)**2 + (py-zone.cy)**2 <= zone.r**2){ insideExcl=true; break; }
           } else if(zone.type === 'polygon'){
@@ -4097,6 +4285,14 @@ function datumHandleAtCanvas(cx, cy){
 // Apply datum resize from handle name + delta-mm from original snapshot (enforcing square constraint)
 function _applyDatumResize(handle, dxmm, dymm, origDatum){
   let {x, y, w, h} = origDatum;
+  if (S.datumMode === 'rect') {
+    if (handle.includes('e')) { w = Math.max(0.5, origDatum.w + dxmm); }
+    else if (handle.includes('w')) { w = Math.max(0.5, origDatum.w - dxmm); x = origDatum.x + origDatum.w - w; }
+    if (handle.includes('s')) { h = Math.max(0.5, origDatum.h + dymm); }
+    else if (handle.includes('n')) { h = Math.max(0.5, origDatum.h - dymm); y = origDatum.y + origDatum.h - h; }
+    S.datumRect = { x, y, w, h };
+    return;
+  }
   let cw = w, ch = h;
   if(handle.includes('e')) cw = w + dxmm;
   else if(handle.includes('w')) cw = w - dxmm;
@@ -6013,6 +6209,10 @@ function renderVerdict(){
     ['HR / NR (outer ⅓)', (lim.hr||0)===2?'N/A':`HR${lim.hr||0} / NR${lim.nr||0}`],
     ['HK / NK (central ⅓)', (lim.hk||0)===2?'N/A':`HK${lim.hk||1} / NK${lim.nk||1}`],
     ['Wall thickness t', (S.imgMode?getEffectiveWallH().toFixed(1):lim.t)+' mm'],
+    ...(S.areaMetrics && S.areaMetrics.imgAreaMm2 ? [['Total Image Area', S.areaMetrics.imgAreaMm2.toFixed(2) + ' mm²']] : []),
+    ...(S.areaMetrics && S.areaMetrics.datumAreaMm2 !== null ? [['Datum Area', S.areaMetrics.datumAreaMm2.toFixed(2) + ' mm²']] : []),
+    ...(S.areaMetrics && S.areaMetrics.totalExclInsideDatumMm2 ? [['Exclusions Area (in datum)', S.areaMetrics.totalExclInsideDatumMm2.toFixed(2) + ' mm²']] : []),
+    ...(S.areaMetrics && S.areaMetrics.netValMm2 ? [['Net Inspection Area', S.areaMetrics.netValMm2.toFixed(2) + ' mm²']] : []),
     ['Total pores detected', _totalRaw],
     ['Effective pores',v.eff.length],
     ['Date',new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})],
@@ -6032,6 +6232,9 @@ function renderVerdict(){
   const _methodLabel={'visual_machined':'Visual (Machined)','visual_cast':'Visual (As-Cast)','xray':'X-Ray / DR','ct':'CT Scan 3D'};
   document.getElementById('v-method-title').textContent='Method Capability — '+(_methodLabel[lim.method]||lim.method||'—');
   document.getElementById('v-method-note').innerHTML=`<p style="font-size:12px;color:var(--muted);line-height:1.65">${MCAP[lim.method]||'No method recorded.'}</p>`;
+  
+  const tpEl = document.getElementById('v-top-pores');
+  if (tpEl) tpEl.innerHTML = (typeof _renderTopPoresHTML === 'function') ? _renderTopPoresHTML() : '';
 }
 
 // ═══════════════════════════════════════════════════
@@ -6892,7 +7095,23 @@ window.addEventListener('resize',()=>{
 
 
 // Active pore array — returns draw or image pore list depending on mode
-function AP(){ return S.imgMode ? S.imgPores : S.pores; }
+function AP(){
+  if (S.imgMode) {
+    if (!S.imgPores) {
+      S.imgPores = [];
+      const p = (typeof activeImagePage === 'function') ? activeImagePage() : null;
+      if (p) p.pores = S.imgPores;
+    }
+    return S.imgPores;
+  } else {
+    if (!S.pores) {
+      S.pores = [];
+      const t = (typeof activeSpecTab === 'function') ? activeSpecTab() : null;
+      if (t) t.drawPores = S.pores;
+    }
+    return S.pores;
+  }
+}
 function setAP(arr){
   if(S.imgMode){
     S.imgPores=arr;
@@ -6993,48 +7212,78 @@ function _otsu(gray,total){
   return thr;
 }
 
-// ── Adaptive threshold v2 — smaller blocks, gradient compensation, dark-bg ──
-function _adaptiveThreshold(gray,w,h,blockSize,globalThr,sens){
-  // Auto-detect dark background (e.g. X-ray): if global mean < 100, invert logic
-  let globalMean=0;
-  for(let i=0;i<w*h;i++) globalMean+=gray[i];
-  globalMean/=(w*h);
-  const darkBg=globalMean<100;
-
-  const bin=new Uint8Array(w*h);
-  for(let by=0;by<h;by+=blockSize) for(let bx=0;bx<w;bx+=blockSize){
-    const bw=Math.min(blockSize,w-bx), bh2=Math.min(blockSize,h-by);
-    const localGray=[];
-    let sum=0, sumSq=0;
-    for(let y=by;y<by+bh2;y++) for(let x=bx;x<bx+bw;x++) localGray.push(gray[y*w+x]);
-    for(let i=0;i<localGray.length;i++){
-      const v=localGray[i]; sum+=v; sumSq+=v*v;
+// ── Adaptive threshold v4 — Background-Modulated Global Otsu (Zero Hallucinated Pores) ──
+function _adaptiveThreshold(gray, w, h, blockSize, globalThr, sens) {
+  // 1. Calculate matrixMean: average brightness of clean metal background (pixels >= globalThr)
+  let sumMatrix = 0, countMatrix = 0;
+  for (let i = 0, len = w * h; i < len; i++) {
+    if (gray[i] >= globalThr) {
+      sumMatrix += gray[i];
+      countMatrix++;
     }
-    const localThr=_otsu(new Uint8Array(localGray),localGray.length);
-    const mean=sum/localGray.length;
-    const variance=Math.max(0, sumSq/localGray.length - mean*mean);
-    const localStd=Math.sqrt(variance);
+  }
+  const matrixMean = countMatrix > 0 ? sumMatrix / countMatrix : 180;
 
-    // Illumination gradient compensation: weight local vs global based on contrast
-    const contrastWeight=Math.min(1, Math.max(0.15, localStd/30));
-    const uniformBlock=localStd < 6;
-    const baseThr=Math.round(uniformBlock
-      ? (globalThr*0.80 + localThr*0.20)
-      : (localThr*0.75 + globalThr*0.25));
-
-    // Wider sensitivity range: 0–100 maps to ±25 threshold units (was ±21)
-    const sensOffset=(sens-50) * 0.50 * contrastWeight;
-    const thr=Math.max(10,Math.min(240,Math.round(baseThr + sensOffset)));
-    for(let y=by;y<by+bh2;y++) for(let x=bx;x<bx+bw;x++){
-      if(darkBg){
-        bin[y*w+x]=gray[y*w+x]>thr?1:0;  // invert for dark background
-      } else {
-        bin[y*w+x]=gray[y*w+x]<thr?1:0;   // normal: dark pores on light bg
+  // 2. Divide into grid of tiles and modulate threshold purely by local illumination shift
+  const numX = Math.ceil(w / blockSize), numY = Math.ceil(h / blockSize);
+  const gridThr = [];
+  for (let ty = 0; ty < numY; ty++) {
+    gridThr[ty] = [];
+    for (let tx = 0; tx < numX; tx++) {
+      const bx = tx * blockSize, by = ty * blockSize;
+      const bw = Math.min(blockSize, w - bx), bh2 = Math.min(blockSize, h - by);
+      
+      let sumTile = 0, countTile = 0;
+      for (let y = by; y < by + bh2; y++) {
+        const yOffset = y * w;
+        for (let x = bx; x < bx + bw; x++) {
+          const v = gray[yOffset + x];
+          if (v >= globalThr - 20) { // clean metal background pixel in this tile
+            sumTile += v;
+            countTile++;
+          }
+        }
       }
+      // If tile has background pixels, measure how much darker/brighter this tile's illumination is
+      const tileMatrixMean = countTile > 0 ? sumTile / countTile : matrixMean;
+      const illumShift = tileMatrixMean - matrixMean;
+
+      // Base threshold is strictly global Otsu shifted by local lighting gradient.
+      // NEVER run local Otsu per tile, because Otsu on clean metal hallucinated false pores!
+      const baseThr = globalThr + illumShift * 0.85;
+      const sensOffset = (sens - 50) * 0.80;
+      const targetThr = baseThr + sensOffset;
+
+      gridThr[ty][tx] = Math.max(10, Math.min(240, Math.round(targetThr)));
+    }
+  }
+
+  // 3. Bilinear interpolation across all pixels for smooth threshold field
+  const bin = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const ty2 = (y - blockSize / 2) / blockSize;
+    const ty0 = Math.max(0, Math.floor(ty2));
+    const ty1 = Math.min(numY - 1, ty0 + 1);
+    const fy = ty2 - ty0;
+    const yOffset = y * w;
+    for (let x = 0; x < w; x++) {
+      const tx = (x - blockSize / 2) / blockSize;
+      const tx0 = Math.max(0, Math.floor(tx));
+      const tx1 = Math.min(numX - 1, tx0 + 1);
+      const fx = tx - tx0;
+      const t00 = gridThr[ty0][tx0], t01 = gridThr[ty0][tx1];
+      const t10 = gridThr[ty1][tx0], t11 = gridThr[ty1][tx1];
+      const thr = Math.round(
+        t00 * (1 - fx) * (1 - fy) + t01 * fx * (1 - fy) +
+        t10 * (1 - fx) * fy     + t11 * fx * fy
+      );
+      bin[yOffset + x] = gray[yOffset + x] < thr ? 1 : 0;
     }
   }
   return bin;
 }
+
+
 
 // ── Morphological dilation (radius r) ────────────────────────────────────────
 function _dilate(bin,w,h,r){
@@ -7274,22 +7523,19 @@ function _wandExtractAllComponents(canvasX, canvasY, mode) {
     }
   }
 
-  // ── For EXCLUSION mode (non-contiguous): keep ONLY edge-touching components ──
-  // Casting outer boundary always reaches the image border; internal grain patterns do NOT.
-  // This prevents the wand from selecting scattered dark grain pixels inside the casting.
-  const filterEdgeOnly = (mode === 'excl' && !isContiguous);
+  // ── FOR BOTH MODES: allow non-contiguous (global) wand selection if unchecked.
+  // The user explicitly requested Photoshop-style magic wand where clicking a color
+  // selects ALL matching areas in the image, regardless of whether they touch the edge.
+  const filterEdgeOnly = false;
 
-  // Sort by area descending, filter minimum area, optionally restrict to edge-touching, cap at 15 zones
+  // Sort by area descending, filter minimum area, cap at 15 zones (to prevent UI lag from noise)
   const components = Object.entries(compStats)
     .filter(([, s]) => s.area >= minAreaPx)
-    .filter(([, s]) => !filterEdgeOnly || s.edgeTouching)
     .sort(([, a], [, b]) => b.area - a.area)
     .slice(0, 15);
 
   if (!components.length) {
-    const hint = filterEdgeOnly
-      ? 'No edge-touching region found — try Contiguous mode or click closer to the image border'
-      : 'No region large enough found — lower Min Area or raise Color Tol';
+    const hint = 'No matching regions found — try increasing the Tolerance or lowering the Min Area';
     if (typeof toast==='function') toast(hint);
     return null;
   }
@@ -7361,8 +7607,13 @@ function _executeWandPore(canvasX, canvasY) {
   const tol = tolInput ? +tolInput.value : 40;
 
   // Always use flood-fill (contiguous) for pore detection
-  const mask = _wandFloodFill(pixels, w, h, sx, sy, tol);
+  let mask = _wandFloodFill(pixels, w, h, sx, sy, tol);
 
+  // Apply Morphological Closing to bridge micro-gaps typical of casting shrinkage porosities
+  const dilR = +(document.getElementById('detect-close')?.value || 3);
+  if (dilR > 0) {
+    mask = _erode(_dilate(mask, w, h, dilR), w, h, dilR);
+  }
   // Find the topmost pixel for contour tracing
   let startX = -1, startY = -1;
   for (let y = 0; y < h && startY === -1; y++)
@@ -7522,13 +7773,13 @@ function _isInExclusionZone(xMm, yMm, zones){
 function setDetectPreset(name){
   const presets={
     // threshold, minDia, aspect, blur, close, curve, edgeReject, maxAreaPct
-    fine:     {thr:60, minD:0.05, asp:5,  blur:1, close:1, curve:24, edge:true,  maxA:10},
-    balanced: {thr:50, minD:0.10, asp:6,  blur:1, close:2, curve:32, edge:true,  maxA:15},
-    coarse:   {thr:40, minD:0.50, asp:4,  blur:2, close:3, curve:20, edge:false, maxA:25},
+    fine:     {thr:60, minD:0.05, asp:6,  blur:1, close:1, curve:64, edge:true,  maxA:10},
+    balanced: {thr:50, minD:0.10, asp:8,  blur:1, close:1, curve:64, edge:true,  maxA:15},
+    coarse:   {thr:40, minD:0.50, asp:10, blur:2, close:2, curve:48, edge:false, maxA:25},
   };
   const p=presets[name]; if(!p) return;
   const set=(id,val,dispId,fmt)=>{ const el=document.getElementById(id); if(el){el.value=val; const d=document.getElementById(dispId); if(d)d.textContent=fmt?fmt(val):val;} };
-  set('detect-threshold',p.thr,'detect-sens-val',v=>v+(v==50?' (Auto)':v>50?' +'+(v-50):' '+(v-50)));
+  set('detect-threshold',p.thr,'detect-sens-val',v=>(v-50===0?'Auto':(v-50>0?'+'+(v-50):v-50)));
   set('detect-min-dia',p.minD,'detect-min-dia-val',v=>parseFloat(v).toFixed(2)+'mm');
   set('detect-aspect',p.asp,'detect-aspect-val');
   set('detect-blur',p.blur,'detect-blur-val');
@@ -7551,29 +7802,18 @@ function toggleDetectAdvanced(){
 }
 
 function _resetAdvancedDefaults(){
-  const defs={aspect:6,blur:1,close:2,curve:32};
-  ['aspect','blur','close','curve'].forEach(k=>{
+  const defs={aspect:8, blur:1, close:3, curve:32, 'max-area':15};
+  Object.keys(defs).forEach(k=>{
     const sl=document.getElementById('detect-'+k);
     const vl=document.getElementById('detect-'+k+'-val');
-    const pip=document.getElementById('adv-'+k+'-pip');
-    if(sl){ sl.value=defs[k]; }
-    if(vl){ vl.textContent=defs[k]; }
-    if(pip){
-      if(k==='aspect') pip.style.left=((defs[k]-2)/10*100)+'%';
-      else if(k==='blur') pip.style.left=(defs[k]/3*100)+'%';
-      else if(k==='close') pip.style.left=(defs[k]/5*100)+'%';
-      else if(k==='curve') pip.style.left=((defs[k]-12)/68*100)+'%';
-    }
+    if(sl) sl.value = defs[k];
+    if(vl) vl.textContent = k === 'max-area' ? defs[k]+'%' : defs[k];
   });
-  // Reset edge reject and max area
-  document.querySelectorAll('#detect-edge-reject').forEach(el=>el.checked=false);
-  const maSl=document.getElementById('detect-max-area');
-  const maVl=document.getElementById('detect-max-area-val');
-  if(maSl) maSl.value=15;
-  if(maVl) maVl.textContent='15%';
-  const maPip=document.getElementById('adv-max-area-pip');
-  if(maPip) maPip.style.left=((15-1)/29*100)+'%';
-  toast('Advanced parameters reset to defaults','info');
+  // Reset edge reject
+  const er = document.getElementById('detect-edge-reject');
+  if(er) er.checked = true;
+  
+  if(typeof toast === 'function') toast('Advanced parameters reset to defaults for castings','info');
 }
 
 function applyImageFilters(){
@@ -7758,21 +7998,16 @@ function autoDetectPores(){
       const blurPasses=+(document.getElementById('detect-blur')?.value||1);
       for(let b=0;b<blurPasses;b++) gray=_gaussianBlur5(gray,W,H);
 
-      // CLAHE — improves local contrast for far better Otsu thresholding.
-      // IMPORTANT: tile size must be LARGER than the expected pore size so CLAHE
-      // normalises illumination but does NOT enhance individual grain boundaries.
-      // tileSize = min_dim/6 targets illumination-level contrast (not grain-level).
-      const tileSize = Math.max(24, Math.round(Math.min(W,H) / 6));
-      // clipLimit 2.0 (conservative) to avoid amplifying casting grain texture
-      const claheImg = _clahe(gray, W, H, tileSize, tileSize, 2.0);
-
-      // Sensitivity and Otsu (on CLAHE-equalized image)
+      // Sensitivity and Global Otsu on denoised grayscale image
+      // Note: We intentionally DO NOT use CLAHE here! On photos of LCD monitor screens or castings
+      // with slight shadows, CLAHE stretches gentle shadows and LCD moiré into high-contrast dark blobs,
+      // creating false porosities in clean metal areas!
       const sens=+document.getElementById('detect-threshold').value;
-      const globalOtsu=_otsu(claheImg,W*H);
+      const globalOtsu=_otsu(gray,W*H);
 
-      // Adaptive threshold on CLAHE image — smaller blocks for finer local adaptation
-      const blockSize=Math.max(20,Math.round(Math.min(W,H)/16));
-      const bin=_adaptiveThreshold(claheImg,W,H,blockSize,globalOtsu,sens);
+      // Background-modulated adaptive threshold (zero hallucinated pores in clean metal)
+      const blockSize = Math.max(32, Math.round(Math.min(W,H) / 10));
+      const bin=_adaptiveThreshold(gray,W,H,blockSize,globalOtsu,sens);
 
       // Morphological closing (fills micro-holes in pores)
       const dilR=+(document.getElementById('detect-close')?.value||2);
@@ -7781,9 +8016,8 @@ function autoDetectPores(){
       // Morphological opening (removes small noise bridges) — radius=1 always
       processed=_open(processed,W,H,1);
 
-      // ── Boundary Suppression: remove ALL blobs touching the image border.
-      // The casting outer wall always extends to the image edge; pores never do.
-      processed = _removeEdgeTouchingBlobs(processed, W, H);
+      // Boundary Suppression was here, but removed because it aggressively deletes
+      // legitimate large pores that happen to touch the edge of cropped inspection photos.
 
       // ── Physical Exclusion Masking during Tracing ──
       // Wipe out pores that fall inside exclusion zones so they are never traced.
@@ -7860,8 +8094,8 @@ function autoDetectPores(){
         if(b.area>maxBlobAreaPx) return false;
         if(b.area<minPhysAreaPx*0.25) return false; // reject sub-grain noise
         if(b.aspect>=maxAspect) return false;
-        // Edge-touching blobs are boundary fragments — always reject
-        if(b.edgeTouching) return false;
+        // Reject edge-touching blobs only if edgeReject setting is enabled
+        if(b.edgeTouching && edgeReject) return false;
         const xMm=b.cx/dsNatPxMm, yMm=b.cy/dsNatPxMm;
         if(xMm<0||xMm>imgWMm||yMm<0||yMm>imgHMm) return false;
         return true;
@@ -8135,4 +8369,186 @@ function removeExclZone(index){
   renderExclList();
   refreshWorkspaceUI();
   toast('\u{1f6ab} Exclusion zone removed');
+}
+function renderAreaTab() {
+  const container = document.getElementById('area-scroll');
+  if (!container) return;
+  
+  if (!S.areaMetrics || !S.imgMode) {
+    container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--dim)">Please load an image and evaluate first.</div>`;
+    return;
+  }
+  
+  const metrics = S.areaMetrics;
+  
+  const pores = (typeof AP === 'function' ? AP() : []) || [];
+  const evalPores = getPoresForEvaluation(pores);
+  const totalArea = evalPores.reduce((sum, p) => sum + (p._effectiveArea || Math.PI*Math.pow((p._effectiveDia||p.dia)/2, 2)), 0);
+  
+  let pct = 0;
+  if (metrics.netValMm2 > 0) {
+    pct = (totalArea / metrics.netValMm2) * 100;
+  }
+  
+  let html = `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-h"><div class="card-title">Area Statistics</div></div>
+      <div class="card-body" style="padding: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+        <div style="background:rgba(0,0,0,.03);padding:12px;border-radius:6px;border-left:3px solid var(--bd2)">
+          <div style="font-size:10px;color:var(--dim);text-transform:uppercase;font-weight:700">Total Image Area</div>
+          <div style="font-size:16px;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums">${metrics.imgAreaMm2 ? metrics.imgAreaMm2.toFixed(2) + ' mm²' : '—'}</div>
+        </div>
+        <div style="background:rgba(255,173,0,.08);padding:12px;border-radius:6px;border-left:3px solid var(--amb)">
+          <div style="font-size:10px;color:var(--dim);text-transform:uppercase;font-weight:700;color:var(--amb)">Datum Area</div>
+          <div style="font-size:16px;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums;color:var(--amb)">${metrics.datumAreaMm2 !== null ? metrics.datumAreaMm2.toFixed(2) + ' mm²' : '—'}</div>
+        </div>
+        <div style="background:rgba(239,68,68,.08);padding:12px;border-radius:6px;border-left:3px solid var(--red)">
+          <div style="font-size:10px;color:var(--dim);text-transform:uppercase;font-weight:700;color:var(--red)">Exclusion Area (in Datum)</div>
+          <div style="font-size:16px;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums;color:var(--red)">${metrics.totalExclInsideDatumMm2.toFixed(2)} mm²</div>
+        </div>
+        <div style="background:rgba(0,232,162,.08);padding:12px;border-radius:6px;border-left:3px solid var(--g)">
+          <div style="font-size:10px;color:var(--dim);text-transform:uppercase;font-weight:700;color:var(--g)">Net Inspection Area</div>
+          <div style="font-size:16px;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums;color:var(--g)">${metrics.netValMm2.toFixed(2)} mm²</div>
+        </div>
+        <div style="background:rgba(30,100,200,.08);padding:12px;border-radius:6px;border-left:3px solid var(--blu)">
+          <div style="font-size:10px;color:var(--dim);text-transform:uppercase;font-weight:700;color:var(--blu)">Porosity Area (in Net)</div>
+          <div style="font-size:16px;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums;color:var(--blu)">${totalArea.toFixed(3)} mm² <span style="font-size:11px;opacity:0.7">(${pct.toFixed(2)}%)</span></div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  html += `
+    <div class="card">
+      <div class="card-h">
+        <div class="card-title">Detailed Pore List</div>
+        <div style="margin-left:auto;font-size:10px;color:var(--dim)">${evalPores.length} valid pores</div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div style="max-height: 400px; overflow-y: auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:11px;text-align:left">
+            <thead style="position:sticky;top:0;background:var(--c2);border-bottom:1px solid var(--bd);">
+              <tr>
+                <th style="padding:8px 12px;color:var(--dim);font-weight:600">ID</th>
+                <th style="padding:8px 12px;color:var(--dim);font-weight:600">Pos X/Y (mm)</th>
+                <th style="padding:8px 12px;color:var(--dim);font-weight:600">Zone</th>
+                <th style="padding:8px 12px;color:var(--dim);font-weight:600;text-align:right">Raw Dia (mm)</th>
+                <th style="padding:8px 12px;color:var(--dim);font-weight:600;text-align:right">Eff Dia (mm)</th>
+                <th style="padding:8px 12px;color:var(--dim);font-weight:600;text-align:right">Eff Area (mm²)</th>
+              </tr>
+            </thead>
+            <tbody>
+  `;
+  
+  const sortedPores = [...evalPores].sort((a,b) => ((b._effectiveDia||b.dia) - (a._effectiveDia||a.dia)));
+  
+  if (sortedPores.length === 0) {
+    html += `<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--dim)">No valid pores detected.</td></tr>`;
+  } else {
+    sortedPores.forEach(p => {
+      const eDia = p._effectiveDia || p.dia;
+      const eArea = p._effectiveArea || Math.PI*Math.pow(eDia/2, 2);
+      html += `
+        <tr style="border-bottom:1px solid var(--bd2)">
+          <td style="padding:6px 12px;font-family:monospace;color:var(--tx)">${p.id.substring(0,6)}</td>
+          <td style="padding:6px 12px;font-family:monospace;color:var(--dim)">${p.x.toFixed(1)}, ${p.y.toFixed(1)}</td>
+          <td style="padding:6px 12px;color:var(--tx)">${p.zone||'—'}</td>
+          <td style="padding:6px 12px;font-family:monospace;text-align:right">${p.dia.toFixed(3)}</td>
+          <td style="padding:6px 12px;font-family:monospace;text-align:right;font-weight:600">${eDia.toFixed(3)}</td>
+          <td style="padding:6px 12px;font-family:monospace;text-align:right;color:var(--blu)">${eArea.toFixed(4)}</td>
+        </tr>
+      `;
+    });
+  }
+  
+  html += `
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  container.innerHTML = html;
+}
+
+function _renderTopPoresHTML() {
+  const pores = (typeof AP === 'function' ? AP() : []) || [];
+  const evalPores = getPoresForEvaluation(pores);
+  const sorted = [...evalPores].sort((a,b) => ((b._effectiveDia||b.dia) - (a._effectiveDia||a.dia))).slice(0, 5);
+  
+  if (sorted.length === 0) return '<div style="font-size:11px;color:var(--dim)">No valid pores detected.</div>';
+  
+  let html = `<table style="width:100%;border-collapse:collapse;font-size:11px;text-align:left">
+    <thead>
+      <tr style="border-bottom:1px solid var(--bd2);color:var(--dim)">
+        <th style="padding:4px 0">ID</th>
+        <th style="padding:4px 0;text-align:right">Eff Dia (mm)</th>
+        <th style="padding:4px 0;text-align:right">Eff Area (mm²)</th>
+      </tr>
+    </thead>
+    <tbody>`;
+  
+  sorted.forEach(p => {
+    const eDia = p._effectiveDia || p.dia;
+    const eArea = p._effectiveArea || Math.PI*Math.pow(eDia/2, 2);
+    html += `<tr style="border-bottom:1px solid var(--bd2)">
+      <td style="padding:4px 0;font-family:monospace">${p.id.substring(0,6)}</td>
+      <td style="padding:4px 0;font-family:monospace;text-align:right">${eDia.toFixed(3)}</td>
+      <td style="padding:4px 0;font-family:monospace;text-align:right">${eArea.toFixed(4)}</td>
+    </tr>`;
+  });
+  
+  html += `</tbody></table>`;
+  return html;
+}
+
+function downloadCSV() {
+  if (!S.evaluated || !S.areaMetrics) {
+    toast('No evaluation data available to export.', 'error');
+    return;
+  }
+  
+  const metrics = S.areaMetrics;
+  let csv = "PVI Area & Pore Analysis Export\n\n";
+  
+  // High-level stats
+  csv += "AREA STATISTICS\n";
+  csv += `Total Image Area (mm2),${metrics.imgAreaMm2 ? metrics.imgAreaMm2.toFixed(4) : 'N/A'}\n`;
+  csv += `Datum Area (mm2),${metrics.datumAreaMm2 !== null ? metrics.datumAreaMm2.toFixed(4) : 'N/A'}\n`;
+  csv += `Exclusion Area in Datum (mm2),${metrics.totalExclInsideDatumMm2.toFixed(4)}\n`;
+  csv += `Net Inspection Area (mm2),${metrics.netValMm2.toFixed(4)}\n\n`;
+  
+  const pores = (typeof AP === 'function' ? AP() : []) || [];
+  const evalPores = getPoresForEvaluation(pores);
+  const totalArea = evalPores.reduce((sum, p) => sum + (p._effectiveArea || Math.PI*Math.pow((p._effectiveDia||p.dia)/2, 2)), 0);
+  let pct = 0;
+  if (metrics.netValMm2 > 0) {
+    pct = (totalArea / metrics.netValMm2) * 100;
+  }
+  
+  csv += `Total Pore Area (mm2),${totalArea.toFixed(4)}\n`;
+  csv += `Porosity (%),${pct.toFixed(4)}%\n\n`;
+  
+  // Pore list
+  csv += "PORE LIST\n";
+  csv += "ID,X (mm),Y (mm),Zone,Raw Dia (mm),Effective Dia (mm),Effective Area (mm2)\n";
+  
+  const sortedPores = [...evalPores].sort((a,b) => ((b._effectiveDia||b.dia) - (a._effectiveDia||a.dia)));
+  
+  sortedPores.forEach(p => {
+    const eDia = p._effectiveDia || p.dia;
+    const eArea = p._effectiveArea || Math.PI*Math.pow(eDia/2, 2);
+    csv += `${p.id},${p.x.toFixed(4)},${p.y.toFixed(4)},${p.zone||'None'},${p.dia.toFixed(4)},${eDia.toFixed(4)},${eArea.toFixed(4)}\n`;
+  });
+  
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `PVI_Analysis_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }

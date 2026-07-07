@@ -653,6 +653,12 @@ def _build_image_elements(img_data: dict, spec_dict: dict, image_label: str, st:
     elems.append(Paragraph("CROSS-SECTION — ZONE MAP", st['section']))
     elems.append(_section_hr())
     elems.append(_zone_map_drawing(pore_dicts, spec_dict, wall_h_mm, excl_zones, datum_rect))
+    elems.append(Spacer(1, 15))
+
+    # Top Pores List
+    elems.append(Paragraph("TOP PORES LIST (BY EFFECTIVE DIAMETER)", st['section']))
+    elems.append(_section_hr())
+    elems.append(_pore_table(pore_dicts, st))
     elems.append(Spacer(1, 10))
 
     return elems
@@ -872,3 +878,50 @@ def generate_workspace_pdf(workspace_specs: list) -> bytes:
     doc.build(elems)
     buffer.seek(0)
     return buffer.getvalue()
+
+def _pore_table(pore_dicts: list, st: dict) -> Table:
+    """Create a table for the top 10 largest pores (or all if < 10) for PDF export."""
+    from reportlab.platypus import Table, TableStyle, Paragraph
+    from reportlab.lib import colors
+    
+    # Sort by effective diameter descending
+    sorted_pores = sorted(pore_dicts, key=lambda p: p.get('effective_dia', p.get('dia', 0)), reverse=True)
+    # Take up to top 20
+    top_pores = sorted_pores[:20]
+    
+    if not top_pores:
+        return Paragraph("No pores detected.", st['small'])
+        
+    data = [
+        [Paragraph("<b>ID</b>", st['label']),
+         Paragraph("<b>Zone</b>", st['label']),
+         Paragraph("<b>Raw Dia (mm)</b>", st['label']),
+         Paragraph("<b>Eff Dia (mm)</b>", st['label']),
+         Paragraph("<b>Eff Area (mm²)</b>", st['label'])]
+    ]
+    
+    import math
+    for p in top_pores:
+        pid = p.get('id', '')[:6]
+        zone = p.get('zone', '—')
+        dia = p.get('dia', 0.0)
+        e_dia = p.get('effective_dia', dia)
+        e_area = p.get('effective_area', math.pi * (e_dia / 2) ** 2)
+        
+        data.append([
+            Paragraph(f"<font name='Courier'>{pid}</font>", st['value']),
+            Paragraph(zone, st['value']),
+            Paragraph(f"{dia:.3f}", st['value']),
+            Paragraph(f"{e_dia:.3f}", st['value']),
+            Paragraph(f"{e_area:.4f}", st['value']),
+        ])
+        
+    t = Table(data, colWidths=[100, 100, 100, 100, 100])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f8f9fa')),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+    ]))
+    return t

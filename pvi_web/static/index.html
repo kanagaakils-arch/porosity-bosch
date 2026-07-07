@@ -32,7 +32,47 @@
     <div class="t-seg-lbl">Porosity</div>
     <div class="t-seg-val" id="tb-pct">—</div>
   </div>
-  <div class="t-right">
+  <div class="t-right" style="display:flex;align-items:center;gap:6px">
+    <!-- AI section label -->
+    <span style="font-size:9px;font-weight:700;color:rgba(99,102,241,.5);letter-spacing:.08em;padding-right:2px">🤖 AI</span>
+    <a href="/train" target="_blank"
+      style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;
+             border:1px solid rgba(99,102,241,.4);color:#818cf8;text-decoration:none;
+             transition:background .15s,border-color .15s;white-space:nowrap"
+      onmouseover="this.style.background='rgba(99,102,241,.15)';this.style.borderColor='rgba(99,102,241,.7)'"
+      onmouseout="this.style.background='';this.style.borderColor='rgba(99,102,241,.4)'">📤 Train</a>
+    <a href="/analyze" target="_blank"
+      style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;
+             border:1px solid rgba(99,102,241,.4);color:#818cf8;text-decoration:none;
+             transition:background .15s,border-color .15s;white-space:nowrap"
+      onmouseover="this.style.background='rgba(99,102,241,.15)';this.style.borderColor='rgba(99,102,241,.7)'"
+      onmouseout="this.style.background='';this.style.borderColor='rgba(99,102,241,.4)'">🔬 Analyze</a>
+    <a href="/history" target="_blank"
+      style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;
+             border:1px solid rgba(99,102,241,.4);color:#818cf8;text-decoration:none;
+             transition:background .15s,border-color .15s;white-space:nowrap"
+      onmouseover="this.style.background='rgba(99,102,241,.15)';this.style.borderColor='rgba(99,102,241,.7)'"
+      onmouseout="this.style.background='';this.style.borderColor='rgba(99,102,241,.4)'">📋 History</a>
+    <a href="/metrics" target="_blank"
+      style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;
+             border:1px solid rgba(99,102,241,.4);color:#818cf8;text-decoration:none;
+             transition:background .15s,border-color .15s;white-space:nowrap"
+      onmouseover="this.style.background='rgba(99,102,241,.15)';this.style.borderColor='rgba(99,102,241,.7)'"
+      onmouseout="this.style.background='';this.style.borderColor='rgba(99,102,241,.4)'">📊 Metrics</a>
+    <a href="/validate" target="_blank"
+      style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;
+             border:1px solid rgba(99,102,241,.4);color:#818cf8;text-decoration:none;
+             transition:background .15s,border-color .15s;white-space:nowrap"
+      onmouseover="this.style.background='rgba(99,102,241,.15)';this.style.borderColor='rgba(99,102,241,.7)'"
+      onmouseout="this.style.background='';this.style.borderColor='rgba(99,102,241,.4)'">🧪 Validate</a>
+    <a href="/admin" target="_blank"
+      style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;
+             border:1px solid rgba(99,102,241,.4);color:#818cf8;text-decoration:none;
+             transition:background .15s,border-color .15s;white-space:nowrap"
+      onmouseover="this.style.background='rgba(99,102,241,.15)';this.style.borderColor='rgba(99,102,241,.7)'"
+      onmouseout="this.style.background='';this.style.borderColor='rgba(99,102,241,.4)'">⚙️ Admin</a>
+    <!-- divider -->
+    <div style="width:1px;height:16px;background:var(--bd);margin:0 4px"></div>
     <div class="t-dot td-idle" id="tb-dot" style="display:none"></div>
     <div class="t-badge tb-idle" id="tb-badge" style="display:none">READY</div>
     <div class="t-time" id="tb-time" style="display:none">09 Jun 26 19:46:52</div>
@@ -59,6 +99,9 @@
       <div class="sb-section-lbl">Reference</div>
       <button class="nb" id="nb-ref" onclick="nav('ref')">
         <span class="nb-n">≡</span><span class="nb-txt">Quick Ref</span>
+      </button>
+      <button class="nb" id="nb-area" onclick="nav('area')">
+        <span class="nb-n">▤</span><span class="nb-txt">All Details</span>
       </button>
     </div>
   </div>
@@ -345,7 +388,7 @@
 </div>
 
 <!-- ─── MEASUREMENT PAGE ─── -->
-<div class="page on" id="pg-meas" style="display: flex; opacity: 1; pointer-events: auto;">
+<div class="page on" id="pg-meas" style="display: flex; flex-direction: column; opacity: 1; pointer-events: auto;">
   <div class="ph">
     <div class="ph-tag">02 LIVE</div>
     <div class="ph-divider"></div>
@@ -383,12 +426,12 @@
         <div class="mph-sub" id="ms-verdict">No spec loaded</div>
       </div>
     </div>
-    <div class="ph-right" style="display:flex; gap:8px; align-items:center;">
-      <div id="img-scale-info" class="img-scale-pill" style="display:none;margin-right:8px"></div>
+    <div class="ph-right" style="display:flex; gap:6px; align-items:center;">
+      <div id="img-scale-info" class="img-scale-pill" style="display:none;margin-right:4px"></div>
       <input type="file" id="img-file-input" accept="image/*" style="display:none" onchange="loadImageFile(event)">
-      <button class="btn btn-sec" id="btn-upload-top" onclick="document.getElementById('img-file-input').click()" title="Upload Image">📁 Upload Image</button>
-      <button class="btn btn-sec" id="btn-scale-tool-top" onclick="imgToolActivate('scale_line')" title="Set physical scale of the image (px/mm)" disabled>📐 Set Scale</button>
-      <button class="btn btn-sec" id="btn-autodetect-top" onclick="autoDetectPores()" title="Automatically trace pores based on detection settings" style="color:#8b5cf6; border-color:rgba(139,92,246,0.5)" disabled>🔍 Auto Detect</button>
+      <button class="btn-ph" id="btn-upload-top" onclick="document.getElementById('img-file-input').click()" title="Upload casting image to begin analysis">↑ Upload Image</button>
+      <button class="btn-ph" id="btn-scale-tool-top" onclick="imgToolActivate('scale_line')" title="Draw a reference line on the image to calibrate the physical scale (px/mm)" disabled>⟷ Set Scale</button>
+      <button class="btn-ph" id="btn-autodetect-top" onclick="autoDetectPores()" title="Auto-detect all pores using current DETECT settings" disabled>◎ Auto Detect</button>
       <button class="btn btn-pri" id="btn-eval" onclick="submitEvaluation()" disabled>Evaluate →</button>
     </div>
   </div>
@@ -406,151 +449,187 @@
   <div id="img-toolbar" class="show" style="position:relative;overflow:visible;display:flex;flex-direction:column;background:var(--c1);border-bottom:1px solid var(--bd);gap:0">
 
     <!-- ── ROW 1: Image ops + Pore action buttons ── -->
-    <div style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none">
+    <div style="display:flex;align-items:center;gap:3px;padding:4px 8px;border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none">
 
-      <!-- PREPARE -->
-      <span class="tb-lbl">PREPARE:</span>
-      <button class="btn-stack" id="btn-crop" onclick="imgToolActivate('crop')" title="Crop">
-        <span class="btn-stack__icon" style="color:#ef4444">✂️</span>
-        <span class="btn-stack__label">Crop</span>
-      </button>
-      <button class="btn-stack" id="btn-applycrop" style="display:none;color:var(--g)" onclick="applyCrop()">
-        <span class="btn-stack__icon">✅</span><span class="btn-stack__label">Apply</span>
-      </button>
-      <button class="btn-stack" id="btn-cancelcrop" style="display:none;color:#ef4444" onclick="cancelCrop()">
-        <span class="btn-stack__icon">✕</span><span class="btn-stack__label">Cancel</span>
-      </button>
-      <button class="btn-stack icon-only" onclick="rotateImage(-90)" title="Rotate CCW">
-        <span class="btn-stack__icon">↺</span><span class="btn-stack__label">CCW</span>
-      </button>
-      <button class="btn-stack icon-only" onclick="rotateImage(90)" title="Rotate CW">
-        <span class="btn-stack__icon">↻</span><span class="btn-stack__label">CW</span>
-      </button>
-      <button class="btn-stack" onclick="flipImage('h')" title="Flip H">
-        <span class="btn-stack__icon">⇄</span><span class="btn-stack__label">Flip H</span>
-      </button>
-      <button class="btn-stack" onclick="flipImage('v')" title="Flip V">
-        <span class="btn-stack__icon">⇅</span><span class="btn-stack__label">Flip V</span>
-      </button>
-
-      <div class="tb-sep"></div>
-
-      <!-- ENHANCE -->
-      <span class="tb-lbl">ENHANCE:</span>
-      <div class="slider-group" style="color:#eab308" title="Brightness">
-        <span style="font-size:11px">☀️</span>
-        <input type="range" id="img-brightness" min="0" max="200" value="100" step="5" oninput="applyImageFilters()" style="width:50px">
-      </div>
-      <div class="slider-group" style="color:#6b7280" title="Contrast">
-        <span style="font-size:11px">◑</span>
-        <input type="range" id="img-contrast" min="0" max="200" value="100" step="5" oninput="applyImageFilters()" style="width:50px">
+      <!-- PREPARE group -->
+      <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
+        <span class="tb-lbl">PREPARE:</span>
+        <button class="btn-hz" id="btn-crop" onclick="imgToolActivate('crop')" title="Crop image to region of interest — removes excess border areas">✂ Crop</button>
+        <button class="btn-hz" id="btn-applycrop" style="display:none" onclick="applyCrop()">✓ Apply</button>
+        <button class="btn-hz" id="btn-cancelcrop" style="display:none" onclick="cancelCrop()">✕ Cancel</button>
+        <button class="btn-hz" onclick="rotateImage(-90)" title="Rotate 90° counter-clockwise — fix orientation before analysis">↺ CCW</button>
+        <button class="btn-hz" onclick="rotateImage(90)" title="Rotate 90° clockwise — fix orientation before analysis">↻ CW</button>
+        <button class="btn-hz" onclick="flipImage('h')" title="Flip horizontally — mirror image left↔right">⇄ Flip H</button>
+        <button class="btn-hz" onclick="flipImage('v')" title="Flip vertically — mirror image top↔bottom">⇅ Flip V</button>
       </div>
 
-      <div class="tb-sep"></div>
+      <!-- ENHANCE group -->
+      <div style="display:flex;align-items:center;gap:4px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
+        <span class="tb-lbl">ENHANCE:</span>
+        <div class="slider-group" title="Brightness — increase to reveal dim pores in underexposed images">
+          <span style="font-size:10px">☀</span>
+          <input type="range" id="img-brightness" min="0" max="200" value="100" step="5" oninput="applyImageFilters()" style="width:50px">
+        </div>
+        <div class="slider-group" title="Contrast — increase to sharpen pore boundaries vs. metal matrix">
+          <span style="font-size:10px">◑</span>
+          <input type="range" id="img-contrast" min="0" max="200" value="100" step="5" oninput="applyImageFilters()" style="width:50px">
+        </div>
+      </div>
 
-      <!-- PORE TOOLS -->
-      <span class="tb-lbl" style="color:#8b5cf6">PORES:</span>
-      <button class="btn-hz" id="btn-autodetect-tb" onclick="autoDetectPores()"
-        style="color:#8b5cf6;border-color:rgba(139,92,246,.5);background:rgba(139,92,246,.1);font-weight:700;padding:2px 8px;font-size:10px"
-        title="Auto-detect all pores from image">🔍 Auto-Detect</button>
-      <button class="btn-hz" id="btn-detect-wand" onclick="setTool('wand_pore')"
-        style="color:#d97706;border-color:rgba(217,119,6,.4);background:rgba(217,119,6,.08);padding:2px 7px;font-size:10px"
-        title="Click a dark void/shrinkage cavity to trace it as a pore">🪄 Wand Pore</button>
-      <button class="btn-hz" id="tool-select-img" onclick="setTool('select')"
-        style="color:#22c55e;border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.06);padding:2px 7px;font-size:10px"
-        title="Select / move pores">↖ Select</button>
-      <button class="btn-hz" onclick="undoPore()" id="btn-undo" disabled title="Undo" style="padding:2px 7px;font-size:10px">↩ Undo</button>
-      <button class="btn-hz" onclick="redoPore()" id="btn-redo" disabled title="Redo" style="padding:2px 7px;font-size:10px">↪ Redo</button>
-      <button class="btn-hz" onclick="clearAllPores()" style="color:#ef4444;padding:2px 7px;font-size:10px" title="Clear all pores">✕ Clear</button>
-      <button class="btn-stack" onclick="downloadAnnotatedImage()" title="Export PNG" style="margin-left:auto">
-        <span class="btn-stack__icon">🖼️</span><span class="btn-stack__label">PNG</span>
-      </button>
+      <!-- PORE ACTION group: Select, Undo, Redo, Clear (no duplicate Auto/Wand — those are in DETECT row) -->
+      <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
+        <span class="tb-lbl">ACTIONS:</span>
+        <button class="btn-hz" id="tool-select-img" onclick="setTool('select')"
+          title="Select tool — click any pore or exclusion zone to select it, drag to move, scroll to resize. Works on all placed pores.">↖ Select</button>
+        <button class="btn-hz" onclick="undoPore()" id="btn-undo" disabled title="Undo last pore action">↩ Undo</button>
+        <button class="btn-hz" onclick="redoPore()" id="btn-redo" disabled title="Redo undone pore action">↪ Redo</button>
+        <button class="btn-hz" onclick="clearAllPores()" title="Remove all placed pores from this image">✕ Clear</button>
+      </div>
+
+      <!-- PNG export pushed to far right -->
+      <button class="btn-hz" onclick="downloadAnnotatedImage()" title="Export annotated image as PNG with pore overlays" style="margin-left:auto">⬇ PNG</button>
     </div>
 
     <!-- ── ROW 2: Detection params + Exclude tools + Measure + Links ── -->
-    <div style="display:flex;align-items:center;gap:4px;padding:3px 8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none">
+    <div style="display:flex;align-items:center;gap:3px;padding:4px 8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none">
 
       <!-- DETECT params group -->
-      <div style="display:flex;align-items:center;gap:3px;background:rgba(139,92,246,.05);border:1px solid rgba(139,92,246,.18);border-radius:5px;padding:2px 6px;flex-shrink:0">
-        <span class="tb-lbl" style="color:#8b5cf6">DETECT:</span>
-        <button class="btn-hz" style="font-size:9px;padding:1px 5px;height:22px" onclick="setDetectPreset('fine')" title="Fine: sensitive, small gas pores">Fine</button>
-        <button class="btn-hz" style="font-size:9px;padding:1px 5px;height:22px" onclick="setDetectPreset('balanced')" title="Balanced">Balanced</button>
-        <button class="btn-hz" style="font-size:9px;padding:1px 5px;height:22px" onclick="setDetectPreset('coarse')" title="Coarse: large shrinkage voids">Coarse</button>
-        <div style="width:1px;height:16px;background:rgba(139,92,246,.2);margin:0 2px;flex-shrink:0"></div>
-        <div class="slider-group" style="color:#8b5cf6" title="Threshold — 50=Auto (Otsu)">
+      <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
+        <span class="tb-lbl">DETECT:</span>
+        <button class="btn-hz" id="btn-autodetect-tb" onclick="autoDetectPores()"
+          style="font-size:9px;padding:1px 7px;height:22px;font-weight:700"
+          title="Auto-detect all pores — scans entire image using threshold + morphology. Adjust presets and sliders first for best results">◎ Auto</button>
+        <button class="btn-hz" id="btn-detect-wand" onclick="setTool('wand_pore')"
+          style="font-size:9px;padding:1px 7px;height:22px"
+          title="Wand Pore — click inside a dark void to flood-fill and trace it as a pore. Best for shrinkage cavities with irregular shapes">⊙ Wand</button>
+        <div style="width:1px;height:14px;background:var(--bd2);margin:0 2px"></div>
+        <button class="btn-hz" style="font-size:9px;padding:1px 6px;height:22px" onclick="setDetectPreset('fine')"
+          title="Fine preset — high sensitivity for small gas pores (≥0.05mm). May pick up noise in rough images.">Fine</button>
+        <button class="btn-hz" style="font-size:9px;padding:1px 6px;height:22px" onclick="setDetectPreset('balanced')"
+          title="Balanced preset — general purpose. Detects gas and shrinkage pores ≥0.1mm. Good default for most castings.">Balanced</button>
+        <button class="btn-hz" style="font-size:9px;padding:1px 6px;height:22px" onclick="setDetectPreset('coarse')"
+          title="Coarse preset — targets large shrinkage voids ≥0.3mm. Ignores micro-porosity. Best for rough as-cast surfaces.">Coarse</button>
+        <div style="width:1px;height:14px;background:var(--bd2);margin:0 2px"></div>
+        <div class="slider-group" title="Threshold — brightness cutoff for pore detection. 50=Auto (Otsu). Lower: only darkest pores. Higher: includes gray areas too.">
           <span style="font-size:8px;font-weight:700">Thresh</span>
           <input type="range" id="detect-threshold" min="10" max="90" value="50" step="5"
             oninput="document.getElementById('detect-sens-val').textContent=this.value+(this.value=='50'?' (Auto)':this.value>50?' +'+(this.value-50):' '+(this.value-50))"
             style="width:44px">
           <span id="detect-sens-val" style="font-size:8px;font-weight:700;min-width:40px">50 (Auto)</span>
         </div>
-        <div class="slider-group" style="color:#0b7285" title="Min pore diameter (mm)">
+        <div class="slider-group" title="Min Pore Diameter — smallest pore to detect (mm). Raise to filter noise; lower to catch fine gas pores.">
           <span style="font-size:8px;font-weight:700">Min Φ</span>
           <input type="range" id="detect-min-dia" min="0.05" max="2.0" value="0.1" step="0.05"
             oninput="document.getElementById('detect-min-dia-val').textContent=parseFloat(this.value).toFixed(2)+'mm'"
             style="width:40px">
           <span id="detect-min-dia-val" style="font-size:8px;font-weight:700;width:32px">0.10mm</span>
         </div>
-        <button class="btn-hz" style="font-size:8px;padding:1px 5px;height:22px" onclick="toggleDetectAdvanced()" id="btn-adv-toggle">⚙ Adv</button>
+        <button class="btn-hz" style="font-size:9px;padding:1px 6px;height:22px" onclick="toggleDetectAdvanced()" id="btn-adv-toggle"
+          title="Advanced tracing panel — tune blur, morphological closing, contour curve detail, max aspect ratio and area filters for complex porosity patterns">⚙ Advanced</button>
       </div>
 
-      <div class="tb-sep"></div>
-
       <!-- EXCLUDE group -->
-      <div style="display:flex;align-items:center;gap:3px;background:rgba(239,68,68,.04);border:1px solid rgba(239,68,68,.15);border-radius:5px;padding:2px 5px;flex-shrink:0">
-        <span class="tb-lbl" style="color:#ef4444">EXCL:</span>
+      <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
+        <span class="tb-lbl">EXCL:</span>
         <button class="btn-hz" id="btn-excl-rect" onclick="setTool('exclude_rect')"
-          style="color:#ef4444;border-color:rgba(239,68,68,.35);font-size:9px;padding:1px 6px;height:22px"
-          title="Draw rectangle exclusion zone">▭ Rect</button>
+          style="font-size:9px;padding:1px 6px;height:22px"
+          title="Exclusion Rectangle — draw a box to mask a region. Pores inside are ignored. Use for bolt holes, markings, or flash.">▭ Rect</button>
         <button class="btn-hz" id="btn-excl-circle" onclick="setTool('exclude_circle')"
-          style="color:#ef4444;border-color:rgba(239,68,68,.35);font-size:9px;padding:1px 6px;height:22px"
-          title="Draw circle exclusion zone">⭕ Circle</button>
+          style="font-size:9px;padding:1px 6px;height:22px"
+          title="Exclusion Circle — draw a circle to mask a round region. Ideal for bore holes and circular features.">○ Circle</button>
         <button class="btn-hz" id="btn-excl-wand" onclick="setTool('exclude_wand')"
-          style="color:#ef4444;border-color:rgba(239,68,68,.35);font-size:9px;padding:1px 6px;height:22px"
-          title="Wand: click boundary region to auto-exclude">🪄 Wand</button>
-        <!-- Wand options dropdown-style (only shown when wand excl active) -->
-        <div id="wand-options" style="display:none;align-items:center;gap:4px;border-left:1px solid rgba(239,68,68,.2);padding-left:5px">
-          <span style="font-size:8px;color:#ef4444;font-weight:700">Tol:</span>
+          style="font-size:9px;padding:1px 6px;height:22px"
+          title="Exclusion Wand — click a bright boundary region to auto-trace and exclude it. Best for complex edge profiles.">⊙ Wand</button>
+        <!-- Wand options (only shown when excl wand active) -->
+        <div id="wand-options" style="display:none;align-items:center;gap:4px;border-left:1px solid var(--bd2);padding-left:5px">
+          <span style="font-size:8px;font-weight:700">Tol:</span>
           <input type="range" id="wand-tolerance" min="5" max="120" value="40" style="width:40px"
             oninput="document.getElementById('wand-tol-val').textContent=this.value">
-          <span id="wand-tol-val" style="font-size:8px;font-weight:700;color:#ef4444;width:18px">40</span>
+          <span id="wand-tol-val" style="font-size:8px;font-weight:700;width:18px">40</span>
           <input type="range" id="wand-min-area" min="50" max="5000" value="200" step="50" style="width:36px"
             oninput="document.getElementById('wand-area-val').textContent=this.value+'px'" title="Min area">
-          <span id="wand-area-val" style="font-size:8px;color:#ef4444;width:30px">200px</span>
-          <label style="font-size:8px;color:#ef4444;cursor:pointer;display:flex;align-items:center;gap:2px">
-            <input type="checkbox" id="wand-contiguous" style="width:9px;height:9px;accent-color:#ef4444">Cont.
+          <span id="wand-area-val" style="font-size:8px;width:30px">200px</span>
+          <label style="font-size:8px;cursor:pointer;display:flex;align-items:center;gap:2px">
+            <input type="checkbox" id="wand-contiguous" style="width:9px;height:9px">Cont.
           </label>
         </div>
         <button class="btn-hz" id="btn-excl-select" onclick="setTool('excl_select')"
-          style="color:#ef4444;border-color:rgba(239,68,68,.35);font-size:9px;padding:1px 6px;height:22px"
-          title="Edit exclusion zones">✏️ Edit</button>
+          style="font-size:9px;padding:1px 6px;height:22px"
+          title="Edit exclusion zones — click to select, drag to move, resize handles at corners">✏ Edit</button>
         <button class="btn-hz" onclick="clearExclusionZones()"
-          style="color:#ef4444;border-color:rgba(239,68,68,.25);font-size:9px;padding:1px 6px;height:22px"
-          title="Remove all exclusion zones">🔄 Clear</button>
+          style="font-size:9px;padding:1px 6px;height:22px"
+          title="Remove all exclusion zones">↺ Clear</button>
         <span class="excl-zone-badge" id="excl-zone-count">0</span>
       </div>
 
-      <div class="tb-sep"></div>
+      <!-- MEASURE group -->
+      <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
+        <span class="tb-lbl">MEASURE:</span>
+        <button class="btn-hz" id="tool-measure" onclick="setTool('measure')" style="font-size:9px;padding:1px 6px;height:22px"
+          title="Gap tool — click two points to measure edge-to-edge distance. Verifies minimum spacing A×Φs.">⟷ Gap</button>
+        <button class="btn-hz" id="tool-datum" onclick="setTool('datum')" style="font-size:9px;padding:1px 6px;height:22px"
+          title="Datum zone — draw the inspection reference rectangle per VW50093. Only pores inside are evaluated.">□ Datum</button>
+        <button class="btn-hz" id="btn-clear-datum" onclick="clearDatum()" style="display:none;font-size:9px;padding:1px 6px;height:22px"
+          title="Remove the datum reference area">✕ Datum</button>
+      </div>
 
-      <!-- MEASURE -->
-      <span class="tb-lbl">MEASURE:</span>
-      <button class="btn-hz" id="tool-measure" onclick="setTool('measure')" title="Measure gap between pores" style="font-size:10px;padding:2px 6px">⟷ Gap</button>
-      <button class="btn-hz" id="tool-datum" onclick="setTool('datum')" title="Draw datum reference area" style="font-size:10px;padding:2px 6px">□ Datum</button>
-      <button class="btn-hz" id="btn-clear-datum" onclick="clearDatum()" style="display:none;color:#ef4444;font-size:10px;padding:2px 6px" title="Remove datum">✕ Datum</button>
-
-      <div class="tb-sep"></div>
-
-      <!-- LINKS -->
-      <span class="tb-lbl">LINKS:</span>
-      <div class="slider-group" style="color:#f59e0b">
-        <input type="range" id="link-range" min="0" max="20" step="0.5" value="0"
-          oninput="document.getElementById('link-disp').textContent=this.value==0?'Nearest':this.value+'mm';if(typeof drawCanvas==='function') drawCanvas();"
-          style="width:50px">
-        <span id="link-disp" style="font-size:9px;font-weight:700;width:36px">Nearest</span>
+      <!-- LINKS group -->
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+        <span class="tb-lbl">LINKS:</span>
+        <div class="slider-group" title="Pore link range — draws lines between pores within this distance. Nearest=only closest pair. Helps spot clusters and spacing violations.">
+          <input type="range" id="link-range" min="0" max="20" step="0.5" value="0"
+            oninput="document.getElementById('link-disp').textContent=this.value==0?'Nearest':this.value+'mm';if(typeof drawCanvas==='function') drawCanvas();"
+            style="width:50px">
+          <span id="link-disp" style="font-size:9px;font-weight:700;width:36px">Nearest</span>
+        </div>
       </div>
     </div>
 
   </div><!-- end img-toolbar -->
+
+  <!-- ADVANCED DETECT PANEL -->
+  <div id="detect-advanced" style="display:none;background:var(--c1);border-bottom:1px solid var(--bd);padding:6px 12px;overflow-x:auto;white-space:nowrap;scrollbar-width:none">
+    <div style="display:flex;align-items:center;gap:12px;font-size:10px">
+      <span style="font-weight:700;color:var(--tx)">Advanced Tracing:</span>
+      
+      <div class="slider-group" title="Gaussian Blur (Noise reduction)">
+        <span>Blur</span>
+        <input type="range" id="detect-blur" min="0" max="5" value="1" step="1" oninput="document.getElementById('detect-blur-val').textContent=this.value" style="width:40px">
+        <span id="detect-blur-val" style="width:12px;text-align:right">1</span>
+      </div>
+
+      <div class="slider-group" title="Morphological Close radius. Higher values bridge larger gaps in shrinkage porosities.">
+        <span>Close (Dilate+Erode)</span>
+        <input type="range" id="detect-close" min="0" max="10" value="1" step="1" oninput="document.getElementById('detect-close-val').textContent=this.value" style="width:50px">
+        <span id="detect-close-val" style="width:16px;text-align:right">1</span>
+      </div>
+
+      <div class="slider-group" title="Curve simplification for traced contours.">
+        <span>Curve</span>
+        <input type="range" id="detect-curve" min="12" max="80" value="32" step="1" oninput="document.getElementById('detect-curve-val').textContent=this.value" style="width:50px">
+        <span id="detect-curve-val" style="width:20px;text-align:right">32</span>
+      </div>
+
+      <div class="slider-group" title="Max Aspect Ratio limit for auto-detect">
+        <span>Max Aspect</span>
+        <input type="range" id="detect-aspect" min="2" max="20" value="8" step="1" oninput="document.getElementById('detect-aspect-val').textContent=this.value" style="width:40px">
+        <span id="detect-aspect-val" style="width:16px;text-align:right">8</span>
+      </div>
+
+      <div class="slider-group" title="Max Area % limit for auto-detect">
+        <span>Max Area</span>
+        <input type="range" id="detect-max-area" min="1" max="50" value="15" step="1" oninput="document.getElementById('detect-max-area-val').textContent=this.value+'%'" style="width:40px">
+        <span id="detect-max-area-val" style="width:24px;text-align:right">15%</span>
+      </div>
+
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer" title="Reject pores touching the edges of the image">
+        <input type="checkbox" id="detect-edge-reject" checked style="accent-color:var(--pri)">
+        <span>Edge Reject</span>
+      </label>
+
+      <button class="btn-hz" onclick="_resetAdvancedDefaults()" style="margin-left:auto;padding:2px 6px">Reset</button>
+    </div>
+  </div>
 
 
   <!-- Scale input overlay — upgraded -->
@@ -579,7 +658,7 @@
   <!-- CANVAS AREA + PORE PANEL -->
   <div style="flex:1;display:flex;overflow:hidden">
     <!-- Main canvas -->
-    <div id="canvas-wrap" style="position:relative">
+    <div id="canvas-wrap" style="position:relative;flex:1">
       <canvas id="main-canvas" width="284" height="576" style="width: 142px; height: 288px;"></canvas>
       <canvas id="overlay-canvas" width="284" height="576" style="width: 142px; height: 288px;"></canvas>
       <!-- Scale calibration warning banner -->
@@ -591,103 +670,167 @@
       <!-- Scale ruler (drawn by JS) -->
     </div>
 
-    <!-- Middle panel: Pore Registry -->
-    <div id="panel-registry" style="width:260px;background:var(--c1);border-left:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0">
-      <div style="padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between">
-        <div class="pp-title" style="margin:0">Inspection Registry</div>
-        <div style="font-size:10px;color:var(--dim)" id="reg-count">0 pores (0 effective)</div>
-      </div>
+    <!-- Middle panel: Inspection Registry (2 tabs) -->
+    <div id="panel-registry" style="width:280px;background:var(--c1);border-left:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0">
 
-      <!-- ── Area Breakdown Panel ── -->
-      <div id="area-breakdown" style="border-bottom:1px solid var(--bd);padding:8px 10px;background:rgba(255,255,255,.02)">
-        <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">📐 Area Analysis</div>
-
-        <!-- Image area row -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
-          <div style="display:flex;align-items:center;gap:4px">
-            <div style="width:8px;height:8px;border-radius:2px;background:#4b5563;flex-shrink:0"></div>
-            <span style="font-size:9px;color:var(--dim)">Full Image</span>
-          </div>
-          <span style="font-size:9px;font-weight:700;color:var(--tx);font-family:monospace" id="area-image">—</span>
+      <!-- Panel header -->
+      <div style="padding:6px 10px 0;border-bottom:1px solid var(--bd);flex-shrink:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+          <div class="pp-title" style="margin:0;font-size:11px">Inspection Registry</div>
+          <div style="font-size:9px;color:var(--dim)" id="reg-count">0 pores (0 effective)</div>
         </div>
-
-        <!-- Datum area row -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
-          <div style="display:flex;align-items:center;gap:4px">
-            <div style="width:8px;height:8px;border-radius:2px;background:#22c55e;flex-shrink:0"></div>
-            <span style="font-size:9px;color:var(--dim)">Datum Area</span>
-          </div>
-          <span style="font-size:9px;font-weight:700;color:#22c55e;font-family:monospace" id="area-datum">—</span>
-        </div>
-
-        <!-- Exclusion rows -->
-        <div id="area-excl-rows"></div>
-
-        <!-- Divider -->
-        <div style="border-top:1px solid var(--bd);margin:5px 0"></div>
-
-        <!-- Net inspection area (key metric) -->
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;background:rgba(139,92,246,.1);border-radius:5px;border:1px solid rgba(139,92,246,.2)">
-          <div style="display:flex;align-items:center;gap:4px">
-            <div style="width:8px;height:8px;border-radius:2px;background:#8b5cf6;flex-shrink:0"></div>
-            <span style="font-size:9px;font-weight:700;color:#8b5cf6">Net Inspect Area</span>
-          </div>
-          <span style="font-size:9px;font-weight:700;color:#8b5cf6;font-family:monospace" id="area-net">—</span>
-        </div>
-
-        <!-- Mini canvas thumbnails row -->
-        <div style="display:flex;gap:5px;margin-top:7px" id="area-thumbs-row">
-          <div style="flex:1;text-align:center">
-            <div style="font-size:8px;color:var(--dim);margin-bottom:2px">Image</div>
-            <canvas id="thumb-image" width="60" height="40" style="width:60px;height:40px;border:1px solid var(--bd);border-radius:3px;display:block;margin:0 auto;background:#111"></canvas>
-          </div>
-          <div style="flex:1;text-align:center">
-            <div style="font-size:8px;color:var(--dim);margin-bottom:2px">Excl. Zones</div>
-            <canvas id="thumb-excl" width="60" height="40" style="width:60px;height:40px;border:1px solid rgba(239,68,68,.3);border-radius:3px;display:block;margin:0 auto;background:#111"></canvas>
-          </div>
-          <div style="flex:1;text-align:center">
-            <div style="font-size:8px;color:var(--dim);margin-bottom:2px">Datum</div>
-            <canvas id="thumb-datum" width="60" height="40" style="width:60px;height:40px;border:1px solid rgba(34,197,94,.3);border-radius:3px;display:block;margin:0 auto;background:#111"></canvas>
-          </div>
+        <!-- Tab strip -->
+        <div style="display:flex;gap:2px;margin-bottom:-1px">
+          <button id="reg-tab-analysis" onclick="switchRegTab('analysis')"
+            style="font-size:9px;font-weight:700;padding:4px 10px;border:1px solid var(--bd2);border-bottom:none;border-radius:4px 4px 0 0;background:var(--c1);color:var(--tx);cursor:pointer;letter-spacing:.04em">
+            Area Analysis
+          </button>
+          <button id="reg-tab-porelist" onclick="switchRegTab('porelist')"
+            style="font-size:9px;font-weight:700;padding:4px 10px;border:1px solid var(--bd2);border-bottom:1px solid var(--c1);border-radius:4px 4px 0 0;background:var(--c3);color:var(--dim);cursor:pointer;letter-spacing:.04em">
+            Pore List
+          </button>
         </div>
       </div>
 
-      <div class="scrollable" style="flex:1;overflow-y:auto">
-        <div id="datum-registry-section" style="border-bottom:1px solid var(--bd)"></div>
-        <div id="excl-registry-section" style="border-bottom:1px solid var(--bd)"></div>
-        <div style="padding:6px 12px;background:rgba(255,255,255,.03);font-size:10px;font-weight:700;color:var(--tx);border-bottom:1px solid var(--bd)">🔴 Detected Pores</div>
-        <div id="pore-registry"><div style="font-size:10px;color:var(--dim);text-align:center;padding:16px">No pores · click canvas to place</div></div>
+      <!-- ── TAB 1: Area Analysis ── -->
+      <div id="reg-panel-analysis" style="flex:1;overflow-y:auto;display:flex;flex-direction:column">
+
+        <!-- Area Breakdown -->
+        <div id="area-breakdown" style="border-bottom:1px solid var(--bd);padding:8px 10px;background:rgba(255,255,255,.02);flex-shrink:0">
+          <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Area Breakdown</div>
+
+          <!-- Full Image row -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+            <div style="display:flex;align-items:center;gap:4px">
+              <div style="width:8px;height:8px;border-radius:2px;background:#4b5563;flex-shrink:0"></div>
+              <span style="font-size:9px;color:var(--dim)">Full Image</span>
+            </div>
+            <span style="font-size:9px;font-weight:700;color:var(--tx);font-family:monospace" id="area-image">—</span>
+          </div>
+
+          <!-- Datum row -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+            <div style="display:flex;align-items:center;gap:4px">
+              <div style="width:8px;height:8px;border-radius:2px;background:#22c55e;flex-shrink:0"></div>
+              <span style="font-size:9px;color:var(--dim)">Datum Area</span>
+            </div>
+            <span style="font-size:9px;font-weight:700;color:#22c55e;font-family:monospace" id="area-datum">—</span>
+          </div>
+
+          <!-- Exclusion zone rows (populated by JS) -->
+          <div id="area-excl-rows"></div>
+
+          <div style="border-top:1px solid var(--bd);margin:5px 0"></div>
+
+          <!-- Net Inspect Area -->
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;background:rgba(100,116,139,.08);border-radius:5px;border:1px solid var(--bd2)">
+            <div style="display:flex;align-items:center;gap:4px">
+              <div style="width:8px;height:8px;border-radius:2px;background:var(--primary);flex-shrink:0"></div>
+              <span style="font-size:9px;font-weight:700;color:var(--tx)">Net Inspect Area</span>
+            </div>
+            <span style="font-size:9px;font-weight:700;color:var(--tx);font-family:monospace" id="area-net">—</span>
+          </div>
+
+          <!-- Mini canvas thumbnails -->
+          <div style="display:flex;gap:5px;margin-top:7px" id="area-thumbs-row">
+            <div style="flex:1;text-align:center">
+              <div style="font-size:8px;color:var(--dim);margin-bottom:2px">Image</div>
+              <canvas id="thumb-image" width="60" height="40" style="width:60px;height:40px;border:1px solid var(--bd);border-radius:3px;display:block;margin:0 auto;background:#111"></canvas>
+            </div>
+            <div style="flex:1;text-align:center">
+              <div style="font-size:8px;color:var(--dim);margin-bottom:2px">Excl. Zones</div>
+              <canvas id="thumb-excl" width="60" height="40" style="width:60px;height:40px;border:1px solid var(--bd);border-radius:3px;display:block;margin:0 auto;background:#111"></canvas>
+            </div>
+            <div style="flex:1;text-align:center">
+              <div style="font-size:8px;color:var(--dim);margin-bottom:2px">Datum</div>
+              <canvas id="thumb-datum" width="60" height="40" style="width:60px;height:40px;border:1px solid var(--bd);border-radius:3px;display:block;margin:0 auto;background:#111"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Porosity Summary per zone ── -->
+        <div style="padding:8px 10px;flex-shrink:0">
+          <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Porosity Summary</div>
+
+          <!-- Full Image zone -->
+          <div style="margin-bottom:6px;padding:5px 7px;border:1px solid var(--bd);border-radius:5px;background:var(--c3)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+              <div style="display:flex;align-items:center;gap:4px">
+                <div style="width:7px;height:7px;border-radius:50%;background:#4b5563;flex-shrink:0"></div>
+                <span style="font-size:9px;font-weight:700;color:var(--tx)">Full Image</span>
+              </div>
+            </div>
+            <div style="font-size:9px;color:var(--muted)" id="stat-image">No data — upload + set scale</div>
+          </div>
+
+          <!-- Datum zone -->
+          <div style="margin-bottom:6px;padding:5px 7px;border:1px solid var(--bd);border-radius:5px;background:var(--c3)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+              <div style="display:flex;align-items:center;gap:4px">
+                <div style="width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0"></div>
+                <span style="font-size:9px;font-weight:700;color:var(--tx)">Datum Zone</span>
+              </div>
+            </div>
+            <div style="font-size:9px;color:var(--muted)" id="stat-datum">No datum drawn</div>
+          </div>
+
+          <!-- Net (effective) zone -->
+          <div style="padding:5px 7px;border:1px solid var(--bd2);border-radius:5px;background:var(--primary-b)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+              <div style="display:flex;align-items:center;gap:4px">
+                <div style="width:7px;height:7px;border-radius:50%;background:var(--primary);flex-shrink:0"></div>
+                <span style="font-size:9px;font-weight:700;color:var(--primary)">Net (Effective)</span>
+              </div>
+            </div>
+            <div style="font-size:9px;color:var(--muted)" id="stat-net">No net area</div>
+          </div>
+        </div>
+
+        <!-- datum/excl registry sections also live on analysis tab -->
+        <div id="datum-registry-section" style="border-top:1px solid var(--bd);flex-shrink:0"></div>
+        <div id="excl-registry-section"  style="border-top:1px solid var(--bd);flex-shrink:0"></div>
       </div>
 
-      <!-- Selected pore edit panel — upgraded -->
-      <div id="pore-edit-panel" style="display:none;padding:10px 12px;border-top:2px solid var(--amb);background:rgba(255,173,0,.06)">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <div class="pp-title" style="color:var(--amb);margin:0">✎ Edit Pore <span id="ep-pore-id" style="font-size:9px;color:var(--dim);font-weight:400"></span></div>
-          <button onclick="const p=AP().find(p=>p.id===S.selectedId);if(p)removePore(p.id);" style="font-size:10px;padding:2px 8px;background:var(--ra);color:var(--red);border:1px solid var(--red);border-radius:4px;cursor:pointer">✕ Delete</button>
+      <!-- ── TAB 2: Pore List ── -->
+      <div id="reg-panel-porelist" style="flex:1;overflow-y:auto;display:none;flex-direction:column">
+        <div style="padding:5px 10px 4px;font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--bd);background:rgba(255,255,255,.02)">
+          Detected Pores
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <div class="fi-item">
-            <div class="fl">Φ diameter (mm)</div>
-            <div class="fi-wrap"><input class="fi" id="ep-phi" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.05" min="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
+        <div id="pore-registry" style="flex:1">
+          <div style="font-size:10px;color:var(--dim);text-align:center;padding:16px">No pores · click canvas to place</div>
+        </div>
+
+        <!-- Selected pore edit panel -->
+        <div id="pore-edit-panel" style="display:none;padding:10px 12px;border-top:2px solid var(--bd2);background:var(--c3);flex-shrink:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div class="pp-title" style="margin:0;font-size:10px">Edit Pore <span id="ep-pore-id" style="font-size:9px;color:var(--dim);font-weight:400"></span></div>
+            <button onclick="const p=AP().find(p=>p.id===S.selectedId);if(p)removePore(p.id);" style="font-size:10px;padding:2px 8px;background:var(--ra);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:4px;cursor:pointer">✕ Delete</button>
           </div>
-          <div class="fi-item">
-            <div class="fl">Type</div>
-            <select class="fi" id="ep-type" onchange="const p=AP().find(p=>p.id===S.selectedId);if(p){p.type=this.value;drawCanvas();updateLiveMetrics();updatePoreRegistry();}" style="font-size:12px;padding:4px 8px">
-              <option value="gas">Gas pore</option>
-              <option value="shrink">Shrinkage</option>
-            </select>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div class="fi-item">
+              <div class="fl">Φ diameter (mm)</div>
+              <div class="fi-wrap"><input class="fi" id="ep-phi" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.05" min="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
+            </div>
+            <div class="fi-item">
+              <div class="fl">Type</div>
+              <select class="fi" id="ep-type" onchange="const p=AP().find(p=>p.id===S.selectedId);if(p){p.type=this.value;drawCanvas();updateLiveMetrics();updatePoreRegistry();}" style="font-size:12px;padding:4px 8px">
+                <option value="gas">Gas pore</option>
+                <option value="shrink">Shrinkage</option>
+              </select>
+            </div>
+            <div class="fi-item">
+              <div class="fl">X position (mm)</div>
+              <div class="fi-wrap"><input class="fi" id="ep-x" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
+            </div>
+            <div class="fi-item">
+              <div class="fl">Y depth (mm)</div>
+              <div class="fi-wrap"><input class="fi" id="ep-y" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
+            </div>
+            <button onclick="S.selectedId=null;document.getElementById('pore-edit-panel').style.display='none';setTool('select');drawCanvas();updatePoreRegistry();" style="width:100%;font-size:10px;padding:5px 0;background:var(--c4);border:1px solid var(--bd);border-radius:4px;cursor:pointer;color:var(--dim);margin-top:2px">Done ✓</button>
           </div>
-          <div class="fi-item">
-            <div class="fl">X position (mm)</div>
-            <div class="fi-wrap"><input class="fi" id="ep-x" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
-          </div>
-          <div class="fi-item">
-            <div class="fl">Y depth (mm)</div>
-            <div class="fi-wrap"><input class="fi" id="ep-y" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
-          </div>
-          <button onclick="S.selectedId=null;document.getElementById('pore-edit-panel').style.display='none';setTool('place');drawCanvas();updatePoreRegistry();" style="width:100%;font-size:10px;padding:5px 0;background:var(--c3);border:1px solid var(--bd);border-radius:4px;cursor:pointer;color:var(--dim);margin-top:2px">Done ✓</button>
         </div>
       </div>
+
     </div>
 
     <!-- Right pore panel -->
@@ -969,6 +1112,23 @@
 
 
 
+<!-- ─── ALL DETAILS / AREA PAGE ─── -->
+<div class="page" id="pg-area" style="display: none; flex-direction: column; opacity: 0; pointer-events: none;">
+  <div class="ph">
+    <div class="ph-tag">04</div><div class="ph-divider"></div>
+    <div class="ph-title">All Details & Summary</div>
+    <div class="ph-sub">Comprehensive workspace pore list and area analysis</div>
+    <div class="ph-right">
+      <button class="btn btn-sec btn-sm" onclick="downloadCSV()">⬇ Export CSV</button>
+    </div>
+  </div>
+  <div class="scrollable" style="padding:24px" id="area-scroll">
+    <div style="font-size:13px; color:var(--dim); text-align:center; padding:40px;">
+      Run evaluation to see detailed results.
+    </div>
+  </div>
+</div>
+
 <!-- ─── QUICK REF PAGE ─── -->
 <div class="page" id="pg-ref" style="display: none; opacity: 0; pointer-events: none;">
   <div class="ph">
@@ -1028,5 +1188,218 @@
 
 <script src="/static/tools/porosity.js?v=20260427h"></script>
 <script src="/static/app.js?v=20260702_datum_edit_crop"></script>
+
+<!-- ═══ AI TRAINING SUBMIT MODAL ═══ -->
+<div id="ai-submit-modal" style="
+  display:none; position:fixed; inset:0; z-index:9998;
+  background:rgba(0,0,0,.7); backdrop-filter:blur(4px);
+  align-items:center; justify-content:center;
+" onclick="if(event.target===this)closeAiModal()">
+  <div style="
+    background:var(--c2); border:1px solid rgba(99,102,241,.4);
+    border-radius:16px; padding:28px 32px; width:420px; max-width:90vw;
+    box-shadow:0 24px 64px rgba(0,0,0,.5);
+  ">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <span style="font-size:22px">🤖</span>
+      <div>
+        <div style="font-size:14px;font-weight:800;color:var(--tx)">Submit for AI Training</div>
+        <div style="font-size:11px;color:var(--dim)">Your approved detections will train the shared model</div>
+      </div>
+    </div>
+
+    <div id="ai-submit-preview" style="
+      width:100%;height:140px;border-radius:9px;overflow:hidden;
+      background:var(--c3);margin-bottom:16px;position:relative;
+    ">
+      <img id="ai-preview-img" src="" alt="Preview" style="width:100%;height:100%;object-fit:contain">
+      <div id="ai-pore-overlay" style="
+        position:absolute;bottom:8px;right:10px;
+        font-size:11px;font-weight:700;color:#fff;
+        background:rgba(99,102,241,.85);padding:3px 10px;border-radius:8px
+      "></div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <label style="font-size:11px;font-weight:700;color:var(--dim);display:block;margin-bottom:5px">YOUR NAME <span style="color:var(--dim);font-weight:400">(optional)</span></label>
+      <input id="ai-submitter-name" type="text" placeholder="e.g. Ravi Kumar"
+        style="width:100%;box-sizing:border-box;padding:9px 12px;font-size:12px;
+               background:var(--c3);border:1px solid var(--bd);border-radius:7px;
+               color:var(--tx);outline:none"
+        onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='var(--bd)'">
+    </div>
+
+    <div style="margin-bottom:20px">
+      <label style="font-size:11px;font-weight:700;color:var(--dim);display:block;margin-bottom:5px">NOTES <span style="color:var(--dim);font-weight:400">(optional)</span></label>
+      <input id="ai-notes" type="text" placeholder="e.g. Aluminium casting, 50mm part"
+        style="width:100%;box-sizing:border-box;padding:9px 12px;font-size:12px;
+               background:var(--c3);border:1px solid var(--bd);border-radius:7px;
+               color:var(--tx);outline:none"
+        onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='var(--bd)'">
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <button onclick="closeAiModal()" style="
+        flex:1;padding:10px;font-size:12px;font-weight:600;
+        background:var(--c3);color:var(--dim);border:1px solid var(--bd);
+        border-radius:8px;cursor:pointer">Cancel</button>
+      <button id="ai-submit-btn" onclick="submitForAiTraining()" style="
+        flex:2;padding:10px;font-size:12px;font-weight:700;
+        background:#6366f1;color:#fff;border:none;
+        border-radius:8px;cursor:pointer;transition:opacity .15s"
+        onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">
+        ✅ Submit for AI Training
+      </button>
+    </div>
+
+    <div id="ai-submit-status" style="
+      margin-top:12px;font-size:11px;text-align:center;color:var(--dim);min-height:16px
+    "></div>
+  </div>
+</div>
+
+<!-- Submit button injected into results panel by JS -->
+<script>
+(function(){
+  // ── Inject "Submit for AI Training" button into the results/verdict area ──
+  function injectAiButton() {
+    // Try to find the porosity summary panel or verdict area
+    const targets = [
+      document.getElementById('porosity-sidebar-footer'),
+    ];
+    targets.forEach(el => {
+      if (el && !el.querySelector('.ai-train-btn')) {
+        const btn = document.createElement('button');
+        btn.className = 'ai-train-btn';
+        btn.innerHTML = '🤖 Submit for AI Training';
+        btn.title = 'Save this inspection as training data for the AI model';
+        Object.assign(btn.style, {
+          width: '100%', marginTop: '10px', padding: '9px 14px',
+          fontSize: '11px', fontWeight: '700',
+          background: 'rgba(99,102,241,.13)', color: '#818cf8',
+          border: '1px solid rgba(99,102,241,.35)', borderRadius: '8px',
+          cursor: 'pointer', transition: 'background .15s',
+          display: 'block',
+        });
+        btn.onmouseover = () => btn.style.background = 'rgba(99,102,241,.22)';
+        btn.onmouseout  = () => btn.style.background = 'rgba(99,102,241,.13)';
+        btn.onclick = openAiModal;
+        el.appendChild(btn);
+      }
+    });
+  }
+
+  // Wait for DOM to fully render
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', injectAiButton);
+  } else {
+    injectAiButton();
+    setTimeout(injectAiButton, 1500); // retry after dynamic content loads
+  }
+
+  // ── Modal helpers ──────────────────────────────────────────────────────────
+  window.openAiModal = function() {
+    // Capture current canvas image
+    const canvas = document.getElementById('mc') ||
+                   document.querySelector('canvas');
+    let dataUrl = '';
+    if (canvas) {
+      try { dataUrl = canvas.toDataURL('image/jpeg', 0.85); } catch(e) {}
+    }
+    document.getElementById('ai-preview-img').src = dataUrl;
+
+    // Count current pores
+    let poreCount = 0;
+    try {
+      if (typeof AP === 'function') poreCount = AP().length;
+    } catch(e) {}
+    document.getElementById('ai-pore-overlay').textContent =
+      poreCount + ' pore' + (poreCount !== 1 ? 's' : '') + ' detected';
+
+    document.getElementById('ai-submit-status').textContent = '';
+    document.getElementById('ai-submit-modal').style.display = 'flex';
+  };
+
+  window.closeAiModal = function() {
+    document.getElementById('ai-submit-modal').style.display = 'none';
+  };
+
+  window.submitForAiTraining = async function() {
+    const btn    = document.getElementById('ai-submit-btn');
+    const status = document.getElementById('ai-submit-status');
+    const name   = (document.getElementById('ai-submitter-name').value || '').trim();
+    const notes  = (document.getElementById('ai-notes').value || '').trim();
+
+    // Get canvas image
+    const canvas = document.getElementById('mc') || document.querySelector('canvas');
+    if (!canvas) {
+      status.textContent = '⚠️ No canvas found. Load an image first.';
+      status.style.color = '#ef4444';
+      return;
+    }
+    let imageBase64;
+    try { imageBase64 = canvas.toDataURL('image/jpeg', 0.85); }
+    catch(e) {
+      status.textContent = '⚠️ Could not capture canvas. Try again.';
+      status.style.color = '#ef4444';
+      return;
+    }
+
+    // Collect pores
+    let pores = [];
+    try { pores = (typeof AP === 'function' ? AP() : []).map(p => ({ x: p.x, y: p.y, dia: p.dia })); }
+    catch(e) {}
+
+    // Get image physical dimensions from spec
+    let imgWmm = 100, imgHmm = 100;
+    try {
+      const pg = typeof currentPage === 'function' ? currentPage() : null;
+      if (pg && pg.imgState) {
+        const is = pg.imgState;
+        if (is.naturalWidth && is.pxPerMm) {
+          imgWmm = is.naturalWidth  / is.pxPerMm;
+          imgHmm = is.naturalHeight / is.pxPerMm;
+        }
+      }
+    } catch(e) {}
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Submitting…';
+    status.textContent = '';
+
+    try {
+      const res = await fetch('/api/ai/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          submitter: name || 'Anonymous',
+          notes,
+          image_base64: imageBase64,
+          pores,
+          image_width_mm: imgWmm,
+          image_height_mm: imgHmm,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        status.textContent = `✅ Submitted! ID: ${data.id} — ${data.pore_count} pores saved.`;
+        status.style.color = '#10b981';
+        btn.textContent = '✅ Submitted!';
+        setTimeout(closeAiModal, 2200);
+      } else {
+        status.textContent = '❌ ' + (data.error || 'Submission failed.');
+        status.style.color = '#ef4444';
+        btn.disabled = false;
+        btn.textContent = '✅ Submit for AI Training';
+      }
+    } catch(e) {
+      status.textContent = '❌ Network error: ' + e.message;
+      status.style.color = '#ef4444';
+      btn.disabled = false;
+      btn.textContent = '✅ Submit for AI Training';
+    }
+  };
+})();
+</script>
 </body>
 </html>

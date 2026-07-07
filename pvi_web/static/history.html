@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Training History — Porosity Inspector</title>
+  <link rel="stylesheet" href="/static/css/platform.css?v=20260702_sync">
+  <link rel="stylesheet" href="/static/styles.css?v=20260702_sync">
+  <style>
+    :root { --ai-accent: #6366f1; --ai-accent-dim: rgba(99,102,241,.15); }
+    html, body { height: auto !important; min-height: 100% !important; overflow: auto !important; overflow-y: auto !important; }
+    body { background: var(--bg); color: var(--tx); font-family: 'Inter', system-ui, sans-serif; margin: 0; }
+
+    /* ── Nav bar ── */
+    .ai-nav {
+      display: flex; align-items: center; gap: 0;
+      background: var(--c2); border-bottom: 1px solid var(--bd);
+      padding: 0 18px; height: 44px; position: sticky; top: 0; z-index: 100;
+    }
+    .ai-nav-brand {
+      font-size: 12px; font-weight: 800; letter-spacing: .06em;
+      color: var(--ai-accent); margin-right: 24px;
+    }
+    .ai-nav a {
+      font-size: 11px; font-weight: 600; color: var(--dim);
+      text-decoration: none; padding: 0 14px; height: 44px;
+      display: flex; align-items: center; border-bottom: 2px solid transparent;
+      transition: color .15s, border-color .15s;
+    }
+    .ai-nav a:hover { color: var(--tx); }
+    .ai-nav a.active { color: var(--ai-accent); border-bottom-color: var(--ai-accent); }
+    .ai-nav-spacer { flex: 1; }
+    .ai-nav-back {
+      font-size: 11px; font-weight: 600; color: var(--dim);
+      text-decoration: none; padding: 6px 14px;
+      border: 1px solid var(--bd); border-radius: 6px;
+      transition: background .15s, color .15s;
+    }
+    .ai-nav-back:hover { background: var(--c3); color: var(--tx); }
+
+    /* ── Page ── */
+    .page-wrap { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+    .page-title { font-size: 20px; font-weight: 800; margin: 0 0 4px; }
+    .page-sub   { font-size: 12px; color: var(--dim); margin: 0 0 28px; }
+
+    /* ── Toolbar ── */
+    .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .search-box {
+      flex: 1; padding: 7px 12px; font-size: 12px;
+      background: var(--c2); border: 1px solid var(--bd); border-radius: 7px;
+      color: var(--tx); outline: none; max-width: 320px;
+    }
+    .search-box:focus { border-color: var(--ai-accent); }
+    .stat-pill {
+      font-size: 11px; font-weight: 700; padding: 5px 12px;
+      background: var(--ai-accent-dim); color: var(--ai-accent);
+      border-radius: 20px; white-space: nowrap;
+    }
+
+    /* ── Table ── */
+    .hist-table { width: 100%; border-collapse: collapse; }
+    .hist-table th {
+      font-size: 10px; font-weight: 700; color: var(--dim);
+      text-transform: uppercase; letter-spacing: .06em;
+      padding: 8px 12px; text-align: left;
+      background: var(--c2); border-bottom: 1px solid var(--bd);
+      position: sticky; top: 44px;
+    }
+    .hist-table td {
+      padding: 10px 12px; font-size: 12px;
+      border-bottom: 1px solid var(--bd); vertical-align: middle;
+    }
+    .hist-table tr:hover td { background: var(--c2); }
+    .hist-table tr:last-child td { border-bottom: none; }
+
+    /* ── Thumbnail ── */
+    .thumb-wrap { width: 60px; height: 44px; border-radius: 5px; overflow: hidden; cursor: pointer; }
+    .thumb-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform .2s; }
+    .thumb-wrap:hover img { transform: scale(1.08); }
+
+    /* ── Badges ── */
+    .badge-pore {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      padding: 3px 8px; border-radius: 10px;
+      background: var(--ai-accent-dim); color: var(--ai-accent);
+    }
+    .badge-user {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      padding: 3px 8px; border-radius: 10px;
+      background: rgba(16,185,129,.13); color: #10b981;
+    }
+    .ts-cell { color: var(--dim); font-size: 11px; }
+    .notes-cell { color: var(--dim); font-style: italic; max-width: 220px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .btn-del {
+      background: rgba(239,68,68,.1); color: #ef4444;
+      border: none; border-radius: 5px; padding: 4px 10px;
+      font-size: 11px; font-weight: 600; cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-del:hover { background: rgba(239,68,68,.25); }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center; padding: 80px 24px;
+      color: var(--dim); font-size: 13px;
+    }
+    .empty-icon { font-size: 48px; margin-bottom: 12px; opacity: .4; }
+
+    /* ── Lightbox ── */
+    .lightbox {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.85); z-index: 9999;
+      align-items: center; justify-content: center;
+    }
+    .lightbox.open { display: flex; }
+    .lightbox img { max-width: 90vw; max-height: 85vh; border-radius: 8px; }
+    .lightbox-close {
+      position: absolute; top: 18px; right: 22px;
+      font-size: 28px; color: #fff; cursor: pointer; opacity: .8;
+    }
+    .lightbox-close:hover { opacity: 1; }
+
+    /* ── Loading ── */
+    .loading { text-align: center; padding: 60px; color: var(--dim); font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="ai-nav">
+  <span class="ai-nav-brand">🤖 AI TRAINING</span>
+  <a href="/train">📤 Train</a>
+  <a href="/analyze">🔬 Analyze</a>
+  <a href="/history" class="active">📋 History</a>
+  <a href="/metrics">📊 Metrics</a>
+  <a href="/validate">🧪 Validate</a>
+  <a href="/admin">⚙️ Admin</a>
+  <div class="ai-nav-spacer"></div>
+  <a href="/" class="ai-nav-back">← Back to Inspector</a>
+</nav>
+
+<!-- Content -->
+<div class="page-wrap">
+  <div class="page-title">Submission History</div>
+  <div class="page-sub">All images submitted by users for AI model training</div>
+
+  <!-- Launch Training Banner -->
+  <div style="background:var(--c2);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="font-size:14px;font-weight:800;color:var(--tx)">🚀 Train Model from History Images</div>
+      <div style="font-size:12px;color:var(--dim)">Instantly retrain YOLOv8n on all labeled images in this history database using Apple Metal GPU</div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <a href="/admin" style="padding:10px 16px;background:var(--c1);color:var(--tx);border:1px solid var(--bd);border-radius:8px;font-size:12px;font-weight:700;text-decoration:none">⚙️ Go to Admin Panel</a>
+      <button onclick="startTrainFromHere(this)" style="padding:10px 18px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">⚡ Launch Retrain Now</button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input class="search-box" type="text" id="search-input"
+      placeholder="🔍  Search by name, notes…" oninput="filterTable()">
+    <span class="stat-pill" id="total-pill">0 submissions</span>
+    <span class="stat-pill" id="pore-pill">0 pores</span>
+  </div>
+
+  <div id="table-wrap">
+    <div class="loading">Loading submissions…</div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <span class="lightbox-close" onclick="closeLightbox()">✕</span>
+  <img id="lightbox-img" src="" alt="Training image">
+</div>
+
+<script>
+let allRecords = [];
+
+async function loadHistory() {
+  try {
+    const res = await fetch('/api/ai/history');
+    allRecords = await res.json();
+    renderTable(allRecords);
+    updateStats(allRecords);
+  } catch(e) {
+    document.getElementById('table-wrap').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">⚠️</div>Failed to load history</div>';
+  }
+}
+
+function updateStats(records) {
+  const total = records.length;
+  const pores = records.reduce((s,r) => s + (r.pore_count || 0), 0);
+  document.getElementById('total-pill').textContent = `${total} submission${total!==1?'s':''}`;
+  document.getElementById('pore-pill').textContent = `${pores} pores labeled`;
+}
+
+function filterTable() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  const filtered = allRecords.filter(r =>
+    (r.submitter||'').toLowerCase().includes(q) ||
+    (r.notes||'').toLowerCase().includes(q) ||
+    (r.id||'').toLowerCase().includes(q)
+  );
+  renderTable(filtered);
+  updateStats(filtered);
+}
+
+function formatTs(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('en-GB', {
+    day:'2-digit', month:'short', year:'numeric',
+    hour:'2-digit', minute:'2-digit'
+  });
+}
+
+function renderTable(records) {
+  const wrap = document.getElementById('table-wrap');
+  if (!records.length) {
+    wrap.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📭</div>
+        No submissions yet. Use the <strong>Submit for AI Training</strong>
+        button in the Inspector to contribute your first image.
+      </div>`;
+    return;
+  }
+
+  const rows = records.map(r => `
+    <tr id="row-${r.id}">
+      <td>
+        <div class="thumb-wrap" onclick="openLightbox('${r.id}')">
+          <img src="/api/ai/image/${r.id}" alt="Sample ${r.id}" loading="lazy"
+            onerror="this.parentElement.innerHTML='<span style=\\'font-size:9px;color:var(--dim);padding:4px\\'>No img</span>'">
+        </div>
+      </td>
+      <td><span class="badge-user">${escHtml(r.submitter || 'Anonymous')}</span></td>
+      <td><span class="badge-pore">${r.pore_count || 0} pores</span></td>
+      <td class="notes-cell" title="${escHtml(r.notes||'')}">${escHtml(r.notes||'—')}</td>
+      <td class="ts-cell">${formatTs(r.ts)}</td>
+      <td><code style="font-size:10px;color:var(--dim)">${r.id}</code></td>
+      <td>
+        <button class="btn-del" onclick="deleteRecord('${r.id}')">🗑 Delete</button>
+      </td>
+    </tr>
+  `).join('');
+
+  wrap.innerHTML = `
+    <table class="hist-table">
+      <thead>
+        <tr>
+          <th>Image</th>
+          <th>Submitted By</th>
+          <th>Pores</th>
+          <th>Notes</th>
+          <th>Date</th>
+          <th>ID</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function openLightbox(sid) {
+  document.getElementById('lightbox-img').src = `/api/ai/image/${sid}`;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.getElementById('lightbox-img').src = '';
+}
+
+async function deleteRecord(sid) {
+  if (!confirm('Delete this training sample? This cannot be undone.')) return;
+  const res = await fetch(`/api/ai/submission/${sid}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.ok) {
+    allRecords = allRecords.filter(r => r.id !== sid);
+    renderTable(allRecords);
+    updateStats(allRecords);
+  } else {
+    alert('Delete failed: ' + (data.error || 'Unknown error'));
+  }
+}
+
+async function startTrainFromHere(btn) {
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Launching Apple Metal GPU Engine...';
+  try {
+    const res = await fetch('/api/ai/retrain', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      alert('✅ Training Started on Apple Metal GPU! Redirecting to Admin Panel to watch live progress.');
+      window.location.href = '/admin';
+    } else {
+      alert('❌ Error: ' + data.message);
+      btn.disabled = false;
+      btn.innerHTML = '⚡ Launch Retrain Now';
+    }
+  } catch(e) {
+    alert('❌ Request failed: ' + e.message);
+    btn.disabled = false;
+    btn.innerHTML = '⚡ Launch Retrain Now';
+  }
+}
+
+loadHistory();
+</script>
+</body>
+</html>
