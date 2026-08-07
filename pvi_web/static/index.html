@@ -110,7 +110,97 @@
     <div id="sb-spec-body" style="font-size:10px;color:var(--dim)"><div style="font-size:10px;color:var(--dim)">No spec loaded</div></div>
   </div>
   <div class="sb-footer" id="porosity-sidebar-footer">
+    <!-- ── Visual Legend ── -->
+    <div style="padding:10px 12px 6px;border-top:1px solid var(--bd)">
+      <div style="font-size:9px;font-weight:800;letter-spacing:.08em;color:var(--dim);margin-bottom:8px;text-transform:uppercase">Visual Legend</div>
+
+      <!-- PORE FILLS -->
+      <div style="font-size:8px;font-weight:700;color:var(--dim);letter-spacing:.06em;margin-bottom:5px;opacity:.7">PORE FILLS — Area Calculated From</div>
+
+      <!-- Gas pore - default zone -->
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <div style="width:18px;height:14px;border-radius:50%;background:rgba(0,120,200,0.75);border:1.5px solid #0099cc;flex-shrink:0"></div>
+        <span style="font-size:9px;color:var(--tx)">Gas pore <span style="color:var(--dim)">(round / Default zone)</span></span>
+      </div>
+
+      <!-- Shrink pore - default zone -->
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <div style="width:18px;height:14px;border-radius:3px;background:rgba(160,100,40,0.75);border:1.5px solid #a06428;flex-shrink:0"></div>
+        <span style="font-size:9px;color:var(--tx)">Shrinkage pore <span style="color:var(--dim)">(irregular)</span></span>
+      </div>
+
+      <!-- HR zone -->
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <div style="width:18px;height:14px;border-radius:50%;background:rgba(184,112,0,0.75);border:1.5px solid #b87000;flex-shrink:0"></div>
+        <span style="font-size:9px;color:var(--tx)">HR zone pore <span style="color:var(--dim)">(amber)</span></span>
+      </div>
+
+      <!-- HK zone -->
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <div style="width:18px;height:14px;border-radius:50%;background:rgba(106,62,204,0.75);border:1.5px solid #6a3ecc;flex-shrink:0"></div>
+        <span style="font-size:9px;color:var(--tx)">HK zone pore <span style="color:var(--dim)">(purple)</span></span>
+      </div>
+
+      <!-- Failing pore -->
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <div style="width:18px;height:14px;border-radius:50%;background:rgba(220,50,50,0.75);border:1.5px solid #cc2222;flex-shrink:0"></div>
+        <span style="font-size:9px;color:var(--tx)">Failing pore <span style="color:#ef4444">(exceeds spec Φ)</span></span>
+      </div>
+
+      <!-- Ignored/excluded -->
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+        <div style="width:18px;height:14px;border-radius:50%;background:rgba(150,150,150,0.45);border:1.5px solid #999;flex-shrink:0"></div>
+        <span style="font-size:9px;color:var(--tx)">Ignored / excluded pore</span>
+      </div>
+
+      <!-- DIVIDER -->
+      <div style="height:1px;background:var(--bd);margin:2px 0 7px"></div>
+
+      <!-- LINE STYLES -->
+      <div style="font-size:8px;font-weight:700;color:var(--dim);letter-spacing:.06em;margin-bottom:5px;opacity:.7">LINE STYLES — Indicator Only (Not Area)</div>
+
+      <!-- Fail dashed ring -->
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <svg width="22" height="14" style="flex-shrink:0">
+          <ellipse cx="11" cy="7" rx="9" ry="6" fill="none" stroke="rgba(255,61,61,0.75)" stroke-width="1.5" stroke-dasharray="3,2"/>
+        </svg>
+        <span style="font-size:9px;color:var(--tx)">Fail compliance ring <span style="color:var(--dim)">(pore over limit)</span></span>
+      </div>
+
+      <!-- Spacing lines -->
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <svg width="22" height="14" style="flex-shrink:0">
+          <line x1="2" y1="7" x2="20" y2="7" stroke="#f59e0b" stroke-width="1.5"/>
+          <line x1="2" y1="4" x2="2" y2="10" stroke="#f59e0b" stroke-width="1.5"/>
+          <line x1="20" y1="4" x2="20" y2="10" stroke="#f59e0b" stroke-width="1.5"/>
+        </svg>
+        <span style="font-size:9px;color:var(--tx)">Spacing measurement <span style="color:var(--dim)">(mm between pores)</span></span>
+      </div>
+
+      <!-- Zone boundary -->
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <svg width="22" height="14" style="flex-shrink:0">
+          <line x1="2" y1="7" x2="20" y2="7" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" stroke-dasharray="4,3"/>
+        </svg>
+        <span style="font-size:9px;color:var(--tx)">Zone boundary <span style="color:var(--dim)">(HR / HK / NR)</span></span>
+      </div>
+
+      <!-- Selection ring -->
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">
+        <svg width="22" height="14" style="flex-shrink:0">
+          <ellipse cx="11" cy="7" rx="9" ry="6" fill="none" stroke="#0099cc" stroke-width="2" opacity="0.8"/>
+        </svg>
+        <span style="font-size:9px;color:var(--tx)">Selected pore ring</span>
+      </div>
+
+      <!-- AREA NOTE -->
+      <div style="margin-top:7px;padding:5px 7px;background:rgba(0,200,130,.08);border:1px solid rgba(0,200,130,.2);border-radius:5px">
+        <div style="font-size:8px;color:#00c882;font-weight:700;margin-bottom:2px">✓ AREA CALCULATION</div>
+        <div style="font-size:8px;color:var(--dim);line-height:1.4">Based on <b style="color:var(--tx)">solid pixel fill</b> only. Dashed rings &amp; spacing lines are indicators and do not affect area or porosity %.</div>
+      </div>
+    </div>
   </div>
+
 </div>
 
 <!-- ═══ MAIN ═══ -->
@@ -338,6 +428,21 @@
                 <div class="fh">Override porosity % for shrinkage pores only</div>
               </div>
             </div>
+            <div style="margin-top:12px;display:flex;align-items:center;gap:8px">
+              <input type="checkbox" id="sp-eval-shrink-feret" onchange="saveSpec()" style="cursor:pointer;width:15px;height:15px">
+              <label for="sp-eval-shrink-feret" style="font-size:12px;color:var(--tx);cursor:pointer;user-select:none">Evaluate shrinkage max Φ against Feret Max Length (<span style="color:#0ea5e9;font-weight:700">↔ L</span>) instead of equivalent circle</label>
+            </div>
+            <!-- Global Max Length Limit -->
+            <div style="margin-top:14px;border-top:1px solid rgba(255,255,255,.08);padding-top:12px">
+              <div style="font-size:10px;font-weight:700;color:var(--dim);margin-bottom:8px;letter-spacing:0.5px">GLOBAL MAX LENGTH LIMIT (ALL PORE TYPES)</div>
+              <div class="fi-item">
+                <div class="fl" style="display:flex;align-items:center;gap:5px">
+                  Max Length L <span style="color:#0ea5e9;font-weight:700;font-size:10px">↔</span>
+                </div>
+                <div class="fi-wrap"><input class="fi" id="sp-max-l-limit" type="number" min="0.1" step="0.5" placeholder="— (disabled)" oninput="saveSpec()"><span class="fi-unit">mm</span></div>
+                <div class="fh">Max Feret (longest dimension) across all pores — leave blank to disable</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -466,12 +571,12 @@
       <!-- ENHANCE group -->
       <div style="display:flex;align-items:center;gap:4px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
         <span class="tb-lbl">ENHANCE:</span>
-        <div class="slider-group" title="Brightness — increase to reveal dim pores in underexposed images">
-          <span style="font-size:10px">☀</span>
+        <div class="slider-group" title="Brightness — adjusts image brightness before detection. Increase to reveal dim pores in underexposed images. Changes instantly re-trigger detection.">
+          <span style="font-size:9px;font-weight:700;color:var(--dim)">Bright</span>
           <input type="range" id="img-brightness" min="0" max="200" value="100" step="5" oninput="applyImageFilters()" style="width:50px">
         </div>
-        <div class="slider-group" title="Contrast — increase to sharpen pore boundaries vs. metal matrix">
-          <span style="font-size:10px">◑</span>
+        <div class="slider-group" title="Contrast — sharpens pore boundaries vs. metal matrix before detection. Increase for overexposed or low-contrast images. Changes instantly re-trigger detection.">
+          <span style="font-size:9px;font-weight:700;color:var(--dim)">Contrast</span>
           <input type="range" id="img-contrast" min="0" max="200" value="100" step="5" oninput="applyImageFilters()" style="width:50px">
         </div>
       </div>
@@ -486,8 +591,9 @@
         <button class="btn-hz" onclick="clearAllPores()" title="Remove all placed pores from this image">✕ Clear</button>
       </div>
 
-      <!-- PNG export pushed to far right -->
-      <button class="btn-hz" onclick="downloadAnnotatedImage()" title="Export annotated image as PNG with pore overlays" style="margin-left:auto">⬇ PNG</button>
+      <!-- Fit + PNG export pushed to far right -->
+      <button class="btn-hz" onclick="fitImgToScreen()" title="Fit to screen — reset pan and zoom to show the full image centred in the canvas" style="margin-left:auto">⊡ Fit</button>
+      <button class="btn-hz" onclick="downloadAnnotatedImage()" title="Export annotated image as PNG with pore overlays">⬇ PNG</button>
     </div>
 
     <!-- ── ROW 2: Detection params + Exclude tools + Measure + Links ── -->
@@ -496,12 +602,22 @@
       <!-- DETECT params group -->
       <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
         <span class="tb-lbl">DETECT:</span>
-        <button class="btn-hz" id="btn-autodetect-tb" onclick="autoDetectPores()"
-          style="font-size:9px;padding:1px 7px;height:22px;font-weight:700"
-          title="Auto-detect all pores — scans entire image using threshold + morphology. Adjust presets and sliders first for best results">◎ Auto</button>
         <button class="btn-hz" id="btn-detect-wand" onclick="setTool('wand_pore')"
           style="font-size:9px;padding:1px 7px;height:22px"
-          title="Wand Pore — click inside a dark void to flood-fill and trace it as a pore. Best for shrinkage cavities with irregular shapes">⊙ Wand</button>
+          title="Pore Wand — click INSIDE a dark pore void to flood-fill and trace it as a pore. Best for irregular shrinkage cavities missed by Auto-Detect.">🪄 Pore Wand</button>
+        <button class="btn-hz" id="btn-poly-draw" onclick="setTool('poly_draw')"
+          style="font-size:9px;padding:1px 7px;height:22px"
+          title="Polygon Draw — click vertices to trace any pore outline precisely. Double-click or click the first point to close. ESC or right-click to cancel.">✦ Poly Draw</button>
+        <!-- Render Mode: Curve = contour polygon area | Solid = pixel-count area projection -->
+        <div style="display:inline-flex;height:22px;border:1px solid var(--bd2);border-radius:4px;overflow:hidden;flex-shrink:0"
+             title="Pore area method. Curve: smooth contour polygon. Solid: exact pixel count filled projection. Switching recalculates all metrics instantly.">
+          <button id="btn-mode-curve" onclick="setPoreRenderMode('curve')"
+            style="font-size:9px;padding:0 7px;height:22px;border:none;border-right:1px solid var(--bd2);cursor:pointer;background:var(--c4);color:var(--pri);font-weight:700"
+            title="Curve mode — area from smoothed contour polygon (shoelace). Default.">▣ Curve</button>
+          <button id="btn-mode-solid" onclick="setPoreRenderMode('solid')"
+            style="font-size:9px;padding:0 7px;height:22px;border:none;cursor:pointer"
+            title="Solid mode — area from true pixel count. Displays filled mask instead of edge curve. More accurate for irregular shrinkage pores.">⬛ Solid</button>
+        </div>
         <div style="width:1px;height:14px;background:var(--bd2);margin:0 2px"></div>
         <button class="btn-hz" style="font-size:9px;padding:1px 6px;height:22px" onclick="setDetectPreset('fine')"
           title="Fine preset — high sensitivity for small gas pores (≥0.05mm). May pick up noise in rough images.">Fine</button>
@@ -513,14 +629,14 @@
         <div class="slider-group" title="Threshold — brightness cutoff for pore detection. 50=Auto (Otsu). Lower: only darkest pores. Higher: includes gray areas too.">
           <span style="font-size:8px;font-weight:700">Thresh</span>
           <input type="range" id="detect-threshold" min="10" max="90" value="50" step="5"
-            oninput="document.getElementById('detect-sens-val').textContent=this.value+(this.value=='50'?' (Auto)':this.value>50?' +'+(this.value-50):' '+(this.value-50))"
+            oninput="document.getElementById('detect-sens-val').textContent=this.value+(this.value=='50'?' (Auto)':this.value>50?' +'+(this.value-50):' '+(this.value-50));_scheduleLiveDetect();"
             style="width:44px">
           <span id="detect-sens-val" style="font-size:8px;font-weight:700;min-width:40px">50 (Auto)</span>
         </div>
         <div class="slider-group" title="Min Pore Diameter — smallest pore to detect (mm). Raise to filter noise; lower to catch fine gas pores.">
           <span style="font-size:8px;font-weight:700">Min Φ</span>
           <input type="range" id="detect-min-dia" min="0.05" max="2.0" value="0.1" step="0.05"
-            oninput="document.getElementById('detect-min-dia-val').textContent=parseFloat(this.value).toFixed(2)+'mm'"
+            oninput="document.getElementById('detect-min-dia-val').textContent=parseFloat(this.value).toFixed(2)+'mm';_scheduleLiveDetect();"
             style="width:40px">
           <span id="detect-min-dia-val" style="font-size:8px;font-weight:700;width:32px">0.10mm</span>
         </div>
@@ -539,7 +655,7 @@
           title="Exclusion Circle — draw a circle to mask a round region. Ideal for bore holes and circular features.">○ Circle</button>
         <button class="btn-hz" id="btn-excl-wand" onclick="setTool('exclude_wand')"
           style="font-size:9px;padding:1px 6px;height:22px"
-          title="Exclusion Wand — click a bright boundary region to auto-trace and exclude it. Best for complex edge profiles.">⊙ Wand</button>
+          title="Excl Wand — click a BRIGHT boundary or structural feature to auto-trace and exclude it from detection. Best for complex edge profiles and bolt holes.">🚫 Excl Wand</button>
         <!-- Wand options (only shown when excl wand active) -->
         <div id="wand-options" style="display:none;align-items:center;gap:4px;border-left:1px solid var(--bd2);padding-left:5px">
           <span style="font-size:8px;font-weight:700">Tol:</span>
@@ -594,36 +710,36 @@
       
       <div class="slider-group" title="Gaussian Blur (Noise reduction)">
         <span>Blur</span>
-        <input type="range" id="detect-blur" min="0" max="5" value="1" step="1" oninput="document.getElementById('detect-blur-val').textContent=this.value" style="width:40px">
+        <input type="range" id="detect-blur" min="0" max="5" value="1" step="1" oninput="document.getElementById('detect-blur-val').textContent=this.value;_scheduleLiveDetect();" style="width:40px">
         <span id="detect-blur-val" style="width:12px;text-align:right">1</span>
       </div>
 
       <div class="slider-group" title="Morphological Close radius. Higher values bridge larger gaps in shrinkage porosities.">
         <span>Close (Dilate+Erode)</span>
-        <input type="range" id="detect-close" min="0" max="10" value="1" step="1" oninput="document.getElementById('detect-close-val').textContent=this.value" style="width:50px">
+        <input type="range" id="detect-close" min="0" max="10" value="1" step="1" oninput="document.getElementById('detect-close-val').textContent=this.value;_scheduleLiveDetect();" style="width:50px">
         <span id="detect-close-val" style="width:16px;text-align:right">1</span>
       </div>
 
       <div class="slider-group" title="Curve simplification for traced contours.">
         <span>Curve</span>
-        <input type="range" id="detect-curve" min="12" max="80" value="32" step="1" oninput="document.getElementById('detect-curve-val').textContent=this.value" style="width:50px">
+        <input type="range" id="detect-curve" min="12" max="80" value="32" step="1" oninput="document.getElementById('detect-curve-val').textContent=this.value;_scheduleLiveDetect();" style="width:50px">
         <span id="detect-curve-val" style="width:20px;text-align:right">32</span>
       </div>
 
       <div class="slider-group" title="Max Aspect Ratio limit for auto-detect">
         <span>Max Aspect</span>
-        <input type="range" id="detect-aspect" min="2" max="20" value="8" step="1" oninput="document.getElementById('detect-aspect-val').textContent=this.value" style="width:40px">
+        <input type="range" id="detect-aspect" min="2" max="20" value="8" step="1" oninput="document.getElementById('detect-aspect-val').textContent=this.value;_scheduleLiveDetect();" style="width:40px">
         <span id="detect-aspect-val" style="width:16px;text-align:right">8</span>
       </div>
 
       <div class="slider-group" title="Max Area % limit for auto-detect">
         <span>Max Area</span>
-        <input type="range" id="detect-max-area" min="1" max="50" value="15" step="1" oninput="document.getElementById('detect-max-area-val').textContent=this.value+'%'" style="width:40px">
+        <input type="range" id="detect-max-area" min="1" max="50" value="15" step="1" oninput="document.getElementById('detect-max-area-val').textContent=this.value+'%';_scheduleLiveDetect();" style="width:40px">
         <span id="detect-max-area-val" style="width:24px;text-align:right">15%</span>
       </div>
 
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer" title="Reject pores touching the edges of the image">
-        <input type="checkbox" id="detect-edge-reject" checked style="accent-color:var(--pri)">
+        <input type="checkbox" id="detect-edge-reject" style="accent-color:var(--pri)" onchange="_scheduleLiveDetect(200);">
         <span>Edge Reject</span>
       </label>
 
@@ -1035,9 +1151,11 @@
       <div style="display:flex;gap:4px;align-items:center;overflow-x:auto" id="v-spec-tabs-inner"></div>
     </div>
     <!-- ── Image sub-tab strip ───────────────────────────── -->
-    <div id="v-image-tabs" style="display:none;background:var(--c3);border-bottom:1px solid var(--bd);padding:6px 16px 0">
-      <div style="display:flex;gap:3px;align-items:center;overflow-x:auto" id="v-image-tabs-inner"></div>
+    <div id="v-image-tabs" style="display:none;background:var(--c2);border-bottom:1px solid var(--bd);padding:8px 16px 0;gap:4px">
+      <div style="display:flex;gap:3px;align-items:flex-end;overflow-x:auto" id="v-image-tabs-inner"></div>
     </div>
+    <!-- ── Active image context header ───────────────────── -->
+    <div id="v-img-context-header" style="display:none;padding:8px 20px;background:var(--c1);border-bottom:1px solid var(--bd);font-size:11px"></div>
 
     <!-- Hero -->
     <div class="verdict-hero" id="v-hero">
@@ -1053,6 +1171,9 @@
         </button>
       </div>
     </div>
+
+    <!-- ── Compare panel (shown when Compare tab is active) ─── -->
+    <div id="v-compare-panel" style="display:none;padding:0 20px 20px"></div>
 
     <div class="g2" style="gap:14px;margin-top:14px">
       <!-- Parameter checks -->
@@ -1187,7 +1308,7 @@
 </div>
 
 <script src="/static/tools/porosity.js?v=20260427h"></script>
-<script src="/static/app.js?v=20260702_datum_edit_crop"></script>
+<script src="/static/app.js?v=20260720_cmpv7"></script>
 
 <!-- ═══ AI TRAINING SUBMIT MODAL ═══ -->
 <div id="ai-submit-modal" style="

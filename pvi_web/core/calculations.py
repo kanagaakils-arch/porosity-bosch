@@ -10,9 +10,19 @@ def calc_porosity(pores: List[PoreModel], spec: SpecModel) -> float:
     return total / max(spec.datum, 0.01) * 100
 
 
+def get_check_dia(p: PoreModel, spec: SpecModel) -> float:
+    """Returns the effective diameter to check against phi limit for this pore."""
+    if getattr(spec, 'eval_shrink_feret', False) and p.type == 'shrink':
+        feret = getattr(p, 'max_length', None)
+        if feret is None:
+            feret = getattr(p, '_maxLength', None)
+        return max(p.dia, feret if feret is not None else p.dia)
+    return p.dia
+
+
 def calc_max_phi(pores: List[PoreModel], spec: SpecModel) -> float:
     eff = effective_pores(pores, spec)
-    return max((p.dia for p in eff), default=0.0)
+    return max((get_check_dia(p, spec) for p in eff), default=0.0)
 
 
 def calc_min_gap(pores: List[PoreModel], spec: SpecModel) -> Optional[dict]:
@@ -93,8 +103,10 @@ def effective_pores(pores: List[PoreModel], spec: SpecModel) -> List[PoreModel]:
         return list(pores)
     result = []
     for p in pores:
-        # Use the original measured diameter (_raw_dia) if available, else fall back to p.dia
-        raw_dia = getattr(p, '_raw_dia', p.dia)
+        # Use the original measured diameter (_raw_dia or raw_dia) if available, else fall back to p.dia
+        raw_dia = getattr(p, '_raw_dia', getattr(p, 'raw_dia', p.dia))
+        if raw_dia is None:
+            raw_dia = p.dia
         if raw_dia >= u:
             result.append(p)
     return result
@@ -485,31 +497,41 @@ def run_evaluation(
         if cs['status'] == 'full':
             continue
         elif cs['status'] == 'partial':
+            orig_raw = getattr(p, 'raw_dia', None) or getattr(p, '_raw_dia', None) or p.dia
+            feret = getattr(p, 'max_length', None) or getattr(p, '_maxLength', None)
             p_copy = PoreModel(
                 id=p.id,
                 x=p.x,
                 y=p.y,
                 dia=cs['effectiveDia'],
                 type=p.type,
-                zone=p.zone
+                zone=p.zone,
+                max_length=feret,
+                raw_dia=orig_raw
             )
             # Add custom markers
             p_copy._effectiveDia = cs['effectiveDia']
-            p_copy._raw_dia = p.dia  # preserve original measured diameter for U threshold
+            p_copy._raw_dia = orig_raw  # preserve original measured diameter for U threshold
+            p_copy._maxLength = feret
             p_copy._cropFraction = cs['fraction']
             p_copy._isCropped = True
             net_pores.append(p_copy)
         else:
+            orig_raw = getattr(p, 'raw_dia', None) or getattr(p, '_raw_dia', None) or p.dia
+            feret = getattr(p, 'max_length', None) or getattr(p, '_maxLength', None)
             p_copy = PoreModel(
                 id=p.id,
                 x=p.x,
                 y=p.y,
                 dia=p.dia,
                 type=p.type,
-                zone=p.zone
+                zone=p.zone,
+                max_length=feret,
+                raw_dia=orig_raw
             )
             p_copy._effectiveDia = p.dia
-            p_copy._raw_dia = p.dia
+            p_copy._raw_dia = orig_raw
+            p_copy._maxLength = feret
             p_copy._cropFraction = 1.0
             p_copy._isCropped = False
             net_pores.append(p_copy)
@@ -582,7 +604,7 @@ def run_evaluation(
             'pass':   max_phi <= spec_net.phi,
             'meas':   f'{max_phi:.3f} mm',
             'limit':  f'≤{spec_net.phi} mm',
-            'detail': f'Largest effective pore {max_phi:.3f} mm',
+            'detail': f'Largest effective pore {max_phi:.3f} mm' + (' (Feret max for shrink)' if getattr(spec_net, 'eval_shrink_feret', False) else ''),
         },
         # §3.4 – Spacing (H condition, global)
         {
@@ -673,7 +695,10 @@ def run_evaluation(
     if shrink_pores:
         phi_s   = spec_net.phi_shrink if spec_net.phi_shrink is not None else spec_net.phi
         pct_s   = spec_net.pct_shrink if spec_net.pct_shrink is not None else spec_net.pct
-        max_s   = max(p.dia for p in shrink_pores)
+        if getattr(spec_net, 'eval_shrink_feret', False):
+            max_s = max(get_check_dia(p, spec_net) for p in shrink_pores)
+        else:
+            max_s = max(p.dia for p in shrink_pores)
         area_s  = sum(math.pi * (p.dia / 2) ** 2 for p in shrink_pores)
         pct_sv  = area_s / net_datum_area * 100
         checks.append({
@@ -682,7 +707,7 @@ def run_evaluation(
             'pass':   max_s <= phi_s,
             'meas':   f'{max_s:.3f} mm',
             'limit':  f'≤{phi_s} mm',
-            'detail': f'{len(shrink_pores)} shrink pore(s) — largest Φ {max_s:.3f} mm',
+            'detail': f'{len(shrink_pores)} shrink pore(s) — largest Φ {max_s:.3f} mm' + (' (Feret max)' if getattr(spec_net, 'eval_shrink_feret', False) else ''),
         })
         checks.append({
             'n':      'Shrink porosity %',
@@ -692,6 +717,30 @@ def run_evaluation(
             'limit':  f'≤{pct_s}%',
             'detail': f'Shrink area {area_s:.2f} mm² / {net_datum_area:.1f} mm² datum',
         })
+
+    # ── Global Max Length (Feret) limit check ────────────────────────────────
+    max_l_limit = getattr(spec_net, 'max_l_limit', None)
+    if max_l_limit is not None and max_l_limit > 0:
+        all_net = list(effective_pores(net_pores, spec_net))
+        # Get max_length from each pore; fall back to dia if not available
+        def _get_max_l(p):
+            ml = getattr(p, 'max_length', None)
+            return float(ml) if ml is not None else float(p.dia)
+        if all_net:
+            worst_p = max(all_net, key=_get_max_l)
+            worst_l = _get_max_l(worst_p)
+            checks.append({
+                'n':      'Max Length L (Feret)',
+                'par':    'Max L',
+                'pass':   worst_l <= max_l_limit,
+                'meas':   f'{worst_l:.3f} mm',
+                'limit':  f'≤{max_l_limit} mm',
+                'detail': (
+                    f'Largest pore max cross-section = {worst_l:.3f} mm (pore #{worst_p.id})'
+                    if worst_l > max_l_limit
+                    else f'All pores within max-length limit (worst {worst_l:.3f} mm)'
+                ),
+            })
 
     all_pass = all(c['pass'] for c in checks)
 

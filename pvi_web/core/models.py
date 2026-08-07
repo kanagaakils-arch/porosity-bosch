@@ -23,11 +23,13 @@ class SpecModel(BaseModel):
     nk: int = 1
     method: str = 'visual_machined'
     zone_disabled: bool = False
+    eval_shrink_feret: bool = False      # if True, check shrink cavities against limit using max_length (Feret max) instead of equivalent circle dia
     # ── Type-specific limits (optional — fall back to phi/pct if None) ──
     phi_gas: Optional[float] = None      # max single gas pore Φ (mm)
     pct_gas: Optional[float] = None      # max gas porosity %
     phi_shrink: Optional[float] = None   # max single shrink pore Φ (mm)
     pct_shrink: Optional[float] = None   # max shrink porosity %
+    max_l_limit: Optional[float] = None  # max allowed Feret (Max Length) across all pores (mm)
 
 class PoreModel(BaseModel):
     id: int
@@ -40,6 +42,8 @@ class PoreModel(BaseModel):
     is_cropped: Optional[bool] = None
     effective_dia: Optional[float] = None
     crop_fraction: Optional[float] = None
+    max_length: Optional[float] = None
+    raw_dia: Optional[float] = None
 
 class ExclusionZoneModel(BaseModel):
     type: Literal["rect", "circle", "polygon"]

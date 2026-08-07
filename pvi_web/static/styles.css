@@ -84,7 +84,7 @@ input[type=number]{-moz-appearance:textfield}
 .sb-spec-row:last-child{border:none}
 .sb-spec-key{color:var(--muted)}
 .sb-spec-val{color:var(--tx);font-weight:600;font-variant-numeric:tabular-nums}
-.sb-footer{padding:10px 14px;border-top:1px solid var(--bd);font-size:9px;color:var(--dim);line-height:1.9}
+.sb-footer{font-size:9px;color:var(--dim);line-height:1.9;overflow-y:auto;max-height:420px;}
 
 /* ── MAIN ── */
 #main{overflow:hidden;position:relative;display:flex;flex-direction:column}

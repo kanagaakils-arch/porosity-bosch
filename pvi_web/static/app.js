@@ -85,7 +85,11 @@ const S = {
     imgDragging: false,
     offscreen: null,      // cached filtered image canvas
     cacheValid: false     // true = offscreen is current
-  }
+  },
+  // Render mode for auto-detected pores:
+  //   'curve'  — draw smooth Catmull-Rom contour; area = shoelace polygon area
+  //   'solid'  — draw pixel-exact filled mask;    area = true pixel count (default)
+  poreRenderMode: 'solid'
 };
 
 const SCALE_BASE = 50; // px per mm at zoom=1
@@ -141,7 +145,8 @@ function makeImagePage(index){
     verdict: null,
     datumRect: null,         // per-image datum zone — never shared across tabs
     datumMode: 'square',     // per-image datum mode
-    imgOffsetMm: 0           // mm offset from Surface A for cropped images
+    imgOffsetMm: 0,          // mm offset from Surface A for cropped images
+    isBaseline: false        // 📌 marks this image as the "before" for comparison
   };
 }
 
@@ -218,6 +223,8 @@ function loadSpecIntoForm(){
   const ss=document.getElementById('sp-phi-shrink'); if(ss) ss.value = s.phi_shrink != null ? s.phi_shrink : '';
   const gp=document.getElementById('sp-pct-gas');    if(gp) gp.value = s.pct_gas    != null ? s.pct_gas    : '';
   const sp2=document.getElementById('sp-pct-shrink'); if(sp2) sp2.value = s.pct_shrink != null ? s.pct_shrink : '';
+  const sf=document.getElementById('sp-eval-shrink-feret'); if(sf) sf.checked = !!s.eval_shrink_feret;
+  const ml=document.getElementById('sp-max-l-limit'); if(ml) ml.value = s.max_l_limit != null ? s.max_l_limit : '';
   setToggleValue('tg-h', s.h||0); setToggleValue('tg-n', s.n||0);
   setToggleValue('tg-hr', s.hr||0); setToggleValue('tg-nr', s.nr||0);
   setToggleValue('tg-hk', s.hk||0); setToggleValue('tg-nk', s.nk||0);
@@ -327,10 +334,25 @@ function renderImageTabs(){
   host.innerHTML=tab.images.map((img,i)=>{
     const count=img.pores.length;
     const hasImg=img.imgState.image ? 'photo' : 'empty';
-    return `<button class="image-tab ${i===tab.activeImage?'on':''}" onclick="switchImageTab(${i})">
-      <span>${img.name}</span><span class="image-tab-meta">${count} pores · ${hasImg}</span>
-    </button>`;
+    const isPinned = !!img.isBaseline;
+    const pinTitle = isPinned ? 'Unpin baseline' : 'Set as baseline (📌 Before image for comparison)';
+    return `<div style="display:flex;align-items:stretch;gap:0">
+      <button class="image-tab ${i===tab.activeImage?'on':''}" onclick="switchImageTab(${i})" style="border-radius:6px 0 0 6px;flex:1">
+        <span>${img.name}${isPinned?' <span style="color:#f59e0b;font-size:9px">📌 Baseline</span>':''}</span>
+        <span class="image-tab-meta">${count} pores · ${hasImg}</span>
+      </button>
+      <button onclick="toggleBaseline(${i})" title="${pinTitle}" style="padding:0 7px;border:none;cursor:pointer;border-left:1px solid rgba(255,255,255,.08);border-radius:0 6px 6px 0;background:${isPinned?'rgba(245,158,11,.2)':'var(--c2)'};color:${isPinned?'#f59e0b':'var(--dim)'};font-size:11px" class="${tab.activeImage===i?'on':''}">📌</button>
+    </div>`;
   }).join('');
+}
+function toggleBaseline(ii){
+  persistActiveResults();
+  const tab = activeSpecTab();
+  const willPin = !tab.images[ii].isBaseline;
+  // Only one baseline per spec
+  tab.images.forEach((pg, i) => { pg.isBaseline = (i === ii && willPin); });
+  renderImageTabs();
+  toast(willPin ? `📌 "${tab.images[ii].name}" set as Baseline (Before image)` : 'Baseline cleared', 'ok');
 }
 
 function refreshWorkspaceUI(){
@@ -878,6 +900,8 @@ function saveCustomPresetSpec() {
     phi_shrink: document.getElementById('sp-phi-shrink')?.value ? +document.getElementById('sp-phi-shrink').value : null,
     pct_gas:    document.getElementById('sp-pct-gas')?.value    ? +document.getElementById('sp-pct-gas').value    : null,
     pct_shrink: document.getElementById('sp-pct-shrink')?.value ? +document.getElementById('sp-pct-shrink').value : null,
+    eval_shrink_feret: !!document.getElementById('sp-eval-shrink-feret')?.checked,
+    max_l_limit: document.getElementById('sp-max-l-limit')?.value ? +document.getElementById('sp-max-l-limit').value : null,
     h: getv('tg-h'), n: getv('tg-n'),
     hr: getv('tg-hr'), nr: getv('tg-nr'),
     hk: getv('tg-hk'), nk: getv('tg-nk')
@@ -904,6 +928,9 @@ function applyCustomPreset(k) {
     const el=document.getElementById('sp-'+f.replace('_', '-'));
     if(el) el.value=p[f] !== undefined && p[f] !== null ? p[f] : '';
   });
+  // Load max length limit
+  const _mlEl = document.getElementById('sp-max-l-limit');
+  if(_mlEl) _mlEl.value = (p.max_l_limit != null) ? p.max_l_limit : '';
   
   // Load toggle zone settings
   ['h','n','hr','nr','hk','nk'].forEach(f=>{ 
@@ -981,6 +1008,8 @@ function saveSpec(){
   const _sPhi = document.getElementById('sp-phi-shrink');  s.phi_shrink = _sPhi    && _sPhi.value    !== '' ? +_sPhi.value    : null;
   const _gPct = document.getElementById('sp-pct-gas');     s.pct_gas    = _gPct    && _gPct.value    !== '' ? +_gPct.value    : null;
   const _sPct = document.getElementById('sp-pct-shrink');  s.pct_shrink = _sPct    && _sPct.value    !== '' ? +_sPct.value    : null;
+  s.eval_shrink_feret = !!document.getElementById('sp-eval-shrink-feret')?.checked;
+  const _mll = document.getElementById('sp-max-l-limit'); s.max_l_limit = _mll && _mll.value !== '' ? +_mll.value : null;
   s.h=getv('tg-h'); s.n=getv('tg-n');
   s.hr=getv('tg-hr'); s.nr=getv('tg-nr');
   s.hk=getv('tg-hk'); s.nk=getv('tg-nk');
@@ -1004,6 +1033,7 @@ function saveSpec(){
     `<div class="sb-spec-row"><span class="sb-spec-key">Part</span><span class="sb-spec-val">${s.pno}</span></div>`+
     `<div class="sb-spec-row"><span class="sb-spec-key">%</span><span class="sb-spec-val">≤${s.pct}%</span></div>`+
     `<div class="sb-spec-row"><span class="sb-spec-key">Φ</span><span class="sb-spec-val">${s.phi} mm</span></div>`+
+    (s.max_l_limit != null ? `<div class="sb-spec-row"><span class="sb-spec-key">↔ L</span><span class="sb-spec-val">≤${s.max_l_limit} mm</span></div>` : '')+
     `<div class="sb-spec-row"><span class="sb-spec-key">A · U</span><span class="sb-spec-val">${s.a} · ${s.u}mm</span></div>`+
     `<div class="sb-spec-row"><span class="sb-spec-key">H/N</span><span class="sb-spec-val">H${s.h}/N${s.n}</span></div>`;
   // Home status
@@ -1090,7 +1120,26 @@ function fitWall(){
   _updateScaleDisplay();
 }
 
+/**
+ * Resets the image pan offset so the loaded image fills the canvas centred,
+ * exactly as it appears on first load.  Works in image mode only; falls back
+ * to fitWall() + drawCanvas() in wall mode.
+ */
+function fitImgToScreen() {
+  if (S.imgMode && S.imgState && S.imgState.image) {
+    // Clear the pan offset — drawCanvas re-centres automatically via fitScale
+    S.imgState.imgOffsetX = 0;
+    S.imgState.imgOffsetY = 0;
+    drawCanvas();
+    toast('⊡ Fit to screen', 'info');
+  } else {
+    fitWall();
+    drawCanvas();
+  }
+}
+
 function resetView(){ fitWall(); drawCanvas(); }
+
 
 function zoom(f, cx, cy){
   const oldScale = S.cv.scale;
@@ -1112,6 +1161,62 @@ function zoom(f, cx, cy){
 function _imgScale(){ return S.imgState.scalePxPerMm || S.cv.scale; }
 function _imgOriginX(){ return S.imgState.imgX !== undefined ? S.imgState.imgX : (S.cv.wallL + S.cv.originX); }
 function _imgOriginY(){ return S.imgState.imgY !== undefined ? S.imgState.imgY : (S.cv.wallTop + S.cv.originY); }
+
+/**
+ * _syncDetectedPoresMm — Re-derives the mm position and _contour for every
+ * auto-detected pore from its scale-invariant native pixel anchors.
+ *
+ * WHY: auto-detected pores store their centroid and contour in native image
+ * pixel space (_nativePxX/Y and _contourPx). The mm display fields (x, y,
+ * _contour) are computed by dividing by natPxPerMm which can change any time
+ * the user rescales or the canvas is resized.  If we don't re-derive, the
+ * rendered contours drift off the actual pore voids ("scatter").
+ *
+ * Called once per drawCanvas frame — pure mutation, no expensive work.
+ */
+function _syncDetectedPoresMm(){
+  if(!S.imgMode || !S.imgState.scalePxPerMm) return;
+  const natPxPerMm = S.imgState.scalePxPerMm / (S.imgState.fitScale || 1);
+  if(!natPxPerMm || natPxPerMm <= 0) return;
+  const pores = AP();
+  for(let i = 0; i < pores.length; i++){
+    const p = pores[i];
+    if(!p._detectMeta) continue;               // only for auto-detected pores
+    if(p._nativePxX == null) continue;         // no pixel anchor stored (legacy)
+    // Re-derive centroid in mm
+    const newX = +(p._nativePxX / natPxPerMm).toFixed(3);
+    const newY = +(p._nativePxY / natPxPerMm).toFixed(3);
+    p.x = newX;
+    p.y = newY;
+    // Re-derive contour offsets in mm from native pixel offsets
+    if(p._contourPx && p._contourPx.length >= 4){
+      p._contour = p._contourPx.map(([dxPx, dyPx]) => [
+        +(dxPx / natPxPerMm).toFixed(4),
+        +(dyPx / natPxPerMm).toFixed(4)
+      ]);
+    }
+    // Re-derive metric lengths from pixel-space (keep metrics consistent)
+    if(p._nativePxX != null){
+      // _pixelDiaMm, _contourDiaMm, _maxLength also scale with natPxPerMm:
+      // But these are already stored correctly from detection — only rescale
+      // if the scale has changed from the detection-time natPxPerMm.
+      // We store the detection-time natPxPerMm so we can detect changes.
+      if(p._detNatPxPerMm && Math.abs(p._detNatPxPerMm - natPxPerMm) > 0.01){
+        const ratio = p._detNatPxPerMm / natPxPerMm;
+        p._pixelDiaMm    = +(p._pixelDiaMm    * ratio).toFixed(3);
+        p._contourDiaMm  = +(p._contourDiaMm  * ratio).toFixed(3);
+        p._pixelAreaMm2  = +(p._pixelAreaMm2  * ratio * ratio).toFixed(4);
+        p._contourAreaMm2= +(p._contourAreaMm2 * ratio * ratio).toFixed(4);
+        p._maxLength     = +(p._maxLength     * ratio).toFixed(3);
+        p.dia            = +(p.dia            * ratio).toFixed(3);
+        p._detNatPxPerMm = natPxPerMm; // update so next call is a no-op
+      }
+    }
+    // Update zone since mm position changed
+    if(typeof getPoreZone === 'function') p.zone = getPoreZone(p);
+  }
+}
+
 
 function canvasToMm(cx, cy){
   if(S.imgMode && S.imgState.scalePxPerMm){
@@ -1139,6 +1244,8 @@ function drawCanvas(){
   if(!mctx) return;
   const {W,H,scale}=S.cv;
   if(W < 1 || H < 1){ console.warn('[PVI] drawCanvas: canvas not sized yet, skipping'); return; }
+  // Re-anchor auto-detected pore mm positions to current scale (fixes scatter-after-rescale)
+  _syncDetectedPoresMm();
   // Apply pan to all wall coords
   const wallL   = S.cv.wallL   + S.cv.originX;
   const wallTop = S.cv.wallTop + S.cv.originY;
@@ -1726,6 +1833,99 @@ function drawCanvas(){
       }
       mctx.restore();
     }
+
+    // ── Polygon Draw in-progress preview ──────────────────────────────────
+    if(S.tool === 'poly_draw' && S._polyPts && S._polyPts.length > 0){
+      mctx.save();
+      const pts = S._polyPts;
+      const cPts = pts.map(pt => mmToCanvas(pt.x, pt.y));
+
+      // Filled polygon preview
+      if(cPts.length >= 3){
+        mctx.beginPath();
+        mctx.moveTo(cPts[0].x, cPts[0].y);
+        cPts.slice(1).forEach(cp => mctx.lineTo(cp.x, cp.y));
+        mctx.closePath();
+        mctx.fillStyle = 'rgba(6,182,212,0.18)';
+        mctx.fill();
+      }
+
+      // Segment lines
+      mctx.setLineDash([5,3]);
+      mctx.strokeStyle = '#06b6d4';
+      mctx.lineWidth = 2;
+      mctx.beginPath();
+      mctx.moveTo(cPts[0].x, cPts[0].y);
+      cPts.slice(1).forEach(cp => mctx.lineTo(cp.x, cp.y));
+      mctx.stroke();
+      mctx.setLineDash([]);
+
+      // Rubber-band line to cursor
+      if(S._polyMouse && cPts.length > 0){
+        const last = cPts[cPts.length-1];
+        mctx.setLineDash([3,4]);
+        mctx.strokeStyle = 'rgba(6,182,212,0.6)';
+        mctx.lineWidth = 1.5;
+        mctx.beginPath();
+        mctx.moveTo(last.x, last.y);
+        mctx.lineTo(S._polyMouse.x, S._polyMouse.y);
+        mctx.stroke();
+        mctx.setLineDash([]);
+      }
+
+      // Vertex dots
+      cPts.forEach((cp, i) => {
+        // First vertex: larger circle as "close" target
+        const isFirst = i === 0;
+        const nearFirst = isFirst && S._polyMouse && pts.length >= 3 &&
+          Math.sqrt((S._polyMouse.x-cp.x)**2+(S._polyMouse.y-cp.y)**2) < 14;
+        mctx.beginPath();
+        mctx.arc(cp.x, cp.y, isFirst ? 7 : 4, 0, Math.PI*2);
+        mctx.fillStyle = nearFirst ? '#22d3ee' : (isFirst ? '#0e7490' : '#06b6d4');
+        mctx.fill();
+        mctx.strokeStyle = '#fff';
+        mctx.lineWidth = isFirst ? 2.5 : 1.5;
+        mctx.stroke();
+        if(isFirst && nearFirst){
+          // Snap indicator ring
+          mctx.beginPath();
+          mctx.arc(cp.x, cp.y, 13, 0, Math.PI*2);
+          mctx.strokeStyle = '#22d3ee';
+          mctx.lineWidth = 2;
+          mctx.setLineDash([3,2]);
+          mctx.stroke();
+          mctx.setLineDash([]);
+        }
+      });
+
+      // Live area label
+      if(pts.length >= 3){
+        let area = 0;
+        for(let i=0,n=pts.length;i<n;i++){
+          const j=(i+1)%n;
+          area += pts[i].x*pts[j].y - pts[j].x*pts[i].y;
+        }
+        area = Math.abs(area)/2;
+        const equivDia = 2*Math.sqrt(area/Math.PI);
+        const cx2 = cPts.reduce((s,c)=>s+c.x,0)/cPts.length;
+        const cy2 = cPts.reduce((s,c)=>s+c.y,0)/cPts.length;
+        mctx.font='bold 10px system-ui';
+        mctx.textAlign='center'; mctx.textBaseline='middle';
+        mctx.fillStyle='rgba(6,182,212,0.95)';
+        mctx.fillText(`Ø${equivDia.toFixed(2)}mm  •  ${pts.length}pts`, cx2, cy2);
+        mctx.fillStyle='rgba(6,182,212,0.6)';
+        mctx.font='9px system-ui';
+        mctx.fillText('dbl-click or ● to close', cx2, cy2+13);
+      } else {
+        const last2 = cPts[cPts.length-1];
+        mctx.font='bold 9px system-ui';
+        mctx.textAlign='left'; mctx.textBaseline='bottom';
+        mctx.fillStyle='rgba(6,182,212,0.9)';
+        mctx.fillText(`${pts.length} pt${pts.length>1?'s':''} — need 3+ to close`, last2.x+8, last2.y-4);
+      }
+      mctx.restore();
+    }
+
   })();
 
   // Spacing lines: controlled by "Links" slider
@@ -1843,7 +2043,9 @@ function drawPore(p, selected){
   const c=mmToCanvas(p.x,p.y);
   const cx=c.x, cy=c.y;
   const ignored=S.spec.u>0&&(p.dia+0.005)<S.spec.u;
-  const failing=!ignored&&p.dia>S.spec.phi;
+  const failPhi = !ignored && getPoreCheckDia(p, S.spec) > getPorePhiLimit(p, S.spec);
+  const failMaxL = !ignored && S.spec.max_l_limit != null && S.spec.max_l_limit > 0 && getPoreMaxLength(p) > S.spec.max_l_limit;
+  const failing = failPhi || failMaxL;
   // ── Exclusion zone crop status ────────────────────────────────────────────
   const _cs = _poreExclCropStatus(p);
   if(_cs.status === 'full'){
@@ -1942,8 +2144,33 @@ function drawPore(p, selected){
 
   // ── Build shape path ──────────────────────────────────────────────────────
   // Prefer real blob contour (auto-detected), else fallback to circle/ellipse
+  // For user-drawn polygon pores (_polyDrawn), always draw straight-edged polygon.
   function buildPath(expand){
-    if(p._contour && p._contour.length>=4){
+    if(p._polyDrawn && p._polyVerts && p._polyVerts.length >= 3){
+      // User-drawn polygon — straight edges (no smoothing, preserves drawn shape)
+      const verts = p._polyVerts;
+      const n = verts.length;
+      mctx.beginPath();
+      const v0 = mmToCanvas(verts[0].x, verts[0].y);
+      if(expand){
+        const ex0 = v0.x-cx, ey0 = v0.y-cy;
+        const d0 = Math.sqrt(ex0*ex0+ey0*ey0)||1;
+        mctx.moveTo(cx+ex0*(1+expand/d0), cy+ey0*(1+expand/d0));
+      } else {
+        mctx.moveTo(v0.x, v0.y);
+      }
+      for(let vi=1;vi<n;vi++){
+        const vc = mmToCanvas(verts[vi].x, verts[vi].y);
+        if(expand){
+          const exv=vc.x-cx, eyv=vc.y-cy;
+          const dv=Math.sqrt(exv*exv+eyv*eyv)||1;
+          mctx.lineTo(cx+exv*(1+expand/dv), cy+eyv*(1+expand/dv));
+        } else {
+          mctx.lineTo(vc.x, vc.y);
+        }
+      }
+      mctx.closePath();
+    } else if(p._contour && p._contour.length>=4){
       // Real blob contour — smooth closed polyline (Catmull-Rom)
       const pts=p._contour.map(([dx,dy])=>{
         const cc=mmToCanvas(p.x+dx, p.y+dy);
@@ -1974,6 +2201,48 @@ function drawPore(p, selected){
   if(selected){
     buildPath(6); mctx.strokeStyle='rgba(0,0,0,.15)'; mctx.lineWidth=1; mctx.stroke();
     buildPath(3); mctx.strokeStyle=strokeCol+'88'; mctx.lineWidth=1.5; mctx.stroke();
+
+    // Vertex handles + midpoint insertion handles for poly-drawn pores
+    if(p._polyDrawn && p._polyVerts && p._polyVerts.length >= 3){
+      const verts = p._polyVerts;
+      const n = verts.length;
+      // Midpoint handles (click to insert vertex)
+      for(let vi=0;vi<n;vi++){
+        const va = verts[vi], vb = verts[(vi+1)%n];
+        const mc = mmToCanvas((va.x+vb.x)/2, (va.y+vb.y)/2);
+        mctx.save();
+        mctx.fillStyle = 'rgba(34,211,238,0.5)';
+        mctx.strokeStyle = '#0e7490';
+        mctx.lineWidth = 1;
+        mctx.beginPath();
+        mctx.arc(mc.x, mc.y, 4, 0, Math.PI*2);
+        mctx.fill(); mctx.stroke();
+        mctx.restore();
+      }
+      // Vertex handles
+      verts.forEach((v, i) => {
+        const vc = mmToCanvas(v.x, v.y);
+        const isHovered = S._polyVtxHover === i && S.selectedId === p.id;
+        const isDragging = dragState && dragState.type === 'poly_vtx' && dragState.vtxIdx === i && dragState.poreId === p.id;
+        mctx.save();
+        mctx.fillStyle = (isDragging || isHovered) ? '#22d3ee' : '#0e7490';
+        mctx.strokeStyle = '#fff';
+        mctx.lineWidth = 1.5;
+        mctx.beginPath();
+        // Square handle
+        const hs = isDragging ? 6 : 5;
+        mctx.rect(vc.x - hs, vc.y - hs, hs*2, hs*2);
+        mctx.fill();
+        mctx.stroke();
+        // Vertex number
+        mctx.fillStyle = '#fff';
+        mctx.font = 'bold 7px system-ui';
+        mctx.textAlign = 'center';
+        mctx.textBaseline = 'middle';
+        mctx.fillText(i + 1, vc.x, vc.y);
+        mctx.restore();
+      });
+    }
   }
   // ── Fail dashed ring ─────────────────────────────────────────────────────
   if(failing){
@@ -1981,7 +2250,51 @@ function drawPore(p, selected){
     mctx.lineWidth=2; mctx.setLineDash([3,3]); mctx.stroke(); mctx.setLineDash([]);
   }
 
-  // ── Fill ─────────────────────────────────────────────────────────────────
+  // ── Solid Mode: pixel-exact area projection ───────────────────────────────
+  // When poreRenderMode is 'solid', ALWAYS skip the Catmull-Rom curve path.
+  // If a raw pixel mask is available, render it as a filled bitmap (most accurate).
+  // If no mask (very small blobs), fall back to a filled circle — never a curve.
+  if (S.poreRenderMode === 'solid') {
+    if (p._maskRaw) {
+      // Best case: pixel-exact filled mask
+      _drawFilledMaskOverlay(p, selected);
+    } else {
+      // Fallback: solid filled circle (no curves)
+      mctx.beginPath();
+      mctx.arc(cx, cy, Math.max(1, r), 0, Math.PI * 2);
+      mctx.fillStyle = `rgba(${fillBase},${fillAlpha * 1.6})`;
+      mctx.fill();
+      mctx.strokeStyle = strokeCol;
+      mctx.lineWidth = S.imgMode ? (selected ? 3.5 : 2) : (selected ? 2 : 1.2);
+      mctx.stroke();
+    }
+    // Draw diameter label so pore is identifiable in solid mode
+    if (r > 7) {
+      mctx.fillStyle = 'rgba(255,255,255,0.95)';
+      mctx.font = `bold ${Math.max(8, Math.min(11, r * 0.6))}px Space Grotesk`;
+      mctx.textAlign = 'center'; mctx.textBaseline = 'middle';
+      mctx.shadowColor = 'rgba(0,0,0,0.6)'; mctx.shadowBlur = 3;
+      mctx.fillText(p.dia.toFixed(2), cx, cy);
+      mctx.shadowBlur = 0;
+    }
+    if (failing) {
+      // Failure dashed ring — still show in solid mode for compliance visibility
+      buildPath(4); mctx.strokeStyle = 'rgba(255,61,61,0.7)';
+      mctx.lineWidth = 2; mctx.setLineDash([4, 3]); mctx.stroke(); mctx.setLineDash([]);
+    }
+    if (selected) {
+      buildPath(5); mctx.strokeStyle = strokeCol + 'cc';
+      mctx.lineWidth = 2.5; mctx.stroke();
+    }
+    if (ignored && r > 5) {
+      mctx.fillStyle = 'rgba(42,64,56,.9)'; mctx.font = '10px Space Grotesk';
+      mctx.textAlign = 'center'; mctx.textBaseline = 'middle';
+      mctx.fillText('U', cx, cy);
+    }
+    return; // solid mode done — never fall through to curve rendering
+  }
+
+  // ── Fill (curve mode only) ────────────────────────────────────────────────
   const grad=mctx.createRadialGradient(cx-r*.3,cy-r*.3,0,cx,cy,Math.max(1,r));
   grad.addColorStop(0,`rgba(${fillBase},${fillAlpha*1.5})`);
   grad.addColorStop(1,`rgba(${fillBase},${fillAlpha*.4})`);
@@ -2007,6 +2320,7 @@ function drawPore(p, selected){
     mctx.fillText('U',cx,cy);
   }
 }
+
 
 function drawRuler(){
   const {scale,W,wallTop,wallH}=S.cv;
@@ -2267,18 +2581,73 @@ function bindCanvasEvents(){
     const pore=poreAtCanvas(p.x,p.y);
     const mm=canvasToMm(p.x,p.y);
 
+    // ── Poly vertex hit: check before normal pore-click so handles are always reachable ──
+    if(S.tool === 'select' && e.button === 0){
+      const selPore = AP().find(pr => pr.id === S.selectedId);
+      if(selPore && selPore._polyDrawn && selPore._polyVerts){
+        const verts = selPore._polyVerts;
+        // 1. Check vertex handles (priority)
+        for(let vi = 0; vi < verts.length; vi++){
+          const vc = mmToCanvas(verts[vi].x, verts[vi].y);
+          if(Math.sqrt((p.x-vc.x)**2 + (p.y-vc.y)**2) < 10){
+            pushHistory();
+            dragState = { type:'poly_vtx', poreId:selPore.id, vtxIdx:vi,
+              startMx:p.x, startMy:p.y,
+              origVx:verts[vi].x, origVy:verts[vi].y };
+            isPointerDown = true;
+            wrap.style.cursor = 'move';
+            return;
+          }
+        }
+        // 2. Check midpoint handles (click = insert vertex)
+        const n = verts.length;
+        for(let vi = 0; vi < n; vi++){
+          const va = verts[vi], vb = verts[(vi+1)%n];
+          const mc = mmToCanvas((va.x+vb.x)/2, (va.y+vb.y)/2);
+          if(Math.sqrt((p.x-mc.x)**2 + (p.y-mc.y)**2) < 8){
+            pushHistory();
+            const newVert = { x:(va.x+vb.x)/2, y:(va.y+vb.y)/2 };
+            selPore._polyVerts.splice(vi+1, 0, newVert);
+            _recomputePolyPore(selPore);
+            // Start dragging the newly inserted vertex immediately
+            dragState = { type:'poly_vtx', poreId:selPore.id, vtxIdx:vi+1,
+              startMx:p.x, startMy:p.y,
+              origVx:newVert.x, origVy:newVert.y };
+            isPointerDown = true;
+            wrap.style.cursor = 'move';
+            drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+            return;
+          }
+        }
+      }
+    }
+
     if(S.tool==='select'){
       if(pore){
         S.selectedId=pore.id;
-        // Begin drag
-        dragState={pore, startMx:p.x, startMy:p.y, origX:pore.x, origY:pore.y};
-        pushHistory();
+        // Lock centroid drag: auto-detected and poly-drawn pores use vertex handles instead
+        if(pore._detectMeta || pore._polyDrawn){
+          dragState=null;
+          // poly-drawn: vertex handles appear automatically — no toast needed
+          if(!pore._polyDrawn){
+            toast('🔒 Auto-detected pore — use Select + Del to remove, or clear and re-detect.','info');
+          }
+        } else {
+          // Manually placed pore — allow drag
+          dragState={pore, startMx:p.x, startMy:p.y, origX:pore.x, origY:pore.y};
+          pushHistory();
+        }
+        drawCanvas(); updateLiveMetrics(); showEditPanel();
+        return;
       } else {
         S.selectedId=null;
         dragState=null;
+        showEditPanel();
+        // Fall through to allow datum interactions
       }
-      drawCanvas(); updateLiveMetrics(); showEditPanel();
-    } else if(S.tool==='place'){
+    }
+    
+    if(S.tool==='place'){
       if(pore){ S.selectedId=pore.id; drawCanvas(); }
       else { placePore(mm.x, mm.y); }
     } else if(S.tool==='measure'){
@@ -2369,8 +2738,25 @@ function bindCanvasEvents(){
       _executeMagicWand(p.x, p.y);
     } else if(S.tool==='wand_pore'){
       // Wand Pore always uses contiguous flood-fill (never global select)
-      // to capture the exact clicked void rather than scattered similar pixels.
       _executeWandPore(p.x, p.y);
+    } else if(S.tool==='poly_draw'){
+      // ── Polygon Draw Tool ─────────────────────────────────────────────────
+      if(!S._polyPts) S._polyPts = [];
+      if(e.button === 2){ // Right-click = cancel
+        S._polyPts = [];
+        drawCanvas(); return;
+      }
+      // Check if clicking near first point to CLOSE
+      if(S._polyPts.length >= 3){
+        const first = mmToCanvas(S._polyPts[0].x, S._polyPts[0].y);
+        const dist = Math.sqrt((p.x-first.x)**2 + (p.y-first.y)**2);
+        if(dist < 14){
+          _closePorePolygon();
+          return;
+        }
+      }
+      S._polyPts.push({x:mm.x, y:mm.y});
+      drawCanvas();
     } else if(S.tool==='datum' || (S.tool==='select' && S.datumRect && S.datumRect.w > 0)){
       if(S.datumRect && S.datumRect.w > 0){
         // 1. Check resize handles first
@@ -2425,6 +2811,24 @@ function bindCanvasEvents(){
       drawCanvas();
       return;
     }
+    // ── Poly vertex drag ───────────────────────────────────────────────────────
+    if(dragState && dragState.type === 'poly_vtx'){
+      const sc = (S.imgMode && S.imgState.scalePxPerMm) ? S.imgState.scalePxPerMm : S.cv.scale;
+      const dx = (p.x - dragState.startMx) / sc;
+      const dy = (p.y - dragState.startMy) / sc;
+      const pore2 = AP().find(pr => pr.id === dragState.poreId);
+      if(pore2 && pore2._polyVerts){
+        pore2._polyVerts[dragState.vtxIdx] = {
+          x: dragState.origVx + dx,
+          y: dragState.origVy + dy
+        };
+        _recomputePolyPore(pore2);
+        if(!S._dragRaf){
+          S._dragRaf = requestAnimationFrame(() => { S._dragRaf = null; drawCanvas(); updateLiveMetrics(); updatePoreRegistry(); });
+        }
+      }
+      return;
+    }
 
     // Drag selected pore — use image scale in image mode for correct 1:1 feel
     if(dragState && S.tool==='select' && dragState.pore){
@@ -2464,7 +2868,8 @@ function bindCanvasEvents(){
       drawCanvas(); updateLiveMetrics(); return;
     }
     const pore=poreAtCanvas(p.x,p.y);
-    showCanvasTip(pore,e);
+    const poreIdx = pore ? AP().indexOf(pore) : -1;
+    showCanvasTip(pore, e, poreIdx);
     // Datum draw: enforced square (n square constraint)
     if(S.tool==='datum' && isPointerDown && S.datumRect && S.datumRect._ox!==undefined){
       const ox=S.datumRect._ox, oy=S.datumRect._oy;
@@ -2602,6 +3007,56 @@ function bindCanvasEvents(){
     }
     if(S.tool==='measure') drawCanvas();
     if(isPointerDown&&S.tool==='datum') drawCanvas();
+    // Polygon draw: track cursor for rubber-band line
+    if(S.tool==='poly_draw' && S._polyPts && S._polyPts.length > 0){
+      S._polyMouse = p;
+      drawCanvas();
+    }
+  });
+
+  // Polygon Draw: double-click to close
+  wrap.addEventListener('dblclick', e => {
+    if(S.tool !== 'poly_draw') return;
+    e.preventDefault();
+    if(S._polyPts && S._polyPts.length >= 3){
+      // Remove the extra point added by the second click of dblclick
+      S._polyPts.pop();
+      _closePorePolygon();
+    }
+  });
+
+  // Right-click on canvas:
+  //  • During poly_draw → cancel in-progress polygon
+  //  • On selected poly-pore vertex (any tool) → delete vertex
+  wrap.addEventListener('contextmenu', e => {
+    if(S.tool === 'poly_draw'){
+      e.preventDefault();
+      S._polyPts = []; S._polyMouse = null; drawCanvas(); return;
+    }
+    // Vertex delete: works in any tool mode when a poly-pore is selected
+    const selPore = AP().find(pr => pr.id === S.selectedId);
+    if(selPore && selPore._polyDrawn && selPore._polyVerts){
+      const p2 = getCanvasPos(e);
+      const verts = selPore._polyVerts;
+      for(let vi = 0; vi < verts.length; vi++){
+        const vc = mmToCanvas(verts[vi].x, verts[vi].y);
+        if(Math.sqrt((p2.x-vc.x)**2 + (p2.y-vc.y)**2) < 10){
+          e.preventDefault();
+          if(verts.length <= 3){
+            toast('Minimum 3 vertices — cannot delete further', 'warn');
+            return;
+          }
+          pushHistory();
+          verts.splice(vi, 1);
+          _recomputePolyPore(selPore);
+          // Ensure we are in select mode to see the handles
+          if(S.tool !== 'select') setTool('select');
+          drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+          toast(`Vertex ${vi+1} removed — ${verts.length} vertices remaining`, 'info');
+          return;
+        }
+      }
+    }
   });
 
   wrap.addEventListener('mouseup',e=>{
@@ -2637,6 +3092,14 @@ function bindCanvasEvents(){
       }
       dragState=null;
       refreshWorkspaceUI();
+      return;
+    }
+    // Poly vertex drag finalize
+    if(dragState && dragState.type === 'poly_vtx'){
+      isPointerDown = false;
+      dragState = null;
+      wrap.style.cursor = 'grab';
+      drawCanvas(); updateLiveMetrics(); updatePoreRegistry(); refreshWorkspaceUI();
       return;
     }
     isPointerDown=false; dragState=null;
@@ -2708,14 +3171,18 @@ function bindCanvasEvents(){
     e.preventDefault();
     const p=getCanvasPos(e);
     const pore=poreAtCanvas(p.x,p.y);
-    if(pore && (S.tool==='place'||S.tool==='select')){
-      // scroll over a pore → resize it
+    // Guard: only manually-placed pores (no _detectMeta) can be resized by scroll.
+    // Auto-detected and Wand pores have _detectMeta set — scrolling over them
+    // zooms the view instead, keeping their traced size locked.
+    const canResize = pore && (S.tool==='place'||S.tool==='select') && !pore._detectMeta;
+    if(canResize){
+      // scroll over a manually-placed pore → resize it
       pushHistory();
       pore.dia=+(Math.max(.1,Math.min(6, pore.dia-(e.deltaY>0?.1:-.1))).toFixed(2));
       pore.zone=getPoreZone(pore);
       drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
     } else {
-      // scroll over empty area → zoom entire view toward cursor
+      // scroll over empty area (or any detected pore) → zoom canvas toward cursor
       zoom(e.deltaY>0?1/1.15:1.15, p.x, p.y);
     }
   },{passive:false});
@@ -2944,6 +3411,10 @@ function setPoreType(t){
   });
 }
 function setTool(t){
+  // If leaving poly_draw mid-draw, cancel any in-progress polygon
+  if(S.tool === 'poly_draw' && t !== 'poly_draw'){
+    S._polyPts = []; S._polyMouse = null;
+  }
   S.tool = t;
   S.measurePt1 = null;
 
@@ -2957,6 +3428,7 @@ function setTool(t){
     ['tool-select-img',    t === 'select'],
     // DETECT row
     ['btn-detect-wand',    t === 'wand_pore'],
+    ['btn-poly-draw',      t === 'poly_draw'],
     ['tool-measure',       t === 'measure'],
     ['tool-datum',         t === 'datum'],
     // EXCL row
@@ -2984,6 +3456,7 @@ function setTool(t){
   const hints = {
     place:          'Click to place pore · Scroll over pore: resize · Right-click: delete',
     wand_pore:      'Wand Pore: click dark void/shrinkage cavity to flood-fill and add as pore',
+    poly_draw:      'Poly Draw: click to add vertices · click first point or double-click to CLOSE · right-click or ESC to cancel',
     select:         'Select: click pore to select · drag to move · scroll to resize · works on all pores & excl zones',
     measure:        'Gap: click point 1, then point 2 to measure edge-to-edge distance (A×Φs check)',
     datum:          'Datum: click and drag to draw the VW50093 inspection reference rectangle',
@@ -3001,6 +3474,7 @@ function setTool(t){
   // Canvas cursor
   const cursors = {
     place:'crosshair', wand_pore:'crosshair', select:'grab',
+    poly_draw:'crosshair',
     measure:'crosshair', datum:'cell',
     exclude_rect:'crosshair', exclude_circle:'crosshair', exclude_wand:'crosshair',
     excl_select:'default', pan:'grab'
@@ -3018,27 +3492,242 @@ function setTool(t){
 // ═══════════════════════════════════════════════════
 // TOOLTIP
 // ═══════════════════════════════════════════════════
-function showCanvasTip(pore, e){
+// DEPTH RISK INDEX (DRI)
+// ═══════════════════════════════════════════════════
+/**
+ * Computes a 1–5 Depth Risk Index for a pore based on three heuristics:
+ *  - Wall-position zone (60 %): where the pore sits across the wall thickness
+ *  - Pore type           (25 %): shrinkage pores form at thermal hot-spots (deeper)
+ *  - Shape complexity    (15 %): irregular / elongated shape → deeper
+ *
+ * Returns { score: 1-5, label: string, color: string }
+ */
+function getDRI(p) {
+  // ── 1. Wall-position score (0–3) ─────────────────────────────────────────
+  const wH = getEffectiveWallH();
+  let posScore = 0;
+  if (wH > 0) {
+    const rel = p.y / wH; // 0 = top surface, 1 = bottom surface
+    // Distance from nearest surface → 0 = at surface, 0.5 = dead centre
+    const distFromSurface = Math.min(rel, 1 - rel);
+    if      (distFromSurface < 0.10) posScore = 0.0; // Surface
+    else if (distFromSurface < 0.25) posScore = 0.8; // Near-surface
+    else if (distFromSurface < 0.40) posScore = 1.6; // Sub-surface
+    else                             posScore = 2.4; // Mid-section (hotspot)
+  } else {
+    posScore = 1.2; // Unknown — neutral
+  }
+
+  // ── 2. Type score (0–1.25) ───────────────────────────────────────────────
+  // Shrinkage pores form in the last-to-solidify zone (thermally deepest)
+  const typeScore = (p.type === 'shrink' || p.type === 'shrinkage') ? 1.25 : 0.3;
+
+  // ── 3. Shape complexity score (0–0.75) ────────────────────────────────────
+  // Use stored _detectMeta circularity if available; else derive from Feret ratio
+  let shapeScore = 0.375; // neutral default
+  const meta = p._detectMeta;
+  if (meta && typeof meta.circularity === 'number') {
+    // Low circularity = dendritic/irregular = more likely deep
+    const c = meta.circularity;
+    if      (c >= 0.85) shapeScore = 0.1;  // Very round (gas bubble)
+    else if (c >= 0.70) shapeScore = 0.25;
+    else if (c >= 0.55) shapeScore = 0.45;
+    else                shapeScore = 0.75; // Very irregular
+  } else if (p._maxLength && p.dia > 0) {
+    // Use Feret ratio as proxy for elongation
+    const feretRatio = p._maxLength / p.dia;
+    if      (feretRatio < 1.3) shapeScore = 0.1;
+    else if (feretRatio < 2.0) shapeScore = 0.3;
+    else if (feretRatio < 3.0) shapeScore = 0.55;
+    else                       shapeScore = 0.75;
+  }
+
+  // ── Combine: weighted sum → map to 1–5 ───────────────────────────────────
+  // Max raw = 3.0 + 1.25 + 0.75 = 5.0; Min = 0 + 0.3 + 0.1 = 0.4
+  const raw = posScore + typeScore + shapeScore;
+  const score = Math.min(5, Math.max(1, Math.round(raw)));
+
+  // Labels and colours
+  const labels = ['', 'Surface', 'Near-Surface', 'Sub-Surface', 'Mid-Section', 'Deep / Critical'];
+  const colors = ['', '#22c55e', '#84cc16', '#f59e0b', '#f97316', '#ef4444'];
+  return { score, label: labels[score], color: colors[score] };
+}
+
+/**
+ * Returns a compact DRI badge string for use in HTML.
+ * e.g. <span style="...">DRI 3 Mid</span>
+ */
+function driHtml(p, compact = false) {
+  const d = getDRI(p);
+  if (compact) {
+    return `<span title="Depth Risk Index ${d.score} — ${d.label}" style="font-size:8px;font-weight:700;color:${d.color};letter-spacing:.02em">DRI${d.score}</span>`;
+  }
+  return `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700;background:${d.color}22;color:${d.color};border:1px solid ${d.color}55" title="Depth Risk Index — heuristic estimate based on wall position, type and shape">${d.score} ${d.label}</span>`;
+}
+
+// ═══════════════════════════════════════════════════
+// TOOLTIP
+// ═══════════════════════════════════════════════════
+function showCanvasTip(pore, e, idx){
   const tip=document.getElementById('ctip');
   if(!pore){ hideTip(); return; }
   const ignored=S.spec.u>0&&(pore.dia+0.005)<S.spec.u;
-  const failing=!ignored&&pore.dia>S.spec.phi;
+  const failPhi = !ignored && getPoreCheckDia(pore, S.spec) > getPorePhiLimit(pore, S.spec);
+  const failMaxL = !ignored && S.spec.max_l_limit != null && S.spec.max_l_limit > 0 && getPoreMaxLength(pore) > S.spec.max_l_limit;
+  const failing = failPhi || failMaxL;
   const zone=pore.zone;
   const meta=pore._detectMeta;
+  const serialStr = (idx != null && idx >= 0) ? `#${idx + 1}` : '';
   const typeLine=meta
     ? `Type: ${(pore.type||'gas').toUpperCase()} (${Math.round((meta.confidence||0)*100)}% conf)`
     : `Type: ${(pore.type||'gas').toUpperCase()}`;
+  const mll = S.spec.max_l_limit;
+  const maxL = getPoreMaxLength(pore);
+  const maxLLimitStr = (mll != null && mll > 0) ? ` (limit ≤${mll}mm)` : '';
+  const maxLColor = failMaxL ? 'var(--red)' : '#0ea5e9';
+  const maxLStr = `Max L: <b style="color:${maxLColor}">${maxL.toFixed(2)} mm</b>${maxLLimitStr}<br>`;
+  const statusStr = ignored ? 'IGNORED (< U)'
+    : failMaxL && failPhi ? 'FAIL > Φ &amp; Max L'
+    : failMaxL ? `FAIL > Max L (≤${mll}mm)`
+    : failing ? 'FAIL > Φ'
+    : 'PASS';
+  const dri = getDRI(pore);
+  const driStr = `Depth Risk: <b style="color:${dri.color}">${dri.score} &mdash; ${dri.label}</b><br>`;
   tip.style.display='block';
   tip.style.left=(e.offsetX+16)+'px';
   tip.style.top=(e.offsetY-10)+'px';
-  document.getElementById('ctip-title').textContent='Ø '+pore.dia.toFixed(2)+' mm · '+pore.type;
+  document.getElementById('ctip-title').textContent=`${serialStr} Ø ${pore.dia.toFixed(2)} mm · ${pore.type}`;
   document.getElementById('ctip-title').style.color=failing?'var(--red)':zone==='hr'?'var(--amb)':zone==='hk'?'var(--pur)':'var(--g)';
   document.getElementById('ctip-rows').innerHTML=
     `<div style="color:var(--muted);margin-top:3px;line-height:1.7">`+
-    `${typeLine}<br>Zone: ${zone.toUpperCase()}<br>Status: ${ignored?'IGNORED (< U)':failing?'FAIL > Φ':'PASS'}<br>`+
+    `${typeLine}<br>Zone: ${zone.toUpperCase()}<br>${maxLStr}${driStr}Status: ${statusStr}<br>`+
     `Pos: x:${pore.x.toFixed(2)} y:${pore.y.toFixed(2)} mm</div>`;
 }
 function hideTip(){ document.getElementById('ctip').style.display='none'; }
+
+// ═══════════════════════════════════════════════════
+// POLYGON DRAW TOOL — close and convert to pore
+// ═══════════════════════════════════════════════════
+function _closePorePolygon(){
+  const pts = S._polyPts;
+  if(!pts || pts.length < 3){ S._polyPts = []; S._polyMouse = null; drawCanvas(); return; }
+
+  // Shoelace area (mm²)
+  let area = 0;
+  for(let i = 0, n = pts.length; i < n; i++){
+    const j = (i + 1) % n;
+    area += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+  }
+  area = Math.abs(area) / 2;
+  if(area < 0.001){ toast('Polygon area too small — draw a larger outline','warn'); S._polyPts = []; S._polyMouse = null; drawCanvas(); return; }
+
+  const equivDia = 2 * Math.sqrt(area / Math.PI);
+
+  // Centroid
+  let cx = 0, cy = 0;
+  for(const pt of pts){ cx += pt.x; cy += pt.y; }
+  cx /= pts.length; cy /= pts.length;
+
+  // True Feret max: exhaustive pairwise distance between polygon vertices (in mm)
+  // This is exact for user-drawn polygons — no sampling error.
+  let maxL = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const d = Math.sqrt((pts[i].x - pts[j].x) ** 2 + (pts[i].y - pts[j].y) ** 2);
+      if (d > maxL) maxL = d;
+    }
+  }
+
+  // Store contour as relative mm offsets from centroid (same format as auto-detected)
+  const contourMm = pts.map(pt => [+(pt.x - cx).toFixed(4), +(pt.y - cy).toFixed(4)]);
+
+  pushHistory();
+  const pore = {
+    id: Date.now() + Math.random(),
+    x: +cx.toFixed(3),
+    y: +cy.toFixed(3),
+    dia: +equivDia.toFixed(3),
+    type: 'shrink', // polygon-drawn pores are irregular → assume shrink
+    zone: '',
+    _rx: equivDia / 2, _ry: equivDia / 4, _angle: 0,
+    _contour: contourMm.length >= 4 ? contourMm : null,
+    _polyVerts: pts.map(pt => ({ x: pt.x, y: pt.y })), // absolute mm vertex positions for editing
+    _pixelDiaMm: +equivDia.toFixed(3),
+    _contourDiaMm: +equivDia.toFixed(3),
+    _pixelAreaMm2: +area.toFixed(4),
+    _contourAreaMm2: +area.toFixed(4),
+    trueArea: +area.toFixed(4),
+    _maxLength: +maxL.toFixed(3),
+    _polyDrawn: true, // mark as user-drawn polygon
+  };
+  pore.zone = getPoreZone(pore);
+  AP().push(pore);
+  S.selectedId = pore.id;
+
+  S._polyPts = [];
+  S._polyMouse = null;
+  drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+  toast(`✏ Polygon pore added — Ø${equivDia.toFixed(2)} mm · ${pts.length} vertices · ${area.toFixed(3)} mm² | Select pore → drag vertices to reshape`, 'info');
+  // Auto-switch to Select tool so the pore is immediately editable
+  setTool('select');
+}
+
+// ESC key: cancel polygon draw in progress
+// ─────────────────────────────────────────────────────────────────────────────
+// Recompute poly-pore properties after vertex edit
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Recomputes area, equivalent diameter, centroid, _contour, and _maxLength
+ * for a poly-drawn pore after any vertex has been moved or added/removed.
+ * The pore is mutated in-place.
+ */
+function _recomputePolyPore(p) {
+  if (!p || !p._polyVerts || p._polyVerts.length < 3) return;
+  const verts = p._polyVerts;
+  const n = verts.length;
+  // Shoelace area (mm²)
+  let area = 0;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    area += verts[i].x * verts[j].y - verts[j].x * verts[i].y;
+  }
+  area = Math.abs(area) / 2;
+  if (area < 1e-6) return; // degenerate
+  // Centroid
+  let cx = 0, cy = 0;
+  for (const v of verts) { cx += v.x; cy += v.y; }
+  cx /= n; cy /= n;
+  // True Feret max (exhaustive pairwise vertex distance)
+  let maxL = 0;
+  for (let i = 0; i < n - 1; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const d = Math.sqrt((verts[i].x - verts[j].x) ** 2 + (verts[i].y - verts[j].y) ** 2);
+      if (d > maxL) maxL = d;
+    }
+  }
+  const equivDia = 2 * Math.sqrt(area / Math.PI);
+  // Mutate pore
+  p.x = +cx.toFixed(3);
+  p.y = +cy.toFixed(3);
+  p.dia = +equivDia.toFixed(3);
+  p._pixelDiaMm = p.dia;
+  p._contourDiaMm = p.dia;
+  p._pixelAreaMm2 = +area.toFixed(4);
+  p._contourAreaMm2 = +area.toFixed(4);
+  p.trueArea = +area.toFixed(4);
+  p._maxLength = +maxL.toFixed(3);
+  // Regenerate contour as centroid-relative offsets (keeps _contour consistent)
+  p._contour = verts.map(v => [+(v.x - cx).toFixed(4), +(v.y - cy).toFixed(4)]);
+  if (typeof getPoreZone === 'function') p.zone = getPoreZone(p);
+}
+
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape' && S.tool === 'poly_draw' && S._polyPts && S._polyPts.length > 0){
+    S._polyPts = []; S._polyMouse = null;
+    drawCanvas();
+    toast('Polygon draw cancelled', 'info');
+  }
+});
 
 // ═══════════════════════════════════════════════════
 // DATUM & EXCLUSION ZONES REGISTRY (EDITABLE)
@@ -3319,50 +4008,55 @@ function _updateAreaBreakdown() {
   
   // 1. Full Image Pores
   if (imgAreaMm2 !== null && el('stat-image')) {
-    let count = 0, area = 0, max = 0;
+    let count = 0, area = 0, maxPhi = 0, maxL = 0;
     allPores.forEach(p => {
       count++;
       area += (p.trueArea || Math.PI*Math.pow(p.dia/2, 2));
-      if (p.dia > max) max = p.dia;
+      if (p.dia > maxPhi) maxPhi = p.dia;
+      const pL = getPoreMaxLength(p);
+      if (pL > maxL) maxL = pL;
     });
     const pct = (area / imgAreaMm2) * 100;
-    el('stat-image').innerHTML = `${count} pores &nbsp;|&nbsp; Max Φ: ${max.toFixed(2)} mm &nbsp;|&nbsp; <b style="color:var(--tx)">${pct.toFixed(2)}%</b>`;
+    el('stat-image').innerHTML = `${count} pores &nbsp;|&nbsp; Max Φ: ${maxPhi.toFixed(2)} mm &nbsp;|&nbsp; Max L: <b style="color:#0ea5e9">${maxL.toFixed(2)} mm</b> &nbsp;|&nbsp; <b style="color:var(--tx)">${pct.toFixed(2)}%</b>`;
   } else if (el('stat-image')) {
     el('stat-image').innerHTML = '';
   }
   
   // 2. Datum Pores (unfiltered by exclusions)
   if (datumAreaMm2 !== null && el('stat-datum')) {
-    let count = 0, area = 0, max = 0;
+    let count = 0, area = 0, maxPhi = 0, maxL = 0;
     const drX = dr && dr.w ? Math.min(dr.x, dr.x + dr.w) : 0;
     const drY = dr && dr.h ? Math.min(dr.y, dr.y + dr.h) : 0;
     const drW = dr && dr.w ? Math.abs(dr.w) : 0;
     const drH = dr && dr.h ? Math.abs(dr.h) : 0;
-    
     allPores.forEach(p => {
       if (p.x >= drX && p.x <= drX + drW && p.y >= drY && p.y <= drY + drH) {
         count++;
         area += (p.trueArea || Math.PI*Math.pow(p.dia/2, 2));
-        if (p.dia > max) max = p.dia;
+        if (p.dia > maxPhi) maxPhi = p.dia;
+        const pL = getPoreMaxLength(p);
+        if (pL > maxL) maxL = pL;
       }
     });
     const pct = (area / datumAreaMm2) * 100;
-    el('stat-datum').innerHTML = `${count} pores &nbsp;|&nbsp; Max Φ: ${max.toFixed(2)} mm &nbsp;|&nbsp; <b>${pct.toFixed(2)}%</b>`;
+    el('stat-datum').innerHTML = `${count} pores &nbsp;|&nbsp; Max Φ: ${maxPhi.toFixed(2)} mm &nbsp;|&nbsp; Max L: <b style="color:#0ea5e9">${maxL.toFixed(2)} mm</b> &nbsp;|&nbsp; <b>${pct.toFixed(2)}%</b>`;
   } else if (el('stat-datum')) {
     el('stat-datum').innerHTML = '';
   }
   
   // 3. Net Pores (filtered by both datum & exclusions)
   if (netValMm2 > 0 && el('stat-net')) {
-    let count = 0, area = 0, max = 0;
+    let count = 0, area = 0, maxPhi = 0, maxL = 0;
     const evalPores = getPoresForEvaluation(allPores, page);
     evalPores.forEach(p => {
       count++;
       area += (p._effectiveArea || Math.PI*Math.pow(p._effectiveDia/2, 2));
-      if (p._effectiveDia > max) max = p._effectiveDia;
+      if (p._effectiveDia > maxPhi) maxPhi = p._effectiveDia;
+      const pL = getPoreMaxLength(p);
+      if (pL > maxL) maxL = pL;
     });
     const pct = (area / netValMm2) * 100;
-    el('stat-net').innerHTML = `${count} pores &nbsp;|&nbsp; Max Φ: ${max.toFixed(2)} mm &nbsp;|&nbsp; <b>${pct.toFixed(2)}%</b>`;
+    el('stat-net').innerHTML = `${count} pores &nbsp;|&nbsp; Max Φ: ${maxPhi.toFixed(2)} mm &nbsp;|&nbsp; Max L: <b style="color:#0ea5e9">${maxL.toFixed(2)} mm</b> &nbsp;|&nbsp; <b>${pct.toFixed(2)}%</b>`;
   } else if (el('stat-net')) {
     el('stat-net').innerHTML = '';
   }
@@ -3446,7 +4140,8 @@ function updatePoreRegistry(){
   }
   reg.innerHTML=AP().map((p,i)=>{
     const ignored=S.spec.u>0&&(p.dia+0.005)<S.spec.u;
-    const fail=!ignored&&p.dia>S.spec.phi;
+    const fail = (!ignored && getPoreCheckDia(p, S.spec) > getPorePhiLimit(p, S.spec))
+              || (!ignored && S.spec.max_l_limit != null && S.spec.max_l_limit > 0 && getPoreMaxLength(p) > S.spec.max_l_limit);
     const zCol=p.zone==='hr'?'var(--amb)':p.zone==='hk'?'var(--pur)':'var(--g)';
     const tCol=p.type==='gas'?'#4db8f5':'#c88c5a';
     const sel=S.selectedId===p.id;
@@ -3463,13 +4158,16 @@ function updatePoreRegistry(){
       : ignored  ? '<span style="font-size:9px;color:var(--dim)">IGN</span>'
       : fail     ? '<span style="font-size:9px;color:var(--red)">FAIL</span>'
       :             '<span style="font-size:9px;color:var(--dim)">—</span>';
+    const maxL = getPoreMaxLength(p);
+    const maxLStr = `<span style="font-size:8px;font-weight:700;color:#0ea5e9" title="Max cross-section length (Feret diameter)">↔${maxL.toFixed(2)}mm</span>`;
+    const driB = driHtml(p, true);
     return `<div class="pr-item${sel?' sel':''}" onclick="selectPore(${JSON.stringify(p.id)})" style="${rowOpacity}">
       <div class="pr-dot" style="background:${exclMasked?'#aaa':tCol};opacity:${exclMasked?.3:ignored?.3:1}"></div>
       <span style="font-variant-numeric:tabular-nums;font-size:10px;color:${exclMasked?'var(--dim)':fail?'var(--red)':ignored?'var(--dim)':'var(--tx)'}">
-        #${i+1} Ø${p.dia.toFixed(2)}mm</span>
+        #${i+1} Ø${p.dia.toFixed(2)}mm ${maxLStr} ${driB}</span>
       <span style="font-size:9px;color:${exclMasked?'var(--dim)':zCol};font-weight:700">${p.zone.toUpperCase()}</span>
       ${statusBadge}
-      <button class="pr-del" onclick="event.stopPropagation();removePore(${JSON.stringify(p.id)})">×</button>
+      <button class="pr-del" onclick="event.stopPropagation();removePore(${JSON.stringify(p.id)})">\u00d7</button>
     </div>`;
   }).join('');
 }
@@ -4110,8 +4808,8 @@ function _poreExclCropStatus(p, page){
   const effectiveArea = Math.max(0, trueArea * (1 - exclFractionGrid));
   const fraction = effectiveArea / trueArea;
 
-  // Fully excluded: almost nothing remains (<2%) OR pore centre inside an exclusion zone
-  if(fraction < 0.02 || (centreInside && zones.length > 0)) return {status:'full', effectiveDia:0, effectiveArea:0, fraction:0, centreInside};
+  // Fully excluded: almost nothing remains (<2%) outside
+  if(fraction < 0.02) return {status:'full', effectiveDia:0, effectiveArea:0, fraction:0, centreInside};
   // Completely excluded by datum (>98% outside)
   if(exclFractionGrid >= 0.98) return {status:'full', effectiveDia:0, effectiveArea:0, fraction:0, centreInside};
 
@@ -4809,9 +5507,24 @@ function _calcPorosity(pores, spec, datum){
   return total / Math.max(datum || 0.01, 0.01) * 100;
 }
 
+function getPoreCheckDia(p, spec){
+  const s = spec || (typeof S !== 'undefined' ? S.spec : null) || {};
+  if(s.eval_shrink_feret && p && p.type === 'shrink'){
+    const maxL = (typeof getPoreMaxLength === 'function') ? getPoreMaxLength(p) : (p._maxLength != null ? p._maxLength : p.dia);
+    return Math.max(p.dia || 0, maxL || 0);
+  }
+  return p ? (p.dia || 0) : 0;
+}
+function getPorePhiLimit(p, spec){
+  const s = spec || (typeof S !== 'undefined' ? S.spec : null) || {};
+  if(p && p.type === 'gas' && s.phi_gas != null) return s.phi_gas;
+  if(p && p.type === 'shrink' && s.phi_shrink != null) return s.phi_shrink;
+  return s.phi || 1.5;
+}
+
 function _calcMaxPhi(pores, spec){
   const eff = _effectivePores(pores, spec);
-  return eff.length ? Math.max(...eff.map(p => p.dia)) : 0;
+  return eff.length ? Math.max(...eff.map(p => getPoreCheckDia(p, spec))) : 0;
 }
 
 function _calcMinGap(pores, spec){
@@ -4881,7 +5594,8 @@ async function _callApiEvaluate(pores, spec, wallH, exclusionZones, datumRect, p
       phi_gas: (spec.phi_gas !== undefined && spec.phi_gas !== null && spec.phi_gas !== '' && !isNaN(parseFloat(spec.phi_gas))) ? parseFloat(spec.phi_gas) : null,
       pct_gas: (spec.pct_gas !== undefined && spec.pct_gas !== null && spec.pct_gas !== '' && !isNaN(parseFloat(spec.pct_gas))) ? parseFloat(spec.pct_gas) : null,
       phi_shrink: (spec.phi_shrink !== undefined && spec.phi_shrink !== null && spec.phi_shrink !== '' && !isNaN(parseFloat(spec.phi_shrink))) ? parseFloat(spec.phi_shrink) : null,
-      pct_shrink: (spec.pct_shrink !== undefined && spec.pct_shrink !== null && spec.pct_shrink !== '' && !isNaN(parseFloat(spec.pct_shrink))) ? parseFloat(spec.pct_shrink) : null
+      pct_shrink: (spec.pct_shrink !== undefined && spec.pct_shrink !== null && spec.pct_shrink !== '' && !isNaN(parseFloat(spec.pct_shrink))) ? parseFloat(spec.pct_shrink) : null,
+      eval_shrink_feret: !!spec.eval_shrink_feret
     };
 
     const formattedPores = (pores || []).map(p => ({
@@ -4889,6 +5603,8 @@ async function _callApiEvaluate(pores, spec, wallH, exclusionZones, datumRect, p
       x: parseFloat(p.x),
       y: parseFloat(p.y),
       dia: parseFloat((p._effectiveDia !== undefined && p._effectiveDia !== null) ? p._effectiveDia : p.dia),
+      max_length: (p._maxLength !== undefined && p._maxLength !== null && !isNaN(parseFloat(p._maxLength))) ? parseFloat(p._maxLength) : null,
+      raw_dia: (p._rawDia !== undefined && p._rawDia !== null && !isNaN(parseFloat(p._rawDia))) ? parseFloat(p._rawDia) : ((p._raw_dia !== undefined && p._raw_dia !== null && !isNaN(parseFloat(p._raw_dia))) ? parseFloat(p._raw_dia) : parseFloat(p.dia)),
       type: p.type || 'gas',
       zone: p.zone || 'hr'
     }));
@@ -5018,7 +5734,7 @@ function runEvaluationLocal(pores, spec, wallH, datumOverride, poreOffset){
       const pctG  = spec.pct_gas    != null ? spec.pct_gas    : (spec.pct || 5);
       const pctS  = spec.pct_shrink != null ? spec.pct_shrink : (spec.pct || 5);
       const maxPhiG = gasP.length ? Math.max(...gasP.map(p => p.dia)) : 0;
-      const maxPhiS = shrP.length ? Math.max(...shrP.map(p => p.dia)) : 0;
+      const maxPhiS = shrP.length ? Math.max(...shrP.map(p => getPoreCheckDia(p, spec))) : 0;
       const areaG = gasP.reduce((s, p) => s + Math.PI * (p.dia/2)**2, 0);
       const areaS = shrP.reduce((s, p) => s + Math.PI * (p.dia/2)**2, 0);
       const pctGval = areaG / Math.max(datum, 0.01) * 100;
@@ -5035,12 +5751,30 @@ function runEvaluationLocal(pores, spec, wallH, datumOverride, poreOffset){
       if(shrP.length > 0){
         rows.push({ n:`Shrink Φ max (${shrP.length}p)`, par:'Φ_S', pass: maxPhiS <= phiS,
           meas:`${maxPhiS.toFixed(3)} mm`, limit:`≤${phiS} mm`,
-          detail:`${shrP.length} shrink pore(s) — largest Φ ${maxPhiS.toFixed(3)} mm` });
+          detail:`${shrP.length} shrink pore(s) — largest Φ ${maxPhiS.toFixed(3)} mm` + (spec.eval_shrink_feret ? ' (Feret max)' : '') });
         rows.push({ n:`Shrink porosity %`,              par:'%_S', pass: pctSval <= pctS,
           meas:`${pctSval.toFixed(2)}%`, limit:`≤${pctS}%`,
           detail:`Shrink area ${areaS.toFixed(2)} mm² / ${datum.toFixed(1)} mm² datum` });
       }
       return rows;
+    })(),
+    // ── Global Max Length (Feret) limit ──────────────────────────────────────
+    ...(() => {
+      const mll = spec.max_l_limit;
+      if (mll == null || mll <= 0) return [];
+      const allEff = _effectivePores(pores, spec);
+      if (!allEff.length) return [];
+      const worstL = Math.max(...allEff.map(p => getPoreMaxLength(p)));
+      return [{
+        n: 'Max Length L (Feret)',
+        par: 'Max L',
+        pass: worstL <= mll,
+        meas: `${worstL.toFixed(3)} mm`,
+        limit: `≤${mll} mm`,
+        detail: worstL > mll
+          ? `Largest pore max cross-section = ${worstL.toFixed(3)} mm exceeds limit ≤${mll} mm`
+          : `All pores within max-length limit (worst ${worstL.toFixed(3)} mm)`,
+      }];
     })(),
   ];
 
@@ -5220,6 +5954,453 @@ function openEvalSelector(){
   const modal = document.getElementById('eval-selector-modal');
   if(modal){ modal.style.display='flex'; }
 }
+
+function _buildImageTabs(entry){
+  const imgInner=document.getElementById('v-image-tabs-inner');
+  const imgStrip=document.getElementById('v-image-tabs');
+  if(!imgInner||!imgStrip) return;
+  const tab=Workspace.specs[entry.si];
+  const total = entry.imgIndices.length;
+
+  // Detect baseline + a compared image
+  const baselineII = entry.imgIndices.find(ii => tab.images[ii] && tab.images[ii].isBaseline);
+  const evaluatedIndices = entry.imgIndices.filter(ii => tab.images[ii] && tab.images[ii].verdict);
+  // Show Compare tab whenever 2+ images have been evaluated (baseline check happens on click)
+  const hasCompare = evaluatedIndices.length >= 2;
+
+  imgInner.innerHTML = entry.imgIndices.map((ii,idx)=>{
+    const page=tab.images[ii];
+    const pass=page&&page.verdict?page.verdict.allPass:null;
+    const badgeTxt=pass===true?' ✓':pass===false?' ✗':' —';
+    const bc=pass===true?'var(--g)':pass===false?'var(--red)':'var(--dim)';
+    const poreCount = page ? (page.pores||[]).length : 0;
+    const imgLabel = escapeHtml((page&&page.name)||('Image '+(ii+1)));
+    const isBase = page && page.isBaseline;
+    return '<button id="v-img-tab-'+entry.si+'-'+ii+'" onclick="switchVerdictImage('+entry.si+','+ii+','+idx+')"'
+      +' style="padding:6px 14px 7px;border:none;cursor:pointer;border-radius:6px 6px 0 0;'
+      +'font-size:10px;font-weight:700;white-space:nowrap;display:flex;flex-direction:column;align-items:flex-start;gap:1px;'
+      +'background:'+(idx===0?'var(--c0)':'var(--c2)')+';'
+      +'color:'+(idx===0?'var(--tx)':'var(--dim)')+';'
+      +'border-bottom:'+(idx===0?'2px solid var(--primary)':'2px solid transparent')+'">'
+      +'<span>'+(isBase?'📌':'📷')+' '+imgLabel+'<span style="color:'+bc+';margin-left:4px;font-size:11px">'+badgeTxt+'</span></span>'
+      +'<span style="font-size:8px;color:var(--dim);font-weight:400">'+poreCount+' pore'+(poreCount!==1?'s':'')+' · '+(idx+1)+'/'+entry.imgIndices.length+(isBase?' · BASELINE':'')+'</span>'
+      +'</button>';
+  }).join('');
+
+  // Always show ⚖️ Compare tab when 2+ images are evaluated
+  if(hasCompare){
+    imgInner.innerHTML +=
+      '<button id="v-img-tab-'+entry.si+'-compare" onclick="showCompareTab('+entry.si+')"'
+      +' style="padding:6px 14px 7px;border:none;cursor:pointer;border-radius:6px 6px 0 0;'
+      +'font-size:10px;font-weight:700;white-space:nowrap;display:flex;flex-direction:column;align-items:flex-start;gap:1px;'
+      +'background:var(--c2);color:#f59e0b;'
+      +'border-bottom:2px solid transparent;margin-left:8px;border-left:2px solid rgba(245,158,11,.3)">'
+      +'<span>⚖️ Compare</span>'
+      +'<span style="font-size:8px;color:var(--dim);font-weight:400">Before vs After</span>'
+      +'</button>';
+  }
+
+  imgStrip.style.display = 'flex';
+  imgStrip.style.alignItems = 'flex-end';
+}
+
+// ── Compare Tab ──────────────────────────────────────────────────────────────
+function _showCompareHideOldContent(restoreNormal){
+  const panel=document.getElementById('v-compare-panel');
+  if(!panel) return;
+  if(restoreNormal){
+    panel.style.display='none';
+    panel.innerHTML='';
+    ['v-hero','v-zone-svg','v-datum-card','v-porosity-compare']
+      .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display=''; });
+    document.querySelectorAll('.g2').forEach(el=>el.style.display='');
+  } else {
+    // Hide normal verdict UI, show compare panel
+    ['v-hero','v-datum-card','v-porosity-compare']
+      .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+    document.querySelectorAll('.g2').forEach(el=>el.style.display='none');
+    panel.style.display='block';
+  }
+}
+
+// ── Compare state (persists between tab switches) ────────────────────────────
+window._cmpState = window._cmpState || {};
+
+function showCompareTab(si){
+  const tab = Workspace.specs[si]; if(!tab) return;
+  const entry = (window._evalledSpecIndices||[]).find(e=>e.si===si);
+  if(!entry) return;
+
+  // Activate compare tab styling
+  entry.imgIndices.forEach(i=>{
+    const el=document.getElementById('v-img-tab-'+si+'-'+i);
+    if(el){el.style.background='var(--c2)';el.style.color='var(--dim)';el.style.borderBottom='2px solid transparent';}
+  });
+  const cmpTab=document.getElementById('v-img-tab-'+si+'-compare');
+  if(cmpTab){cmpTab.style.background='rgba(245,158,11,.15)';cmpTab.style.color='#f59e0b';cmpTab.style.borderBottom='2px solid #f59e0b';}
+
+  // Header
+  const header=document.getElementById('v-img-context-header');
+  if(header){
+    header.style.display='flex';
+    header.innerHTML='<div style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;font-weight:700;color:#f59e0b">⚖️ Image Comparison</span><span style="font-size:10px;color:var(--dim)">Select Before & After images — pore-level change analysis</span></div>';
+  }
+
+  // Collect evaluated images
+  const evalII = entry.imgIndices.filter(ii => tab.images[ii] && tab.images[ii].verdict);
+  if(evalII.length < 2){
+    _showCompareHideOldContent(false);
+    const panel = document.getElementById('v-compare-panel');
+    if(panel) panel.innerHTML = '<div style="padding:40px;text-align:center;color:var(--dim)"><div style="font-size:28px;margin-bottom:12px">📊</div><div style="font-size:14px;font-weight:700;color:var(--tx);margin-bottom:6px">Need 2+ Evaluated Images</div><div style="font-size:11px">Evaluate at least 2 images using the <b>Evaluate</b> button, then return here to compare them.</div></div>';
+    return;
+  }
+
+  // Init or retrieve compare state for this spec
+  if(!window._cmpState[si]){
+    const baselineII = evalII.find(ii => tab.images[ii] && tab.images[ii].isBaseline);
+    const beforeII = baselineII != null ? baselineII : evalII[0];
+    const afterII  = evalII.find(ii => ii !== beforeII) ?? evalII[1];
+    window._cmpState[si] = { beforeII, afterII };
+  }
+
+  _showCompareHideOldContent(false);
+  _renderComparePanel(si);
+}
+
+function _renderComparePanel(si){
+  const panel = document.getElementById('v-compare-panel');
+  if(!panel) return;
+  const tab = Workspace.specs[si];
+  const entry = (window._evalledSpecIndices||[]).find(e=>e.si===si);
+  if(!tab||!entry) return;
+
+  const evalII = entry.imgIndices.filter(ii => tab.images[ii] && tab.images[ii].verdict);
+  const cs = window._cmpState[si];
+  let { beforeII, afterII } = cs;
+
+  // Guard: same image selected
+  const sameImage = beforeII === afterII;
+
+  const beforePage = tab.images[beforeII];
+  const afterPage  = tab.images[afterII];
+  const bv = beforePage?.verdict, av = afterPage?.verdict;
+
+  // Build dropdown HTML
+  const makeOpts = (selII) => evalII.map(ii=>{
+    const pg = tab.images[ii];
+    const pass = pg.verdict?.allPass;
+    const badge = pass===true?' ✓':pass===false?' ✗':'';
+    const num = ii + 1;
+    const name = pg.name || `Image ${num}`;
+    return `<option value="${ii}" ${ii===selII?'selected':''}>${num}. ${escapeHtml(name)}${badge}</option>`;
+  }).join('');
+
+  const selectorBar = `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 18px;background:var(--c2);border-radius:10px;margin-bottom:14px;border:1px solid var(--bd)">
+      <div style="display:flex;align-items:center;gap:7px;flex:1;min-width:180px">
+        <span style="font-size:9px;font-weight:800;color:#f59e0b;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap">📌 Before</span>
+        <select onchange="_cmpPickBefore(${si},+this.value)" style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--bd);background:var(--c3);color:var(--tx);font-size:11px;cursor:pointer">${makeOpts(beforeII)}</select>
+      </div>
+      <button onclick="_cmpSwap(${si})" title="Swap Before/After" style="padding:5px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--c3);color:var(--dim);font-size:14px;cursor:pointer;flex-shrink:0">⇄</button>
+      <div style="display:flex;align-items:center;gap:7px;flex:1;min-width:180px">
+        <span style="font-size:9px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap">📷 After</span>
+        <select onchange="_cmpPickAfter(${si},+this.value)" style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--bd);background:var(--c3);color:var(--tx);font-size:11px;cursor:pointer">${makeOpts(afterII)}</select>
+      </div>
+      ${sameImage ? `<div style="padding:5px 10px;border-radius:6px;background:rgba(239,68,68,.12);color:var(--red);font-size:10px;font-weight:700;border:1px solid rgba(239,68,68,.3)">⚠ Same image selected</div>` : ''}
+    </div>`;
+
+  if(sameImage || !bv || !av){
+    panel.innerHTML = selectorBar + '<div style="padding:30px;text-align:center;color:var(--dim);font-size:11px">Select two <b>different</b> evaluated images to compare.</div>';
+    return;
+  }
+
+  // ── Pore matching ────────────────────────────────────────────────────────────
+  // Adaptive threshold: ~2% of image height, minimum 0.6mm, max 2mm
+  const refState = beforePage.imgState;
+  const wHmm = (refState?.scalePxPerMm && refState?.image)
+    ? refState.image.naturalHeight / (refState.scalePxPerMm / (refState.fitScale||1))
+    : (tab.spec.t || 8);
+  const wWmm = (refState?.scalePxPerMm && refState?.image)
+    ? refState.image.naturalWidth  / (refState.scalePxPerMm / (refState.fitScale||1))
+    : (tab.spec.datum || 60);
+  const THRESH = Math.min(2.0, Math.max(0.6, wHmm * 0.03));
+
+  const bPores = beforePage.pores||[];
+  const aPores = afterPage.pores||[];
+
+  // Bipartite matching: each before-pore matches to closest after-pore of same type (within threshold)
+  function matchPores(setA, setB){
+    return setA.map(pa=>{
+      let best = null, bestDist = Infinity;
+      for(const pb of setB){
+        const d = Math.hypot(pb.x-pa.x, pb.y-pa.y);
+        // Type match gives bonus (shrink→shrink or gas→gas preferred)
+        const typePenalty = (pa.type === pb.type) ? 0 : THRESH * 0.4;
+        const effectiveD = d + typePenalty;
+        if(effectiveD < THRESH && d < bestDist){ bestDist=d; best=pb; }
+      }
+      return {pore:pa, matched:!!best, matchedPore:best, dist:bestDist};
+    });
+  }
+  const baseMatched  = matchPores(bPores, aPores);
+  const afterMatched = matchPores(aPores, bPores);
+  const resolved  = baseMatched.filter(m=>!m.matched);
+  const persisting= baseMatched.filter(m=>m.matched);
+  const newPores  = afterMatched.filter(m=>!m.matched);
+
+  // Zone breakdown
+  const zones = ['hr','hk','nr'];
+  const zoneLabels = {hr:'HR Outer',hk:'HK Centre',nr:'NR Inner'};
+  const zoneBreakdown = zones.map(z=>{
+    const bz = bPores.filter(p=>p.zone===z).length;
+    const az = aPores.filter(p=>p.zone===z).length;
+    const rz = resolved.filter(m=>m.pore.zone===z).length;
+    const pz = persisting.filter(m=>m.pore.zone===z).length;
+    const nz = newPores.filter(m=>m.pore.zone===z).length;
+    return {z, label:zoneLabels[z]||z.toUpperCase(), bz, az, rz, pz, nz};
+  }).filter(r=>r.bz>0||r.az>0);
+
+  // Type breakdown
+  const typeRows = ['gas','shrink'].map(t=>{
+    const bt = bPores.filter(p=>p.type===t).length;
+    const at2 = aPores.filter(p=>p.type===t).length;
+    return {t, bt, at2, delta:at2-bt};
+  });
+
+  // ── Delta metrics ───────────────────────────────────────────────────────────
+  const ds = v => { const n=parseFloat(v); return (n>0?'+':'')+v; };
+  const dc = (v,neg=true) => { const n=parseFloat(v); return n===0?'var(--dim)':(neg?(n<0):(n>0))?'var(--g)':'var(--red)'; };
+  const dPct   = (av.pct    - bv.pct).toFixed(2);
+  const dCount = aPores.length - bPores.length;
+  const dPhi   = ((av.maxPhi||0)-(bv.maxPhi||0)).toFixed(2);
+  const dArea  = ((av.largestArea||0)-(bv.largestArea||0)).toFixed(2);
+  const summary = !bv.allPass&&av.allPass ? '🎉 Part now PASSES after improvement!'
+    : !bv.allPass&&!av.allPass ? '⚠️ Still failing — further improvement needed'
+    : bv.allPass&&av.allPass   ? '✅ Both pass — consistency confirmed'
+    : '🔻 Regression — was passing, now failing';
+  const summaryCol = av.allPass ? 'var(--g)' : 'var(--red)';
+
+  const metricsTable = `
+    <table style="width:100%;border-collapse:collapse;font-size:11px;border-radius:8px;overflow:hidden">
+      <thead><tr style="background:rgba(255,255,255,.05)">
+        <th style="padding:9px 12px;text-align:left;color:var(--dim);font-size:9px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--bd)">Metric</th>
+        <th style="padding:9px 12px;text-align:right;color:#f59e0b;font-size:9px;font-weight:700;border-bottom:1px solid var(--bd)">📌 ${escapeHtml(beforePage.name)}</th>
+        <th style="padding:9px 12px;text-align:right;color:var(--primary);font-size:9px;font-weight:700;border-bottom:1px solid var(--bd)">📷 ${escapeHtml(afterPage.name)}</th>
+        <th style="padding:9px 12px;text-align:right;font-size:9px;font-weight:700;border-bottom:1px solid var(--bd)">Δ Change</th>
+      </tr></thead>
+      <tbody>
+        ${[
+          ['Porosity %',   (bv.pct||0).toFixed(2)+'%',  (av.pct||0).toFixed(2)+'%',  ds(dPct)+'%',  dc(dPct)],
+          ['Pore Count',   bPores.length,                aPores.length,               ds(dCount),    dc(dCount)],
+          ['Max Φ (mm)',   (bv.maxPhi||0).toFixed(2),   (av.maxPhi||0).toFixed(2),   ds(dPhi),      dc(dPhi)],
+          ['Max Area mm²', (bv.largestArea||0).toFixed(2),(av.largestArea||0).toFixed(2),ds(dArea),  dc(dArea)],
+          ['Verdict',      bv.allPass?'✓ PASS':'✗ FAIL', av.allPass?'✓ PASS':'✗ FAIL',
+            av.allPass&&!bv.allPass?'⬆ Improved':!av.allPass&&bv.allPass?'⬇ Regressed':av.allPass?'—':'—',
+            av.allPass?'var(--g)':'var(--red)']
+        ].map(([label,bVal,aVal,delta,col])=>`
+          <tr style="border-bottom:1px solid rgba(255,255,255,.04)">
+            <td style="padding:8px 12px;color:var(--tx);font-weight:600">${label}</td>
+            <td style="padding:8px 12px;text-align:right;color:var(--dim)">${bVal}</td>
+            <td style="padding:8px 12px;text-align:right;color:var(--tx)">${aVal}</td>
+            <td style="padding:8px 12px;text-align:right;font-weight:800;color:${col}">${delta}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  const zoneTable = zoneBreakdown.length ? `
+    <div style="margin-top:12px">
+      <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Zone Breakdown</div>
+      <table style="width:100%;border-collapse:collapse;font-size:10px">
+        <thead><tr style="background:rgba(255,255,255,.04)">
+          <th style="padding:6px 10px;text-align:left;color:var(--dim);font-size:8px;font-weight:700;text-transform:uppercase">Zone</th>
+          <th style="padding:6px 10px;text-align:right;color:#f59e0b;font-size:8px">Before</th>
+          <th style="padding:6px 10px;text-align:right;color:var(--primary);font-size:8px">After</th>
+          <th style="padding:6px 10px;text-align:right;color:rgba(160,160,160,.7);font-size:8px">✓ Resolved</th>
+          <th style="padding:6px 10px;text-align:right;color:rgba(239,68,68,.9);font-size:8px">⟳ Persisting</th>
+          <th style="padding:6px 10px;text-align:right;color:rgba(16,185,129,.9);font-size:8px">+ New</th>
+        </tr></thead>
+        <tbody>${zoneBreakdown.map(({label,bz,az,rz,pz,nz})=>`
+          <tr style="border-bottom:1px solid rgba(255,255,255,.04)">
+            <td style="padding:6px 10px;font-weight:700;color:var(--tx)">${label}</td>
+            <td style="padding:6px 10px;text-align:right;color:var(--dim)">${bz}</td>
+            <td style="padding:6px 10px;text-align:right;color:var(--tx)">${az}</td>
+            <td style="padding:6px 10px;text-align:right;color:rgba(160,160,160,.8)">${rz||'—'}</td>
+            <td style="padding:6px 10px;text-align:right;color:${pz?'rgba(239,68,68,.9)':'var(--dim)'}">${pz||'—'}</td>
+            <td style="padding:6px 10px;text-align:right;color:${nz?'rgba(16,185,129,.9)':'var(--dim)'}">${nz||'—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : '';
+
+  const typeTable = `
+    <div style="margin-top:12px">
+      <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Pore Type Change</div>
+      <div style="display:flex;gap:8px">
+        ${typeRows.map(({t,bt,at2,delta})=>`
+          <div style="flex:1;padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid var(--bd)">
+            <div style="font-size:9px;color:var(--dim);font-weight:700;text-transform:uppercase;margin-bottom:4px">${t==='gas'?'⚪ Gas':'🟤 Shrink'}</div>
+            <div style="display:flex;align-items:baseline;gap:5px">
+              <span style="font-size:18px;font-weight:900;color:var(--tx)">${at2}</span>
+              <span style="font-size:9px;color:var(--dim)">was ${bt}</span>
+              <span style="margin-left:auto;font-size:11px;font-weight:800;color:${delta===0?'var(--dim)':delta<0?'var(--g)':'var(--red)'}">${delta>0?'+':''}${delta}</span>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+
+  // Build HTML — canvases will be filled after innerHTML is set
+  panel.innerHTML = selectorBar + `
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <div style="flex:1;min-width:100px;padding:12px 16px;background:rgba(160,160,160,.07);border-radius:10px;border-left:4px solid rgba(160,160,160,.5)">
+        <div style="font-size:28px;font-weight:900;color:rgba(160,160,160,.9)">${resolved.length}</div>
+        <div style="font-size:9px;color:var(--dim);font-weight:700;text-transform:uppercase;margin-top:2px">Resolved ✓</div>
+        <div style="font-size:8px;color:var(--dim);margin-top:2px">In before, gone in after</div>
+      </div>
+      <div style="flex:1;min-width:100px;padding:12px 16px;background:rgba(239,68,68,.07);border-radius:10px;border-left:4px solid rgba(239,68,68,.5)">
+        <div style="font-size:28px;font-weight:900;color:rgba(239,68,68,.9)">${persisting.length}</div>
+        <div style="font-size:9px;color:var(--dim);font-weight:700;text-transform:uppercase;margin-top:2px">Persisting ⟳</div>
+        <div style="font-size:8px;color:var(--dim);margin-top:2px">Present in both images</div>
+      </div>
+      <div style="flex:1;min-width:100px;padding:12px 16px;background:rgba(16,185,129,.07);border-radius:10px;border-left:4px solid rgba(16,185,129,.5)">
+        <div style="font-size:28px;font-weight:900;color:rgba(16,185,129,.9)">${newPores.length}</div>
+        <div style="font-size:9px;color:var(--dim);font-weight:700;text-transform:uppercase;margin-top:2px">New ＋</div>
+        <div style="font-size:8px;color:var(--dim);margin-top:2px">Appeared in after only</div>
+      </div>
+      <div style="flex:1;min-width:100px;padding:12px 16px;border-radius:10px;border:1px solid ${summaryCol};background:${av.allPass?'rgba(16,185,129,.05)':'rgba(239,68,68,.05)'}">
+        <div style="font-size:13px;font-weight:800;color:${summaryCol}">${av.allPass?'✓ PASS':'✗ FAIL'}</div>
+        <div style="font-size:9px;color:var(--dim);font-weight:700;text-transform:uppercase;margin-top:2px">After Verdict</div>
+        <div style="font-size:8px;color:var(--dim);margin-top:2px">${summary}</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div>
+        <div style="font-size:9px;font-weight:800;color:#f59e0b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">📌 BEFORE — ${escapeHtml(beforePage.name)}</div>
+        <canvas id="cmp-canvas-before" style="width:100%;border-radius:8px;display:block;border:2px solid rgba(245,158,11,.3)"></canvas>
+      </div>
+      <div>
+        <div style="font-size:9px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">📷 AFTER — ${escapeHtml(afterPage.name)}</div>
+        <canvas id="cmp-canvas-after" style="width:100%;border-radius:8px;display:block;border:2px solid rgba(0,200,150,.3)"></canvas>
+      </div>
+    </div>
+
+    <div style="font-size:8px;color:var(--dim);margin-bottom:14px;display:flex;gap:14px;flex-wrap:wrap">
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:rgba(160,160,160,.3);border:1.5px solid rgba(160,160,160,.8);display:inline-block"></span>Resolved (before only)</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:rgba(239,68,68,.15);border:2px dashed rgba(239,68,68,.9);display:inline-block"></span>Persisting (both)</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:rgba(16,185,129,.2);border:1.5px solid rgba(16,185,129,.9);display:inline-block"></span>New (after only)</span>
+      <span style="color:rgba(255,255,255,.3)">Match threshold: ±${THRESH.toFixed(1)}mm</span>
+    </div>
+
+    <div style="background:var(--c2);border-radius:10px;padding:14px 16px;margin-bottom:14px;border:1px solid var(--bd)">
+      ${metricsTable}${zoneTable}${typeTable}
+    </div>`;
+
+  // Draw canvases after DOM is ready
+  requestAnimationFrame(() => {
+    _drawCmpCanvas('cmp-canvas-before', beforePage, baseMatched, 'before', wWmm, wHmm);
+    _drawCmpCanvas('cmp-canvas-after',  afterPage,  afterMatched, 'after',  wWmm, wHmm);
+  });
+}
+
+function _cmpPickBefore(si, ii){ window._cmpState[si].beforeII=ii; _renderComparePanel(si); }
+function _cmpPickAfter(si, ii) { window._cmpState[si].afterII=ii;  _renderComparePanel(si); }
+function _cmpSwap(si){
+  const cs=window._cmpState[si];
+  [cs.beforeII,cs.afterII]=[cs.afterII,cs.beforeII];
+  _renderComparePanel(si);
+}
+
+function _drawCmpCanvas(canvasId, page, matchedArr, role, wWmm, wHmm){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  const img = page.imgState?.image;
+
+  // Set canvas native size
+  const CW = 900, CH = img ? Math.round(900 * img.naturalHeight / img.naturalWidth) : 300;
+  canvas.width = CW; canvas.height = CH;
+  const ctx = canvas.getContext('2d');
+
+  // Draw actual image or dark background
+  if(img){
+    try { ctx.drawImage(img, 0, 0, CW, CH); }
+    catch(e){ ctx.fillStyle='#111'; ctx.fillRect(0,0,CW,CH); }
+    // Slightly darken for contrast
+    ctx.fillStyle='rgba(0,0,0,.35)';
+    ctx.fillRect(0,0,CW,CH);
+  } else {
+    ctx.fillStyle='#111'; ctx.fillRect(0,0,CW,CH);
+    ctx.fillStyle='rgba(255,255,255,.1)'; ctx.font='bold 13px system-ui'; ctx.textAlign='center';
+    ctx.fillText('No image', CW/2, CH/2);
+  }
+
+  // Scale mm → canvas px
+  const scX = img ? (CW / img.naturalWidth  * (page.imgState?.scalePxPerMm / (page.imgState?.fitScale||1)||1)) : (CW/wWmm);
+  const scY = img ? (CH / img.naturalHeight * (page.imgState?.scalePxPerMm / (page.imgState?.fitScale||1)||1)) : (CH/wHmm);
+  // Use uniform scale
+  const sc = Math.min(scX, scY);
+  // Actually derive from mm space
+  const pxPerMmX = img ? CW / wWmm : CW / wWmm;
+  const pxPerMmY = img ? CH / wHmm : CH / wHmm;
+
+  function mmToC(xmm, ymm){ return { x: xmm * pxPerMmX, y: ymm * pxPerMmY }; }
+
+  function drawPore(p, strokeCol, fillCol, dashed){
+    const c = mmToC(p.x, p.y);
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    if(p._contour && p._contour.length >= 4){
+      const pts = p._contour.map(([dx,dy]) => mmToC(p.x+dx, p.y+dy));
+      ctx.beginPath();
+      ctx.moveTo((pts[0].x+pts[pts.length-1].x)/2, (pts[0].y+pts[pts.length-1].y)/2);
+      for(let i=0;i<pts.length;i++){
+        const p0=pts[(i+pts.length-1)%pts.length], p1=pts[i], p2=pts[(i+1)%pts.length];
+        const mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2;
+        ctx.quadraticCurveTo(p1.x,p1.y,mx,my);
+      }
+      ctx.closePath();
+    } else {
+      const r = Math.max(3, (p.dia/2) * pxPerMmX);
+      ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI*2);
+    }
+    ctx.fillStyle = fillCol; ctx.fill();
+    if(dashed) ctx.setLineDash([5,3]);
+    ctx.strokeStyle = strokeCol; ctx.lineWidth = 2; ctx.stroke();
+    ctx.setLineDash([]);
+    // Diameter label
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 8px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(p.dia.toFixed(1), c.x, c.y);
+    ctx.restore();
+  }
+
+  if(role === 'before'){
+    // Resolved = grey (pores not in after)
+    matchedArr.filter(m=>!m.matched).forEach(({pore:p})=>drawPore(p,'rgba(180,180,180,.9)','rgba(160,160,160,.15)',false));
+    // Persisting = red dashed (pores also in after)
+    matchedArr.filter(m=>m.matched).forEach(({pore:p})=>drawPore(p,'rgba(239,68,68,.95)','rgba(239,68,68,.15)',true));
+  } else {
+    // New = green (pores not in before)
+    matchedArr.filter(m=>!m.matched).forEach(({pore:p})=>drawPore(p,'rgba(16,185,129,.95)','rgba(16,185,129,.18)',false));
+    // Persisting = red dashed (pores also in before)
+    matchedArr.filter(m=>m.matched).forEach(({pore:p})=>drawPore(p,'rgba(239,68,68,.95)','rgba(239,68,68,.15)',true));
+  }
+
+  // Zone lines overlay
+  const tab = Workspace.specs.find(sp => sp.images.some(pg => pg === page));
+  if(tab){
+    const spec = tab.spec;
+    ctx.save(); ctx.setLineDash([6,4]); ctx.strokeStyle='rgba(255,255,255,.2)'; ctx.lineWidth=1;
+    [spec.h, spec.hr].forEach(yFrac=>{
+      if(!yFrac) return;
+      const y = (yFrac / (spec.t||8)) * CH;
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(CW,y); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+}
+
+
 function closeEvalSelector(){
   const modal = document.getElementById('eval-selector-modal');
   if(modal){ modal.style.display='none'; }
@@ -5409,26 +6590,6 @@ function renderVerdictTabs(evalledSpecIndices){
   specStrip.style.display='block';
   if(evalledSpecIndices.length>0) _buildImageTabs(evalledSpecIndices[0]);
 }
-function _buildImageTabs(entry){
-  const imgInner=document.getElementById('v-image-tabs-inner');
-  const imgStrip=document.getElementById('v-image-tabs');
-  if(!imgInner||!imgStrip) return;
-  const tab=Workspace.specs[entry.si];
-  imgInner.innerHTML = entry.imgIndices.map((ii,idx)=>{
-    const page=tab.images[ii];
-    const pass=page&&page.verdict?page.verdict.allPass:null;
-    const badge=pass===true?' ✓':pass===false?' ✗':'';
-    const bc=pass===true?'var(--g)':'var(--red)';
-    return '<button id="v-img-tab-'+entry.si+'-'+ii+'" onclick="switchVerdictImage('+entry.si+','+ii+','+idx+')"'
-      +' style="padding:4px 10px 6px;border:none;cursor:pointer;border-radius:5px 5px 0 0;'
-      +'font-size:9px;font-weight:600;white-space:nowrap;'
-      +'background:'+(idx===0?'var(--c0)':'var(--c2)')+';'
-      +'color:'+(idx===0?'var(--tx)':'var(--dim)')+';'
-      +'border-bottom:'+(idx===0?'2px solid var(--primary)':'2px solid transparent')+'">'+escapeHtml((page&&page.name)||'Image '+(ii+1))
-      +(pass!==null?'<span style="color:'+bc+'">'+badge+'</span>':'')+'</button>';
-  }).join('');
-  imgStrip.style.display='block';
-}
 function switchVerdictSpec(idx,si){
   const all=window._evalledSpecIndices||[];
   all.forEach(e=>{
@@ -5443,21 +6604,60 @@ function switchVerdictSpec(idx,si){
 function switchVerdictImage(si,ii,idx){
   const entry=(window._evalledSpecIndices||[]).find(e=>e.si===si);
   if(!entry) return;
+  // Deactivate all tabs including compare
   entry.imgIndices.forEach(i=>{
     const el=document.getElementById('v-img-tab-'+si+'-'+i);
     if(el){el.style.background='var(--c2)';el.style.color='var(--dim)';el.style.borderBottom='2px solid transparent';}
   });
+  const cmpEl=document.getElementById('v-img-tab-'+si+'-compare');
+  if(cmpEl){cmpEl.style.background='var(--c2)';cmpEl.style.color='#f59e0b';cmpEl.style.borderBottom='2px solid transparent';}
   const ae=document.getElementById('v-img-tab-'+si+'-'+ii);
   if(ae){ae.style.background='var(--c0)';ae.style.color='var(--tx)';ae.style.borderBottom='2px solid var(--primary)';}
+  // Restore normal verdict content (in case compare tab was active)
+  _showCompareHideOldContent(true);
   showVerdictForTab(si,ii);
 }
 function showVerdictForTab(si,ii){
   const tab=Workspace.specs[si]; if(!tab) return;
   const page=tab.images[ii]; if(!page||!page.verdict) return;
-  // Permanently update S.spec + S.verdict so navigating back shows correct data
-  S.spec=tab.spec;
-  S.verdict=page.verdict;
-  S.evaluated=true;
+  // Update active tab highlights
+  const entry=(window._evalledSpecIndices||[]).find(e=>e.si===si);
+  if(entry){
+    entry.imgIndices.forEach(i=>{
+      const el=document.getElementById('v-img-tab-'+si+'-'+i);
+      const isActive=(i===ii);
+      if(el){
+        el.style.background=isActive?'var(--c0)':'var(--c2)';
+        el.style.color=isActive?'var(--tx)':'var(--dim)';
+        el.style.borderBottom=isActive?'2px solid var(--primary)':'2px solid transparent';
+      }
+    });
+  }
+  // Show image context header
+  const header=document.getElementById('v-img-context-header');
+  if(header){
+    const total = tab.images.length;
+    const imgNum = ii + 1;
+    const pass = page.verdict.allPass;
+    header.style.display='flex';
+    header.innerHTML=
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+      +'<span style="font-size:11px;font-weight:700;color:var(--dim)">📷 Results for:</span>'
+      +'<span style="font-size:12px;font-weight:800;color:var(--tx)">'+escapeHtml(page.name||('Image '+imgNum))+'</span>'
+      +'<span style="font-size:10px;color:var(--dim)">Image '+imgNum+' of '+total+'</span>'
+      +'<span style="margin-left:auto;font-size:11px;font-weight:800;padding:3px 12px;border-radius:20px;background:'+(pass?'rgba(16,185,129,.15)':'rgba(239,68,68,.15)')+';color:'+(pass?'var(--g)':'var(--red)')+'">'
+      +(pass?'✓ PASS':'✗ FAIL')
+      +'</span>'
+      +'</div>';
+  }
+  // Permanently update workspace state so all render functions see the correct image
+  Workspace.activeSpec = si;
+  tab.activeImage = ii;
+  bindActiveWorkspace();
+  
+  S.spec = tab.spec;
+  S.verdict = page.verdict;
+  S.evaluated = true;
   renderVerdict();
 }
 
@@ -5642,7 +6842,7 @@ function renderReportImage(page, spec, metrics){
   page.pores.forEach(p=>{
     const x=p.x*sx, y=p.y*sy, r=Math.max(3,(p.dia/2)*((sx+sy)/2));
     const ignored=spec.u>0&&(p.dia+0.005)<spec.u;
-    const fail=!ignored&&p.dia>spec.phi;
+    const fail=!ignored&&getPoreCheckDia(p, spec)>getPorePhiLimit(p, spec);
     const _cs2 = _poreExclCropStatus(p, page);
     const isExcluded = _cs2.status === 'full';
     const isPartial = _cs2.status === 'partial';
@@ -5759,7 +6959,7 @@ function renderReportZoneMap(page, spec, metrics){
     const y=wy+(p.y/Math.max(metrics.wallH,.01))*wh;
     const r=Math.max(3,Math.min(18,(p.dia/Math.max(metrics.wallH,.01))*wh/2));
     const ignored=spec.u>0&&(p.dia+0.005)<spec.u;
-    const fail=!ignored&&p.dia>spec.phi;
+    const fail=!ignored&&getPoreCheckDia(p, spec)>getPorePhiLimit(p, spec);
     const _cs3 = _poreExclCropStatus(p, page);
     const isExcluded = _cs3.status === 'full';
     const isPartial2 = _cs3.status === 'partial';
@@ -5855,23 +7055,27 @@ function buildImageReportSection(tab, page, spec, specIndex, imageIndex){
     let statusStr = '<span class="pass">Active</span>';
     let rowStyle = '';
     if(isExcluded){
-      statusStr = '<span class="fail" style="color:#d92d20">✕ Excl. (Zone)</span>';
+      statusStr = '<span class="fail" style="color:#d92d20">\u2715 Excl. (Zone)</span>';
       rowStyle = ' style="background:#fafafa;text-decoration:line-through;color:#bbb"';
     } else if(isPartialR){
       const pct = ((_csR.fraction||0)*100).toFixed(0);
-      statusStr = `<span style="color:#f76707">✂ Cropped (${pct}% active, Ø${_csR.effectiveDia.toFixed(2)})</span>`;
+      statusStr = `<span style="color:#f76707">\u2702 Cropped (${pct}% active, \u00d8${_csR.effectiveDia.toFixed(2)})</span>`;
       rowStyle = ' style="background:#fff9f0"';
     } else if(isOutsideDatum){
       statusStr = '<span class="fail" style="color:#f76707">Outside Datum</span>';
       rowStyle = ' style="background:#f9f9f9;text-decoration:line-through;color:#999"';
     }
-    const displayDia = isPartialR ? `${Number(p.dia||0).toFixed(3)} <span style="font-size:8px;color:#f76707">(→${_csR.effectiveDia.toFixed(3)})</span>` : Number(p.dia||0).toFixed(3);
+    const displayDia = isPartialR ? `${Number(p.dia||0).toFixed(3)} <span style="font-size:8px;color:#f76707">(\u2192${_csR.effectiveDia.toFixed(3)})</span>` : Number(p.dia||0).toFixed(3);
+    const maxL = getPoreMaxLength(p);
+    const dri = getDRI(p);
+    const driCell = `<span style="display:inline-block;padding:1px 4px;border-radius:3px;font-weight:700;font-size:8px;background:${dri.color}22;color:${dri.color}">${dri.score} — ${dri.label}</span>`;
     return `<tr${rowStyle}>
-      <td>${i+1}</td><td>${displayDia}</td><td>${Number(p.x||0).toFixed(2)}</td>
+      <td>${i+1}</td><td>${displayDia}</td><td>${maxL.toFixed(3)}</td><td>${Number(p.x||0).toFixed(2)}</td>
       <td>${Number(p.y||0).toFixed(2)}</td><td>${escapeHtml((p.zone||'-').toUpperCase())}</td><td>${escapeHtml(p.type||'gas')}</td>
+      <td>${driCell}</td>
       <td>${statusStr}</td>
     </tr>`;
-  }).join('') : '<tr><td colspan="7" class="detail">No pores recorded for this image.</td></tr>';
+  }).join('') : '<tr><td colspan="9" class="detail">No pores recorded for this image.</td></tr>';
 
   // ── Datum & Exclusion Analysis section (PDF) ─────────────────────────────
   const _datumType    = pageDatum ? 'Drawn □ (measured square)' : (metrics.calibrated ? 'Full image (calibrated)' : 'Spec default');
@@ -5945,7 +7149,7 @@ function buildImageReportSection(tab, page, spec, specIndex, imageIndex){
     <table><thead><tr><th>Parameter</th><th>Measured</th><th>Limit</th><th>Result</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table>
     ${datumExclSection}
     <h4>Pore Data</h4>
-    <table><thead><tr><th>#</th><th>Φ (mm)</th><th>X (mm)</th><th>Y (mm)<th>Zone</th><th>Type</th><th>Status</th></tr></thead><tbody>${poreRows}</tbody></table>
+    <table><thead><tr><th>#</th><th>Φ (mm)</th><th>Max L (mm)</th><th>X (mm)</th><th>Y (mm)</th><th>Zone</th><th>Type</th><th>DRI</th><th>Status</th></tr></thead><tbody>${poreRows}</tbody></table>
   </section>`;
 }
 
@@ -5985,7 +7189,8 @@ async function downloadPDF() {
           phi_gas: (tab.spec.phi_gas !== undefined && tab.spec.phi_gas !== null && tab.spec.phi_gas !== '' && !isNaN(parseFloat(tab.spec.phi_gas))) ? parseFloat(tab.spec.phi_gas) : null,
           pct_gas: (tab.spec.pct_gas !== undefined && tab.spec.pct_gas !== null && tab.spec.pct_gas !== '' && !isNaN(parseFloat(tab.spec.pct_gas))) ? parseFloat(tab.spec.pct_gas) : null,
           phi_shrink: (tab.spec.phi_shrink !== undefined && tab.spec.phi_shrink !== null && tab.spec.phi_shrink !== '' && !isNaN(parseFloat(tab.spec.phi_shrink))) ? parseFloat(tab.spec.phi_shrink) : null,
-          pct_shrink: (tab.spec.pct_shrink !== undefined && tab.spec.pct_shrink !== null && tab.spec.pct_shrink !== '' && !isNaN(parseFloat(tab.spec.pct_shrink))) ? parseFloat(tab.spec.pct_shrink) : null
+          pct_shrink: (tab.spec.pct_shrink !== undefined && tab.spec.pct_shrink !== null && tab.spec.pct_shrink !== '' && !isNaN(parseFloat(tab.spec.pct_shrink))) ? parseFloat(tab.spec.pct_shrink) : null,
+          eval_shrink_feret: !!tab.spec.eval_shrink_feret
         },
         images: tab.images.map(img => {
           const metrics = getImagePageMetrics(img, tab.spec);
@@ -5996,6 +7201,8 @@ async function downloadPDF() {
               x: parseFloat(p.x),
               y: parseFloat(p.y),
               dia: parseFloat(p.dia),
+              max_length: (p._maxLength !== undefined && p._maxLength !== null && !isNaN(parseFloat(p._maxLength))) ? parseFloat(p._maxLength) : null,
+              raw_dia: (p._rawDia !== undefined && p._rawDia !== null && !isNaN(parseFloat(p._rawDia))) ? parseFloat(p._rawDia) : ((p._raw_dia !== undefined && p._raw_dia !== null && !isNaN(parseFloat(p._raw_dia))) ? parseFloat(p._raw_dia) : parseFloat(p.dia)),
               type: p.type || 'gas',
               zone: p.zone || 'hr'
             })),
@@ -6502,7 +7709,7 @@ function drawVerdictZone(){
       const svgR=Math.max(3,Math.min(22,(p.dia/wHmm)*wh*.5));
       const excl = typeof _poreInExclZone==='function' && _poreInExclZone(p);
       const ign=S.spec.u>0&&(p.dia+0.005)<S.spec.u;
-      const fail=!ign&&!excl&&p.dia>S.spec.phi;
+      const fail=!ign&&!excl&&getPoreCheckDia(p, S.spec)>getPorePhiLimit(p, S.spec);
       const col=excl?'rgba(180,180,180,.6)':ign?'rgba(120,120,120,.7)':fail?'#ff3d3d':p.zone==='hr'?'#ffad00':p.zone==='hk'?'#9b6bff':'#00e8a2';
       const fillC=excl?'rgba(180,180,180,.1)':ign?'rgba(120,120,120,.15)':fail?'rgba(255,61,61,.25)':
                   p.zone==='hr'?'rgba(255,173,0,.2)':p.zone==='hk'?'rgba(155,107,255,.2)':'rgba(0,232,162,.15)';
@@ -6551,7 +7758,7 @@ function drawVerdictZone(){
     const py=((p.y-dr.y)/dr.h)*cH;
     const pr=Math.max(4,((p.dia/2)/dr.w)*cW);
     const ign=S.spec.u>0&&(p.dia+0.005)<S.spec.u;
-    const fail=!ign&&p.dia>S.spec.phi;
+    const fail=!ign&&getPoreCheckDia(p, S.spec)>getPorePhiLimit(p, S.spec);
     const col=ign?'rgba(140,140,140,.7)':fail?'#ff3d3d':p.zone==='hr'?'#ffad00':p.zone==='hk'?'#9b6bff':'#00e8a2';
     // Contour or circle
     if(p._contour&&p._contour.length>=4){
@@ -7645,6 +8852,22 @@ function _executeWandPore(canvasX, canvasY) {
   const diaMm = Math.sqrt(areaMm2 / Math.PI) * 2;
 
   if (!page.pores) page.pores = [];
+
+  // ── Build compact bounding-box mask for filled-overlay rendering ──────────
+  // Crop the full-image mask down to the pore's bounding box to save memory.
+  let x0mask = w, y0mask = h, x1mask = 0, y1mask = 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (mask[y*w+x]) {
+      if (x < x0mask) x0mask = x; if (x > x1mask) x1mask = x;
+      if (y < y0mask) y0mask = y; if (y > y1mask) y1mask = y;
+    }
+  }
+  const mw = x1mask - x0mask + 1, mh = y1mask - y0mask + 1;
+  const croppedMask = new Uint8Array(mw * mh);
+  for (let y = y0mask; y <= y1mask; y++)
+    for (let x = x0mask; x <= x1mask; x++)
+      croppedMask[(y - y0mask) * mw + (x - x0mask)] = mask[y * w + x];
+
   const pore = {
     id: 'p_' + Math.random().toString(36).substr(2, 9),
     x: +centerMmX.toFixed(3),
@@ -7655,7 +8878,9 @@ function _executeWandPore(canvasX, canvasY) {
     _contour: contourMm.length >= 4 ? contourMm : null,
     _effectiveArea: +areaMm2.toFixed(4),
     _effectiveDia: +diaMm.toFixed(3),
-    _detectMeta: { confidence: 1.0, circularity: 0.5, aspect: 1.0, contrast: 0.5, edgeGrad: 0.5 }
+    _detectMeta: { confidence: 1.0, circularity: 0.5, aspect: 1.0, contrast: 0.5, edgeGrad: 0.5 },
+    // Raw pixel mask for filled-overlay rendering
+    _maskRaw: { x0: x0mask, y0: y0mask, mw, mh, data: croppedMask, imgW: w, imgH: h }
   };
 
   pushHistory();
@@ -7666,6 +8891,230 @@ function _executeWandPore(canvasX, canvasY) {
   drawCanvas(); updatePoreRegistry(); updateLiveMetrics();
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// FILLED MASK OVERLAY — renders the raw flood-fill pixel mask as a
+// translucent solid-colour region directly on the canvas, giving a true
+// "area projection" view instead of (or alongside) the edge curve.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Draws the raw pixel mask stored on a wand pore as a translucent bitmap
+ * overlay onto the main canvas context (mctx).
+ *
+ * The mask was captured at the natural image resolution then cropped to the
+ * pore bounding box.  We map each mask pixel back to canvas coordinates via
+ * the same fit/imgX/imgY transform used for the image itself.
+ *
+ * @param {object} p   - Pore object with _maskRaw property
+ * @param {boolean} selected - Whether the pore is currently selected
+ */
+function _drawFilledMaskOverlay(p, selected) {
+  if (!p._maskRaw) return;
+  if (!S.imgState || !S.imgState.image) return;
+
+  const { x0, y0, mw, mh, data } = p._maskRaw;
+  // dsScale: auto-detect uses a downsampled image (max 1600px side).
+  // Wand pores use natural resolution so dsScale defaults to 1.
+  const dsScale = p._maskRaw.dsScale || 1;
+
+  const fit = S.imgState.fitScale || 1;
+  const ix  = S.imgState.imgX !== undefined ? S.imgState.imgX : 0;
+  const iy  = S.imgState.imgY !== undefined ? S.imgState.imgY : 0;
+
+  // Determine fill colour from pore type / state
+  const ignored = S.spec.u > 0 && (p.dia + 0.005) < S.spec.u;
+  const failing = !ignored && getPoreCheckDia(p, S.spec) > getPorePhiLimit(p, S.spec);
+  let rc, gc, bc;
+  if      (ignored)          { rc = 150; gc = 150; bc = 150; }
+  else if (failing)          { rc = 220; gc =  50; bc =  50; }
+  else if (p.type === 'gas') { rc =   0; gc = 120; bc = 200; }
+  else                       { rc = 160; gc = 100; bc =  40; }  // shrink
+
+  const baseAlpha = selected ? 0.78 : 0.60;
+  const edgeAlpha = selected ? 0.95 : 0.80;
+
+  // Build RGBA ImageData at mask resolution, paint only '1' pixels
+  const imgData = mctx.createImageData(mw, mh);
+  const d = imgData.data;
+  for (let i = 0; i < mw * mh; i++) {
+    if (!data[i]) continue;
+    const base = i * 4;
+    d[base]     = rc;
+    d[base + 1] = gc;
+    d[base + 2] = bc;
+    d[base + 3] = Math.round(baseAlpha * 255);
+  }
+
+  // Map mask bounding box to canvas coordinates.
+  // Mask pixel (x0,y0) corresponds to natural-image pixel (x0/dsScale, y0/dsScale)
+  // Natural image pixel → canvas: ix + px*fit
+  const cx0 = ix + (x0 / dsScale) * fit;
+  const cy0 = iy + (y0 / dsScale) * fit;
+  const cw  = (mw / dsScale) * fit;
+  const ch  = (mh / dsScale) * fit;
+
+  const osc = document.createElement('canvas');
+  osc.width  = mw;
+  osc.height = mh;
+  osc.getContext('2d').putImageData(imgData, 0, 0);
+
+  mctx.save();
+  mctx.imageSmoothingEnabled = false;  // crisp pixel boundary
+  mctx.drawImage(osc, cx0, cy0, cw, ch);
+
+  // Thin edge outline traced from the contour polygon for crispness
+  if (p._contour && p._contour.length >= 4) {
+    const pts = p._contour.map(([dx, dy]) => mmToCanvas(p.x + dx, p.y + dy));
+    const n   = pts.length;
+    mctx.beginPath();
+    mctx.moveTo((pts[0].x + pts[n-1].x) / 2, (pts[0].y + pts[n-1].y) / 2);
+    for (let i = 0; i < n; i++) {
+      const p0 = pts[(i + n - 1) % n], p1 = pts[i], p2 = pts[(i + 1) % n];
+      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+      mctx.quadraticCurveTo(p1.x, p1.y, mx, my);
+    }
+    mctx.closePath();
+    mctx.strokeStyle = `rgba(${rc},${gc},${bc},${edgeAlpha})`;
+    mctx.lineWidth   = selected ? 2.5 : 1.5;
+    mctx.stroke();
+  }
+  mctx.restore();
+}
+
+/**
+ * Computes the shoelace (Gauss's area) of a blob's row-scan contour polygon
+ * and converts the result from pixels² to mm².
+ * Used by Curve mode for pore area calculation.
+ *
+ * @param {Array} contour  - Array of [x,y] pixel pairs (row-scan outline)
+ * @param {number} pxPerMm - Pixels per mm at the detection resolution
+ * @returns {number} area in mm²
+ */
+function _shoelaceContourAreaMm2(contour, pxPerMm) {
+  if (!contour || contour.length < 3 || pxPerMm <= 0) return 0;
+  let area = 0;
+  const n = contour.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    area += contour[i][0] * contour[j][1];
+    area -= contour[j][0] * contour[i][1];
+  }
+  return Math.abs(area) / 2 / (pxPerMm * pxPerMm);
+}
+
+/**
+ * Returns the maximum Feret diameter (longest caliper distance) in mm
+ * by computing the maximum pairwise distance between contour points.
+ * Works in pixel-space (ds-resolution) and converts via pxPerMm.
+ *
+ * @param {Array}  contourPx  - Array of [x,y] pixel coords (blob contour in ds space)
+ * @param {number} pxPerMm    - pixels per mm at detection resolution
+ * @returns {number} max Feret length in mm
+ */
+function _maxFeretDiameterMm(contourPx, pxPerMm) {
+  if (!contourPx || contourPx.length < 2 || pxPerMm <= 0) return 0;
+  let maxD2 = 0;
+  const n = contourPx.length;
+  for (let i = 0; i < n - 1; i++) {
+    const [ax, ay] = contourPx[i];
+    for (let j = i + 1; j < n; j++) {
+      const dx = ax - contourPx[j][0], dy = ay - contourPx[j][1];
+      const d2 = dx * dx + dy * dy;
+      if (d2 > maxD2) maxD2 = d2;
+    }
+  }
+  return Math.sqrt(maxD2) / pxPerMm;
+}
+
+/**
+ * Returns the max cross-length (Feret diameter) of a pore in mm.
+ * For auto-detected / wand pores, returns the stored _maxLength.
+ * For manually placed circular pores, falls back to the diameter.
+ */
+function getPoreMaxLength(p) {
+  if (p._maxLength != null) return p._maxLength;
+  return p.dia; // circular manual pore: max length = diameter
+}
+
+/**
+ * Switches the pore render mode between 'curve' and 'solid'.
+ *
+ * CURVE — smooth Catmull-Rom contour outline; pore diameter derived from the
+ *         shoelace area of the simplified row-scan contour polygon.
+ *
+ * SOLID — pixel-exact filled mask; pore diameter derived from the true pixel
+ *         count of the threshold/flood-fill region (ground-truth area).
+ *
+ * Switching mode live-updates the `dia` on every auto-detected pore so that
+ * all evaluation metrics (porosity %, max-Φ, spacing) recalculate instantly.
+ */
+function setPoreRenderMode(mode) {
+  if (mode !== 'curve' && mode !== 'solid') return;
+  S.poreRenderMode = mode;
+
+  // Update button visual state
+  const btnCurve = document.getElementById('btn-mode-curve');
+  const btnSolid = document.getElementById('btn-mode-solid');
+  if (btnCurve) {
+    btnCurve.style.background = mode === 'curve' ? 'var(--c4)' : '';
+    btnCurve.style.color      = mode === 'curve' ? 'var(--pri)' : '';
+    btnCurve.style.fontWeight = mode === 'curve' ? '700' : '';
+  }
+  if (btnSolid) {
+    btnSolid.style.background = mode === 'solid' ? 'var(--c4)' : '';
+    btnSolid.style.color      = mode === 'solid' ? 'var(--pri)' : '';
+    btnSolid.style.fontWeight = mode === 'solid' ? '700' : '';
+  }
+
+  // Live-update pore diameters — only auto-detected pores have both values stored
+  const pores = AP();
+  if (pores) {
+    pores.forEach(p => {
+      if (!p._detectMeta) return;  // manually placed pore — leave as-is
+      if (mode === 'solid' && p._pixelDiaMm  != null) p.dia = p._pixelDiaMm;
+      if (mode === 'curve' && p._contourDiaMm != null) p.dia = p._contourDiaMm;
+    });
+  }
+
+  drawCanvas(); updateLiveMetrics(); updatePoreRegistry(); updateHeaderButtons();
+  toast(mode === 'solid'
+    ? '⬛ Solid mode — area from pixel count (ground-truth projection)'
+    : '▣ Curve mode — area from contour polygon', 'info');
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LIVE DETECTION — debounced auto re-detection triggered whenever a detect
+// parameter changes (threshold, min-Φ, blur, close, curve, aspect, max-area,
+// edge-reject, presets).  Always active — no toggle needed.
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _liveDetectTimer = null;
+
+/**
+ * Schedule a live re-detection after `delay` ms (default 480ms).
+ * Called automatically from all slider oninput and preset handlers.
+ * No-ops if no image or scale is loaded yet.
+ */
+function _scheduleLiveDetect(delay = 480) {
+  // Always-on: skip only if no image/calibration is present yet
+  if (!S.imgState || !S.imgState.image || !S.imgState.scalePxPerMm) return;
+  clearTimeout(_liveDetectTimer);
+
+  // Show a subtle "pending" indicator on the Auto button while waiting
+  const btnAuto = document.getElementById('btn-autodetect-tb') ||
+                  document.getElementById('btn-autodetect-top');
+  if (btnAuto && !btnAuto.disabled) {
+    btnAuto.style.outline = '2px solid var(--pri)';
+    btnAuto.style.outlineOffset = '1px';
+  }
+
+  _liveDetectTimer = setTimeout(() => {
+    if (btnAuto) { btnAuto.style.outline = ''; btnAuto.style.outlineOffset = ''; }
+    autoDetectPores();
+  }, delay);
+}
+
 // ── Blob extraction with PCA + row-scan outline ──────────────────────────────
 function _blobs(lbl,w,h,maxContourPts=32){
   const b={};
@@ -7673,7 +9122,7 @@ function _blobs(lbl,w,h,maxContourPts=32){
     const l=lbl[y*w+x]; if(!l) continue;
     if(!b[l]) b[l]={n:0,sx:0,sy:0,sxx:0,syy:0,sxy:0,
                     minX:x,maxX:x,minY:y,maxY:y,
-                    rowL:{},rowR:{}};
+                    rowL:{},rowR:{}, lbl:l};
     const o=b[l]; o.n++; o.sx+=x; o.sy+=y;
     o.sxx+=x*x; o.syy+=y*y; o.sxy+=x*y;
     if(x<o.minX)o.minX=x; if(x>o.maxX)o.maxX=x;
@@ -7710,7 +9159,10 @@ function _blobs(lbl,w,h,maxContourPts=32){
       ra,rb,angle,bboxW,bboxH,contour,
       aspect:Math.max(bboxW,bboxH)/shortSide,
       perimeter, fillRatio, elongation, circularity, roughness,
-      edgeTouching };
+      edgeTouching,
+      // Exposed for mask extraction in autoDetectPores
+      lbl: o.lbl, minX: o.minX, minY: o.minY, maxX: o.maxX, maxY: o.maxY
+    };
   });
 }
 
@@ -7768,7 +9220,48 @@ function _isInExclusionZone(xMm, yMm, zones){
   });
 }
 
-// ── Main auto-detect entry point ─────────────────────────────────────────────
+// ── Non-Maximum Suppression ───────────────────────────────────────────────────
+// Removes overlapping blob duplicates produced by the auto-detect pipeline.
+// Blobs are sorted by area (largest wins). A candidate is suppressed when its
+// centre falls inside any already-kept blob's equivalent-circle radius — the
+// most conservative possible criterion, which only removes genuine embedded
+// duplicates without touching legitimately adjacent pores.
+//
+// suppressRatio (default 1.0):
+//   1.0 = suppress only if candidate centre is inside winner's circle (strict)
+//   0.5 = suppress if centres are within half the winner's radius (aggressive)
+// ─────────────────────────────────────────────────────────────────────────────
+function _suppressOverlappingBlobs(blobs, suppressRatio = 1.0) {
+  // Sort descending by pixel area — largest blob always wins a conflict
+  const sorted = blobs.slice().sort((a, b) => b.area - a.area);
+  const kept   = [];
+
+  for (const candidate of sorted) {
+    const rc = candidate.dia / 2;   // candidate's equivalent radius (ds-pixels)
+    let suppress = false;
+
+    for (const winner of kept) {
+      const rw = winner.dia / 2;
+      const dx = candidate.cx - winner.cx;
+      const dy = candidate.cy - winner.cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      // Suppress if candidate's centre is inside the winner's circle, OR
+      // if the winner's centre is inside the candidate's circle (handles
+      // cases where a spurious large blob wraps around a smaller real one).
+      if (dist < rw * suppressRatio || dist < rc * suppressRatio) {
+        suppress = true;
+        break;
+      }
+    }
+
+    if (!suppress) kept.push(candidate);
+  }
+
+  return kept;
+}
+
+
 // ── Auto-detect: preset configurations ───────────────────────────────────────
 function setDetectPreset(name){
   const presets={
@@ -7790,6 +9283,8 @@ function setDetectPreset(name){
   // Max area %
   set('detect-max-area',p.maxA,'detect-max-area-val',v=>v+'%');
   toast('Preset: '+name.charAt(0).toUpperCase()+name.slice(1)+' (Threshold '+p.thr+', Min Φ '+p.minD+'mm, Max Area '+p.maxA+'%)');
+  // Trigger live re-detection with a short delay to let the toast settle
+  _scheduleLiveDetect(300);
 }
 
 function toggleDetectAdvanced(){
@@ -7812,8 +9307,8 @@ function _resetAdvancedDefaults(){
   // Reset edge reject
   const er = document.getElementById('detect-edge-reject');
   if(er) er.checked = true;
-  
   if(typeof toast === 'function') toast('Advanced parameters reset to defaults for castings','info');
+  _scheduleLiveDetect(300);
 }
 
 function applyImageFilters(){
@@ -7823,6 +9318,9 @@ function applyImageFilters(){
   S.imgState.contrast = c;
   S.imgState.cacheValid = false; // Force re-render of offscreen cache
   drawCanvas();
+  // Brightness/contrast directly affect the grayscale used for pore threshold detection,
+  // so re-schedule detection whenever these change (600ms debounce to avoid rapid-fire)
+  _scheduleLiveDetect(600);
 }
 
 function resetImageFilters(){
@@ -8111,7 +9609,7 @@ function autoDetectPores(){
 
       // Hole auto-flagging: perfectly circular large blobs
       let holeCount = 0;
-      const finalBlobs = valid.filter(b=>{
+      let finalBlobs = valid.filter(b=>{
         if(_isPossibleHole(b, S.spec.phi, dsNatPxMm)){
           holeCount++;
           return false; // exclude detected holes
@@ -8119,6 +9617,15 @@ function autoDetectPores(){
         return true;
       });
 
+      // ── Non-Maximum Suppression — remove embedded / overlapping blobs ───────
+      // After CC labelling blobs are pixel-disjoint, but their equivalent
+      // circles can still visually overlap (e.g. two adjacent tiny pores
+      // whose circles touch, or a morphological artefact that produces a
+      // small spurious blob inside a larger one).  NMS keeps the largest
+      // blob when any two circles' centres overlap.
+      const beforeNMS = finalBlobs.length;
+      finalBlobs = _suppressOverlappingBlobs(finalBlobs);
+      const nmsRemoved = beforeNMS - finalBlobs.length;
       if(!finalBlobs.length){
         let hint = 'try raising sensitivity';
         if(exclCount) hint += ` (${exclCount} inside exclusion zones, kept for review)`;
@@ -8135,20 +9642,59 @@ function autoDetectPores(){
       // came from a previous auto-detection so we get a clean fresh result.
       setAP(AP().filter(p => !p._detectMeta));
 
+      // ── Extract per-blob bounding-box pixel masks for Solid rendering ──────
+      // We map label IDs from finalBlobs back into the labels[] array to build
+      // a compact Uint8Array mask cropped to each blob's bounding box.
+      const finalLabelSet = new Set(finalBlobs.map(fb => fb.lbl).filter(Boolean));
+      const blobMaskMap = {};
+      if (finalLabelSet.size > 0) {
+        for (const fb of finalBlobs) {
+          if (!fb.lbl || fb.minX === undefined) continue;
+          const mw = fb.maxX - fb.minX + 1, mh = fb.maxY - fb.minY + 1;
+          blobMaskMap[fb.lbl] = {
+            x0: fb.minX, y0: fb.minY, mw, mh,
+            imgW: W, imgH: H,
+            dsScale,          // needed by _drawFilledMaskOverlay to map back to canvas
+            data: new Uint8Array(mw * mh)
+          };
+        }
+        // Single pass over label map to fill mask data
+        for (let y = 0; y < H; y++) {
+          const yoff = y * W;
+          for (let x = 0; x < W; x++) {
+            const l = labels[yoff + x];
+            if (!finalLabelSet.has(l)) continue;
+            const m = blobMaskMap[l];
+            if (m) m.data[(y - m.y0) * m.mw + (x - m.x0)] = 1;
+          }
+        }
+      }
+
       let added=0, gasCount=0, shrinkCount=0;
       finalBlobs.forEach(b=>{
         const xMm=+(b.cx/dsNatPxMm).toFixed(3);
         const yMm=+(b.cy/dsNatPxMm).toFixed(3);
-        const diaMm=+(b.dia/dsNatPxMm).toFixed(3);
+        // ── Pixel-count area (ground truth filled area) ──────────────────────
+        const pixelAreaMm2  = b.area / (dsNatPxMm * dsNatPxMm);
+        const pixelDiaMm    = 2 * Math.sqrt(pixelAreaMm2 / Math.PI);
+        // ── Contour polygon area (shoelace of simplified row-scan outline) ───
+        const contourAreaMm2  = _shoelaceContourAreaMm2(b.contour, dsNatPxMm);
+        const contourDiaMm    = contourAreaMm2 > 0
+          ? 2 * Math.sqrt(contourAreaMm2 / Math.PI)
+          : pixelDiaMm;   // fallback to pixel if contour degenerate
+        // Active diameter depends on current render mode
+        const activeDiaMm = (S.poreRenderMode === 'solid') ? pixelDiaMm : contourDiaMm;
         const cls=_classifyDetectedPore(b);
-        const rxMm=Math.max(diaMm/2, b.ra/dsNatPxMm/2);
-        const ryMm=Math.max(diaMm/4, b.rb/dsNatPxMm/2);
+        const rxMm=Math.max(activeDiaMm/2, b.ra/dsNatPxMm/2);
+        const ryMm=Math.max(activeDiaMm/4, b.rb/dsNatPxMm/2);
         const contourMm = (b.contour||[]).map(([bx,by])=>
           [+((bx-b.cx)/dsNatPxMm).toFixed(4), +((by-b.cy)/dsNatPxMm).toFixed(4)]
         );
         const pore={
           id:Date.now()+Math.random(),
-          x:xMm, y:yMm, dia:diaMm, type:cls.type, zone:'',
+          x:xMm, y:yMm,
+          dia: +activeDiaMm.toFixed(3),
+          type:cls.type, zone:'',
           _rx:rxMm, _ry:ryMm, _angle:b.angle,
           _contour: contourMm.length>=4 ? contourMm : null,
           _detectMeta: {
@@ -8157,7 +9703,36 @@ function autoDetectPores(){
             elongation: +b.elongation.toFixed(3),
             fillRatio: +b.fillRatio.toFixed(3),
             roughness: +b.roughness.toFixed(3)
-          }
+          },
+          // Both area values stored so mode can be switched post-detection
+          _pixelDiaMm:     +pixelDiaMm.toFixed(3),
+          _contourDiaMm:   +contourDiaMm.toFixed(3),
+          _pixelAreaMm2:   +pixelAreaMm2.toFixed(4),
+          _contourAreaMm2: +contourAreaMm2.toFixed(4),
+          // Max cross-length: true Feret maximum (longest caliper distance across the pore).
+          // Computed by exhaustive pairwise distance on the blob's row-scan contour (pixel coords).
+          // Falls back to bounding-box diagonal if contour is degenerate (< 2 points).
+          _maxLength: (() => {
+            const feretPx = _maxFeretDiameterMm(b.contour, dsNatPxMm);
+            if (feretPx > 0) return +feretPx.toFixed(3);
+            // Fallback: bounding-box diagonal (conservative overestimate)
+            return +(Math.sqrt(
+              Math.pow((b.maxX - b.minX + 1) / dsNatPxMm, 2) +
+              Math.pow((b.maxY - b.minY + 1) / dsNatPxMm, 2)
+            )).toFixed(3);
+          })(),
+          // ── Scale-invariant native pixel anchor (FIXES scatter-after-rescale) ──
+          // Store centroid and contour in native image pixel space so we can always
+          // re-derive mm coordinates using whatever natPxPerMm is current at render time.
+          _nativePxX: b.cx / dsScale,          // centroid X in native image pixels
+          _nativePxY: b.cy / dsScale,           // centroid Y in native image pixels
+          _detNatPxPerMm: natPxPerMm,           // natPxPerMm AT detection time (drift detection)
+          // Contour stored as native pixel offsets from centroid (scale-independent)
+          _contourPx: (b.contour||[]).length >= 4
+            ? (b.contour||[]).map(([bx,by]) => [+(bx/dsScale - b.cx/dsScale), +(by/dsScale - b.cy/dsScale)])
+            : null,
+          // Raw pixel mask for Solid rendering
+          _maskRaw: blobMaskMap[b.lbl] || null
         };
         pore.zone=getPoreZone(pore);
         AP().push(pore);
@@ -8175,10 +9750,14 @@ function autoDetectPores(){
         if(removed>0) toast(`ℹ️ ${removed} pore${removed>1?'s':''} outside datum square excluded`);
       }
       S.imgState.autoDetected = true;
-      drawCanvas(); updateLiveMetrics(); updatePoreRegistry();
+      // Re-apply current render mode so button UI syncs and pore diameters are correct
+      // This is the key step that ensures solid mode stays locked after every re-detection
+      setPoreRenderMode(S.poreRenderMode);
+      updateHeaderButtons();
       let msg = `✅ ${added} pore${added>1?'s':''} detected · ${gasCount} gas · ${shrinkCount} shrink · Otsu=${globalOtsu} · 🔬 CLAHE+BndSup`;
       if(exclCount) msg += ` · ${exclCount} in excl. zones`;
       if(holeCount) msg += ` · ${holeCount} holes excluded`;
+      if(nmsRemoved > 0) msg += ` · ${nmsRemoved} overlap${nmsRemoved>1?'s':''} removed`;
       toast(msg);
     }catch(e){
       toast('Detection error: '+e.message,'err');
@@ -8532,14 +10111,15 @@ function downloadCSV() {
   
   // Pore list
   csv += "PORE LIST\n";
-  csv += "ID,X (mm),Y (mm),Zone,Raw Dia (mm),Effective Dia (mm),Effective Area (mm2)\n";
+  csv += "ID,X (mm),Y (mm),Zone,Raw Dia (mm),Max Length (mm),Effective Dia (mm),Effective Area (mm2)\n";
   
   const sortedPores = [...evalPores].sort((a,b) => ((b._effectiveDia||b.dia) - (a._effectiveDia||a.dia)));
   
   sortedPores.forEach(p => {
     const eDia = p._effectiveDia || p.dia;
     const eArea = p._effectiveArea || Math.PI*Math.pow(eDia/2, 2);
-    csv += `${p.id},${p.x.toFixed(4)},${p.y.toFixed(4)},${p.zone||'None'},${p.dia.toFixed(4)},${eDia.toFixed(4)},${eArea.toFixed(4)}\n`;
+    const maxL = getPoreMaxLength(p);
+    csv += `${p.id},${p.x.toFixed(4)},${p.y.toFixed(4)},${p.zone||'None'},${p.dia.toFixed(4)},${maxL.toFixed(4)},${eDia.toFixed(4)},${eArea.toFixed(4)}\n`;
   });
   
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
