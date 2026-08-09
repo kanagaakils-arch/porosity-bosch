@@ -571,7 +571,7 @@
       </div>
 
       <!-- ENHANCE group -->
-      <div style="display:flex;align-items:center;gap:4px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:3px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
         <span class="tb-lbl">ENHANCE:</span>
         <div class="slider-group" title="Brightness — adjusts image brightness before detection. Increase to reveal dim pores in underexposed images. Changes instantly re-trigger detection.">
           <span style="font-size:9px;font-weight:700;color:var(--dim)">Bright</span>
@@ -707,6 +707,11 @@
           title="Snap to pore edge — snaps measurement clicks to nearest pore boundary">🧲 Snap</button>
         <button class="btn-hz" onclick="clearAllMeasAnnots()" style="font-size:9px;padding:1px 5px;height:22px"
           title="Clear all measurement annotations">✕ Clear Meas</button>
+        <div style="width:1px;height:14px;background:var(--bd2);margin:0 2px"></div>
+        <button class="btn-hz" id="btn-heatmap" onclick="toggleHeatMap()" style="font-size:9px;padding:1px 6px;height:22px"
+          title="Heat Map — toggle a porosity density colour overlay on the canvas">🌡 Heat Map</button>
+        <input id="heatmap-opacity" type="range" min="10" max="100" value="55" style="display:none;width:40px;height:14px;cursor:pointer"
+          oninput="setHeatMapOpacity(this.value)" title="Heat map opacity">
       </div>
 
       <!-- LINKS group -->
@@ -929,13 +934,21 @@
         <!-- datum/excl registry sections also live on analysis tab -->
         <div id="datum-registry-section" style="border-top:1px solid var(--bd);flex-shrink:0"></div>
         <div id="excl-registry-section"  style="border-top:1px solid var(--bd);flex-shrink:0"></div>
+        <!-- Zone statistics (populated by JS renderZoneStats) -->
+        <div id="zone-stats-section" style="flex-shrink:0"></div>
+        <!-- Size distribution histogram (populated by JS renderSizeHistogram) -->
+        <div id="size-histogram-section" style="flex-shrink:0"></div>
       </div>
 
       <!-- ── TAB 3: Measurements ── -->
       <div id="reg-panel-measurements" style="flex:1;overflow-y:auto;display:none;flex-direction:column">
         <div style="padding:5px 10px 4px;font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--bd);background:rgba(255,255,255,.02);display:flex;align-items:center;justify-content:space-between">
           <span>Measurement Annotations</span>
-          <button onclick="exportMeasCSV()" style="font-size:8px;padding:2px 6px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);border-radius:3px;cursor:pointer;color:#34d399">⬇ CSV</button>
+          <div style="display:flex;gap:4px;align-items:center">
+            <button id="meas-undo-btn" onclick="undoMeas()" disabled style="font-size:8px;padding:2px 5px;background:rgba(255,255,255,.06);border:1px solid var(--bd);border-radius:3px;cursor:pointer;color:var(--dim)" title="Undo (Ctrl+Z)">↩ Undo</button>
+            <button id="meas-redo-btn" onclick="redoMeas()" disabled style="font-size:8px;padding:2px 5px;background:rgba(255,255,255,.06);border:1px solid var(--bd);border-radius:3px;cursor:pointer;color:var(--dim)" title="Redo (Ctrl+Shift+Z)">↪ Redo</button>
+            <button onclick="exportMeasCSV()" style="font-size:8px;padding:2px 6px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);border-radius:3px;cursor:pointer;color:#34d399">⬇ CSV</button>
+          </div>
         </div>
         <div id="meas-list-panel" style="flex:1;padding:6px 8px">
           <div style="font-size:10px;color:var(--dim);text-align:center;padding:16px">No measurements yet.<br>Use MEASURE tools in the toolbar.</div>

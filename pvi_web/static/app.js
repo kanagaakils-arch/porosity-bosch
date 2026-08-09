@@ -2015,7 +2015,7 @@ function drawCanvas(){
 
   // Draw pores
   AP().forEach(p=>{
-    drawPore(p, p.id===S.selectedId);
+    drawPore(p, p.id===S.selectedId, !!p._histHL);
   });
 
   // Measure tool active line
@@ -2036,6 +2036,11 @@ function drawCanvas(){
   // Scale ruler (bottom-left)
   drawRuler();
 
+  // ── Heat Map Overlay ──
+  if (typeof window.renderHeatMap === 'function') {
+    window.renderHeatMap(mctx, AP());
+  }
+
   // ── Measurement Annotations (new tools: angle/ruler/lasso/caliper/refline) ──
   if (typeof window.drawMeasAnnotations === 'function') {
     window.drawMeasAnnotations(mctx);
@@ -2048,7 +2053,7 @@ function drawCanvas(){
   if(OC) OC.style.opacity = (OC.style.opacity === '0.999') ? '1' : '0.999';
 }
 
-function drawPore(p, selected){
+function drawPore(p, selected, histHL){
   const {scale}=S.cv;
   const drawScale=(S.imgMode&&S.imgState.scalePxPerMm)?S.imgState.scalePxPerMm:scale;
   const r=p.dia*drawScale/2;
@@ -2058,6 +2063,17 @@ function drawPore(p, selected){
   const failPhi = !ignored && getPoreCheckDia(p, S.spec) > getPorePhiLimit(p, S.spec);
   const failMaxL = !ignored && S.spec.max_l_limit != null && S.spec.max_l_limit > 0 && getPoreMaxLength(p) > S.spec.max_l_limit;
   const failing = failPhi || failMaxL;
+  // Histogram bin highlight glow
+  if (histHL) {
+    mctx.save();
+    mctx.shadowColor = '#fbbf24';
+    mctx.shadowBlur  = 14;
+    mctx.strokeStyle = '#fbbf24';
+    mctx.lineWidth   = 2.5;
+    mctx.beginPath(); mctx.arc(cx, cy, r + 4, 0, Math.PI*2); mctx.stroke();
+    mctx.shadowBlur  = 0;
+    mctx.restore();
+  }
   // ── Exclusion zone crop status ────────────────────────────────────────────
   const _cs = _poreExclCropStatus(p);
   if(_cs.status === 'full'){
@@ -2516,9 +2532,9 @@ function bindCanvasEvents(){
     if(e.key==='Shift') { window._scaleShift=true;
       if(S.imgState.imgTool==='scale_line' && S.imgState.scaleDrawing) drawCanvas();
     }
-    // Pass key to measure engine (Enter=finish, Escape=cancel)
+    // Pass key to measure engine (Enter=finish, Escape=cancel, Ctrl+Z=undo, Ctrl+Y=redo)
     if (typeof window._measHandleKey === 'function') {
-      if (window._measHandleKey(e.key)) { e.preventDefault(); }
+      if (window._measHandleKey(e.key, e.ctrlKey || e.metaKey, e.shiftKey)) { e.preventDefault(); }
     }
   });
   document.addEventListener('keyup', e=>{
@@ -7184,9 +7200,148 @@ function buildImageReportSection(tab, page, spec, specIndex, imageIndex){
     <h4>Compliance Checks</h4>
     <table><thead><tr><th>Parameter</th><th>Measured</th><th>Limit</th><th>Result</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table>
     ${datumExclSection}
-    <h4>Pore Data</h4>
-    <table><thead><tr><th>#</th><th>Φ (mm)</th><th>Max L (mm)</th><th>X (mm)</th><th>Y (mm)</th><th>Zone</th><th>Type</th><th>DRI</th><th>Status</th></tr></thead><tbody>${poreRows}</tbody></table>
+    <h4>Pore Data + Shape Metrics</h4>
+    <table><thead><tr><th>#</th><th>Φ (mm)</th><th>Feret Max</th><th>X (mm)</th><th>Y (mm)</th><th>Zone</th><th>Type</th><th>Circ.</th><th>A.R.</th><th>Nearest mm</th><th>DRI</th><th>Status</th></tr></thead><tbody>${(() => {
+      const pmr = typeof window.getPoreMetricsForReport==='function' ? window.getPoreMetricsForReport(page.pores||[]) : [];
+      return page.pores.map((p,i) => {
+        const pm = pmr.find(x=>x.id===p.id)||{};
+        const pass = !data.failing_pores?.includes(p.id);
+        const circ = pm.circularity != null ? pm.circularity.toFixed(2) : '—';
+        const ar   = pm.aspect_ratio != null ? pm.aspect_ratio.toFixed(2) : '—';
+        const nn   = pm.nn != null ? pm.nn.toFixed(2) : '—';
+        const fmax = pm.fmax != null ? pm.fmax.toFixed(3) : p.dia.toFixed(3);
+        return `<tr style="background:${pass?'transparent':'#fff5f5'}"><td>${i+1}</td><td>${p.dia.toFixed(3)}</td><td>${fmax}</td><td>${p.x.toFixed(2)}</td><td>${p.y.toFixed(2)}</td><td>${pm.zone||p.zone||'—'}</td><td>${pm.type||p.type||'gas'}</td><td>${circ}</td><td>${ar}</td><td>${nn}</td><td>${p.dri!=null?p.dri.toFixed(2):'—'}</td><td style="color:${pass?'#087f5b':'#c92a2a'};font-weight:700">${pass?'OK':'FAIL'}</td></tr>`;
+      }).join('');
+    })()}</tbody></table>
+    ${(() => {
+      const annots = typeof window.getMeasAnnotsForReport==='function' ? window.getMeasAnnotsForReport() : [];
+      if (!annots.length) return '';
+      return `<h4>Measurement Annotations</h4><table><thead><tr><th>#</th><th>Tool</th><th>Label</th><th>Result</th></tr></thead><tbody>${
+        annots.map((a,i)=>`<tr><td>${i+1}</td><td>${a.type}</td><td>${a.label||'—'}</td><td>${a.result||'—'}</td></tr>`).join('')
+      }</tbody></table>`;
+    })()}
   </section>`;
+}
+
+// ── FEATURE 3: Zone Statistics ─────────────────────────────────────────────────
+function renderZoneStats() {
+  const el = document.getElementById('zone-stats-section');
+  if (!el) return;
+  const pores = AP();
+  if (!pores.length) { el.innerHTML = ''; return; }
+
+  const zones = [
+    { key:'HR', label:'HR Zone', color:'#f59e0b' },
+    { key:'HK', label:'HK Zone', color:'#8b5cf6' },
+    { key:'NR', label:'NR Zone', color:'#06b6d4' },
+    { key:'outside', label:'Outside Zones', color:'#64748b' },
+  ];
+
+  const rows = zones.map(z => {
+    const zp = pores.filter(p => (p.zone || 'outside') === z.key);
+    if (!zp.length) return '';
+    const count = zp.length;
+    const maxPhi = Math.max(...zp.map(p => p.dia));
+    const avgPhi = zp.reduce((s,p) => s + p.dia, 0) / count;
+    const netInspEl = document.getElementById('area-net');
+    const netTxt = netInspEl ? netInspEl.textContent : '';
+    const netMm2 = parseFloat(netTxt) || null;
+    const areaPct = netMm2 ? (zp.reduce((s,p) => s + Math.PI*(p.dia/2)**2, 0) / netMm2 * 100).toFixed(2) + '%' : '—';
+    return `<div style="display:grid;grid-template-columns:80px 28px 42px 50px 44px;gap:3px;align-items:center;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:9px">
+      <div style="display:flex;align-items:center;gap:4px"><div style="width:6px;height:6px;border-radius:50%;background:${z.color};flex-shrink:0"></div><span style="color:var(--dim)">${z.label}</span></div>
+      <span style="font-family:monospace;font-weight:700">${count}</span>
+      <span style="font-family:monospace;color:#34d399">${areaPct}</span>
+      <span style="font-family:monospace">${maxPhi.toFixed(2)}</span>
+      <span style="font-family:monospace;color:var(--dim)">${avgPhi.toFixed(2)}</span>
+    </div>`;
+  }).join('');
+
+  if (!rows.trim()) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `
+    <div style="padding:8px 10px;border-top:1px solid var(--bd);flex-shrink:0">
+      <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px">Zone Breakdown</div>
+      <div style="display:grid;grid-template-columns:80px 28px 42px 50px 44px;gap:3px;padding-bottom:3px;border-bottom:1px solid rgba(255,255,255,.1)">
+        <span style="font-size:8px;font-weight:700;color:var(--dim);text-transform:uppercase">Zone</span>
+        <span style="font-size:8px;font-weight:700;color:var(--dim);text-transform:uppercase">#</span>
+        <span style="font-size:8px;font-weight:700;color:var(--dim);text-transform:uppercase">Area%</span>
+        <span style="font-size:8px;font-weight:700;color:var(--dim);text-transform:uppercase">MaxΦ</span>
+        <span style="font-size:8px;font-weight:700;color:var(--dim);text-transform:uppercase">AvgΦ</span>
+      </div>
+      ${rows}
+    </div>`;
+}
+
+// ── FEATURE 4: Pore Size Distribution Histogram ─────────────────────────────────
+let _histHighlightBin = null;
+function renderSizeHistogram() {
+  const el = document.getElementById('size-histogram-section');
+  if (!el) return;
+  const pores = AP();
+  if (!pores.length) { el.innerHTML = ''; return; }
+
+  const BINS = [
+    { label: '<0.5', min: 0,    max: 0.5 },
+    { label: '0.5–1', min: 0.5,  max: 1.0 },
+    { label: '1–1.5', min: 1.0,  max: 1.5 },
+    { label: '1.5–2', min: 1.5,  max: 2.0 },
+    { label: '>2',   min: 2.0,  max: Infinity },
+  ];
+  const binned = BINS.map(b => ({
+    ...b,
+    count: pores.filter(p => p.dia >= b.min && p.dia < b.max).length,
+    ids:   pores.filter(p => p.dia >= b.min && p.dia < b.max).map(p => p.id),
+  }));
+  const maxCount = Math.max(1, ...binned.map(b => b.count));
+  const total    = pores.length;
+
+  const COLORS = ['#60a5fa','#34d399','#fbbf24','#f87171','#c084fc'];
+  const bars = binned.map((b, i) => {
+    const pct = (b.count / maxCount * 100).toFixed(1);
+    const cumPct = (binned.slice(0, i+1).reduce((s,x)=>s+x.count,0)/total*100).toFixed(1);
+    const isHL = _histHighlightBin === i;
+    return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;cursor:pointer;padding:2px" onclick="highlightPoresByBin(${i})" title="${b.count} pores (${cumPct}% cumulative)">
+      <span style="font-size:8px;font-family:monospace;color:${COLORS[i]};font-weight:700">${b.count}</span>
+      <div style="width:100%;display:flex;flex-direction:column;justify-content:flex-end;height:40px">
+        <div style="width:100%;border-radius:3px 3px 0 0;background:${COLORS[i]};opacity:${isHL?1:0.7};height:${pct}%;min-height:${b.count?2:0}px;transition:height .3s,opacity .2s"></div>
+      </div>
+      <span style="font-size:7px;color:var(--dim);margin-top:2px;text-align:center">Φ${b.label}</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="padding:8px 10px;border-top:1px solid var(--bd);flex-shrink:0">
+      <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;display:flex;align-items:center;justify-content:space-between">
+        <span>Size Distribution</span>
+        ${_histHighlightBin !== null ? `<button onclick="clearHistogramHL()" style="font-size:8px;background:none;border:none;color:var(--dim);cursor:pointer">clear ×</button>` : ''}
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:3px;height:64px">${bars}</div>
+    </div>`;
+}
+
+function highlightPoresByBin(binIdx) {
+  const BINS = [
+    { min: 0,   max: 0.5 },
+    { min: 0.5, max: 1.0 },
+    { min: 1.0, max: 1.5 },
+    { min: 1.5, max: 2.0 },
+    { min: 2.0, max: Infinity },
+  ];
+  _histHighlightBin = binIdx;
+  // Visually highlight matching pores via a temporary glow
+  const b = BINS[binIdx];
+  AP().forEach(p => {
+    p._histHL = (p.dia >= b.min && p.dia < b.max);
+  });
+  drawCanvas();
+  renderSizeHistogram();
+}
+
+function clearHistogramHL() {
+  _histHighlightBin = null;
+  AP().forEach(p => { p._histHL = false; });
+  drawCanvas();
+  renderSizeHistogram();
 }
 
 async function downloadPDF() {

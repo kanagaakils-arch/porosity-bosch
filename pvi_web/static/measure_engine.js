@@ -687,7 +687,9 @@ window._measHandleMouseMove = function(mm) {
   window.handleMeasToolMouseMove(mm);
 };
 
-window._measHandleKey = function(key) {
+window._measHandleKey = function(key, ctrl, shift) {
+  if (ctrl && key === 'z') { undoMeas(); return true; }
+  if (ctrl && (key === 'y' || (shift && key === 'z'))) { redoMeas(); return true; }
   return window.handleMeasToolKey(key);
 };
 
@@ -696,3 +698,186 @@ document.addEventListener('DOMContentLoaded', () => {
   _renderMeasList();
   _updateMeasHUD();
 });
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 1: HEAT MAP OVERLAY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let _heatMapEnabled = false;
+let _heatMapOpacity = 0.55;
+
+window.toggleHeatMap = function() {
+  _heatMapEnabled = !_heatMapEnabled;
+  const btn = document.getElementById('btn-heatmap');
+  if (btn) btn.classList.toggle('on', _heatMapEnabled);
+  const slider = document.getElementById('heatmap-opacity');
+  if (slider) slider.style.display = _heatMapEnabled ? 'inline-block' : 'none';
+  if (typeof drawCanvas === 'function') drawCanvas();
+};
+
+window.setHeatMapOpacity = function(val) {
+  _heatMapOpacity = parseFloat(val) / 100;
+  if (typeof drawCanvas === 'function') drawCanvas();
+};
+
+window.renderHeatMap = function(ctx, pores) {
+  if (!_heatMapEnabled || !pores || pores.length === 0) return;
+  const MC = document.getElementById('main-canvas');
+  if (!MC) return;
+  const W = MC.offsetWidth || 800, H = MC.offsetHeight || 600;
+
+  // Offscreen canvas for heat accumulation
+  const off = document.createElement('canvas');
+  off.width = Math.round(W); off.height = Math.round(H);
+  const octx = off.getContext('2d');
+
+  // Build heat layer — each pore contributes a radial gradient weighted by dia²
+  pores.forEach(p => {
+    const c = (typeof mmToCanvas === 'function') ? mmToCanvas(p.x, p.y) : { x: p.x, y: p.y };
+    const drawScale = (typeof S !== 'undefined' && S.imgMode && S.imgState && S.imgState.scalePxPerMm)
+      ? S.imgState.scalePxPerMm
+      : (typeof S !== 'undefined' ? S.cv.scale : 40);
+    const r = Math.max(16, p.dia * drawScale * 2.5); // influence radius
+    const weight = Math.min(1, p.dia * p.dia / 4);   // larger pores = hotter
+
+    const grad = octx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
+    grad.addColorStop(0,    `rgba(255,30,0,${(0.28 * weight).toFixed(3)})`);
+    grad.addColorStop(0.25, `rgba(255,160,0,${(0.20 * weight).toFixed(3)})`);
+    grad.addColorStop(0.55, `rgba(80,180,255,${(0.12 * weight).toFixed(3)})`);
+    grad.addColorStop(1,    'rgba(0,0,0,0)');
+
+    octx.beginPath();
+    octx.arc(c.x, c.y, r, 0, Math.PI * 2);
+    octx.fillStyle = grad;
+    octx.fill();
+  });
+
+  // Composite onto main canvas at controlled opacity
+  ctx.save();
+  ctx.globalAlpha = _heatMapOpacity;
+  ctx.drawImage(off, 0, 0);
+  ctx.globalAlpha = 1;
+
+  // Colour-scale legend (bottom-right)
+  const lx = W - 90, ly = H - 50;
+  const lgrd = ctx.createLinearGradient(lx, 0, lx + 70, 0);
+  lgrd.addColorStop(0,   'rgba(80,180,255,0.9)');
+  lgrd.addColorStop(0.5, 'rgba(255,160,0,0.9)');
+  lgrd.addColorStop(1,   'rgba(255,30,0,0.9)');
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.beginPath(); ctx.roundRect(lx - 6, ly - 16, 84, 34, 4); ctx.fill();
+  ctx.fillStyle = lgrd;
+  ctx.fillRect(lx, ly, 70, 8);
+  ctx.font = '8px Space Grotesk, system-ui';
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.textAlign = 'left';  ctx.fillText('Low',  lx,     ly - 4);
+  ctx.textAlign = 'right'; ctx.fillText('High', lx + 70, ly - 4);
+  ctx.textAlign = 'start';
+  ctx.restore();
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 2: UNDO / REDO FOR MEASUREMENT ANNOTATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const MEAS_HISTORY  = [];  // stack of snapshot arrays
+const MEAS_REDO_STK = [];
+const MEAS_MAX_HIST = 25;
+
+function _snapMeas() {
+  return JSON.parse(JSON.stringify(window.MEAS_ANNOTS));
+}
+
+// Call this BEFORE every mutating operation
+window.pushMeasHistory = function() {
+  MEAS_HISTORY.push(_snapMeas());
+  MEAS_REDO_STK.length = 0; // clear redo on new action
+  if (MEAS_HISTORY.length > MEAS_MAX_HIST) MEAS_HISTORY.shift();
+  _syncMeasUndoButtons();
+};
+
+function undoMeas() {
+  if (MEAS_HISTORY.length === 0) return;
+  MEAS_REDO_STK.push(_snapMeas());
+  window.MEAS_ANNOTS = MEAS_HISTORY.pop();
+  _renderMeasList(); _updateMeasHUD();
+  if (typeof drawCanvas === 'function') drawCanvas();
+  _syncMeasUndoButtons();
+}
+
+function redoMeas() {
+  if (MEAS_REDO_STK.length === 0) return;
+  MEAS_HISTORY.push(_snapMeas());
+  window.MEAS_ANNOTS = MEAS_REDO_STK.pop();
+  _renderMeasList(); _updateMeasHUD();
+  if (typeof drawCanvas === 'function') drawCanvas();
+  _syncMeasUndoButtons();
+}
+
+function _syncMeasUndoButtons() {
+  const btnU = document.getElementById('meas-undo-btn');
+  const btnR = document.getElementById('meas-redo-btn');
+  if (btnU) btnU.disabled = MEAS_HISTORY.length === 0;
+  if (btnR) btnR.disabled = MEAS_REDO_STK.length === 0;
+}
+
+window.undoMeas = undoMeas;
+window.redoMeas = redoMeas;
+
+// Patch _commitAnnot to push history before each commit
+const _origCommitAnnot = window._measCommitAnnotRef || null;
+// Wrap the internal commit function to auto-push history
+const _origWrapRef = window.clearAllMeasAnnots;
+window.clearAllMeasAnnots = function() {
+  window.pushMeasHistory();
+  window.MEAS_ANNOTS = [];
+  _measPts = []; _measActiveTool = null;
+  _renderMeasList(); drawCanvas && drawCanvas(); _updateMeasHUD();
+};
+window.deleteMeasAnnot = function(id) {
+  window.pushMeasHistory();
+  window.MEAS_ANNOTS = window.MEAS_ANNOTS.filter(x => x.id !== id);
+  _renderMeasList(); drawCanvas && drawCanvas(); _updateMeasHUD();
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 5 HELPERS: REPORT EXPORT DATA
+// ═══════════════════════════════════════════════════════════════════════════════
+
+window.getMeasAnnotsForReport = function() {
+  return window.MEAS_ANNOTS.map(a => ({
+    id:     a.id,
+    type:   a.type,
+    label:  a.label,
+    result: a.result,
+    pts:    a.pts,
+    color:  a.color,
+  }));
+};
+
+window.getPoreMetricsForReport = function(pores) {
+  return (pores || []).map(p => {
+    const m = window.computePoreMetrics ? window.computePoreMetrics(p) : {};
+    const meta = (window.PORE_META || {})[p.type || 'gas'] || { label: p.type || 'gas' };
+    return {
+      id:          p.id,
+      dia:         p.dia,
+      fmax:        m.fmax   || p.dia,
+      fmin:        m.fmin   || p.dia,
+      area:        m.area   || (Math.PI * (p.dia/2) ** 2),
+      circularity: m.circ   || 1,
+      aspect_ratio:m.ar     || 1,
+      roundness:   m.roundness || 1,
+      convexity:   m.convexity || 1,
+      zone:        p.zone   || '—',
+      type:        meta.label,
+      x:           p.x,
+      y:           p.y,
+      nn:          m.nn,
+    };
+  });
+};
+
