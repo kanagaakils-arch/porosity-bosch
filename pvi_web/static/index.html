@@ -552,11 +552,11 @@
     </button>
   </div>
 
-  <!-- IMAGE TOOLBAR — two-row compact layout -->
+  <!-- IMAGE TOOLBAR — 3-row redesigned layout -->
   <div id="img-toolbar" class="show" style="position:relative;overflow:visible;display:flex;flex-direction:column;background:var(--c1);border-bottom:1px solid var(--bd);gap:0">
 
-    <!-- ── ROW 1: Image ops + Pore action buttons ── -->
-    <div style="display:flex;align-items:center;gap:3px;padding:4px 8px;border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none">
+    <!-- ══ ROW 1: Image Preparation & Actions ══ -->
+    <div style="display:flex;align-items:center;gap:3px;padding:3px 8px;border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;background:rgba(255,255,255,.015)">
 
       <!-- PREPARE group -->
       <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
@@ -564,78 +564,80 @@
         <button class="btn-hz" id="btn-crop" onclick="imgToolActivate('crop')" title="Crop image to region of interest — removes excess border areas">✂ Crop</button>
         <button class="btn-hz" id="btn-applycrop" style="display:none" onclick="applyCrop()">✓ Apply</button>
         <button class="btn-hz" id="btn-cancelcrop" style="display:none" onclick="cancelCrop()">✕ Cancel</button>
-        <button class="btn-hz" onclick="rotateImage(-90)" title="Rotate 90° counter-clockwise — fix orientation before analysis">↺ CCW</button>
-        <button class="btn-hz" onclick="rotateImage(90)" title="Rotate 90° clockwise — fix orientation before analysis">↻ CW</button>
-        <button class="btn-hz" onclick="flipImage('h')" title="Flip horizontally — mirror image left↔right">⇄ Flip H</button>
-        <button class="btn-hz" onclick="flipImage('v')" title="Flip vertically — mirror image top↔bottom">⇅ Flip V</button>
+        <button class="btn-hz" onclick="rotateImage(-90)" title="Rotate 90° counter-clockwise">↺ CCW</button>
+        <button class="btn-hz" onclick="rotateImage(90)"  title="Rotate 90° clockwise">↻ CW</button>
+        <button class="btn-hz" onclick="flipImage('h')"   title="Flip horizontally">⇄ Flip H</button>
+        <button class="btn-hz" onclick="flipImage('v')"   title="Flip vertically">⇅ Flip V</button>
       </div>
 
       <!-- ENHANCE group -->
       <div style="display:flex;align-items:center;gap:3px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
         <span class="tb-lbl">ENHANCE:</span>
-        <div class="slider-group" title="Brightness — adjusts image brightness before detection. Increase to reveal dim pores in underexposed images. Changes instantly re-trigger detection.">
+        <div class="slider-group" title="Brightness">
           <span style="font-size:9px;font-weight:700;color:var(--dim)">Bright</span>
           <input type="range" id="img-brightness" min="0" max="200" value="100" step="5" oninput="applyImageFilters()" style="width:50px">
         </div>
-        <div class="slider-group" title="Contrast — sharpens pore boundaries vs. metal matrix before detection. Increase for overexposed or low-contrast images. Changes instantly re-trigger detection.">
+        <div class="slider-group" title="Contrast">
           <span style="font-size:9px;font-weight:700;color:var(--dim)">Contrast</span>
           <input type="range" id="img-contrast" min="0" max="200" value="100" step="5" oninput="applyImageFilters()" style="width:50px">
         </div>
       </div>
 
-      <!-- PORE ACTION group: Select, Undo, Redo, Clear (no duplicate Auto/Wand — those are in DETECT row) -->
+      <!-- VIEW group -->
+      <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
+        <span class="tb-lbl">VIEW:</span>
+        <button class="btn-hz" onclick="fitImgToScreen()" title="Fit to screen">⊡ Fit</button>
+        <button class="btn-hz" id="btn-heatmap" onclick="toggleHeatMap()" title="Toggle porosity heat map overlay">🌡 Heat Map</button>
+        <input id="heatmap-opacity" type="range" min="10" max="100" value="55" style="display:none;width:38px;height:14px;cursor:pointer" oninput="setHeatMapOpacity(this.value)" title="Heat map opacity">
+      </div>
+
+      <!-- ACTIONS group -->
       <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
         <span class="tb-lbl">ACTIONS:</span>
         <button class="btn-hz" id="tool-select-img" onclick="setTool('select')"
-          title="Select tool — click any pore or exclusion zone to select it, drag to move, scroll to resize. Works on all placed pores.">↖ Select</button>
-        <button class="btn-hz" onclick="undoPore()" id="btn-undo" disabled title="Undo last pore action">↩ Undo</button>
-        <button class="btn-hz" onclick="redoPore()" id="btn-redo" disabled title="Redo undone pore action">↪ Redo</button>
-        <button class="btn-hz" onclick="clearAllPores()" title="Remove all placed pores from this image">✕ Clear</button>
+          title="Select — click pore/zone to select, drag to move">↖ Select</button>
+        <button class="btn-hz" onclick="undoPore()" id="btn-undo" disabled title="Undo last pore action (Ctrl+Z)">↩ Undo</button>
+        <button class="btn-hz" onclick="redoPore()" id="btn-redo" disabled title="Redo (Ctrl+Shift+Z)">↪ Redo</button>
+        <button class="btn-hz" onclick="clearAllPores()" title="Remove all pores from this image">✕ Clear</button>
       </div>
 
-      <!-- Fit + PNG export pushed to far right -->
-      <button class="btn-hz" onclick="fitImgToScreen()" title="Fit to screen — reset pan and zoom to show the full image centred in the canvas" style="margin-left:auto">⊡ Fit</button>
-      <button class="btn-hz" onclick="downloadAnnotatedImage()" title="Export annotated image as PNG with pore overlays">⬇ PNG</button>
+      <!-- Export pushed right -->
+      <button class="btn-hz" onclick="downloadAnnotatedImage()" title="Export annotated image as PNG" style="margin-left:auto">⬇ PNG</button>
     </div>
 
-    <!-- ── ROW 2: Detection params + Exclude tools + Measure + Links ── -->
-    <div style="display:flex;align-items:center;gap:3px;padding:4px 8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none">
+    <!-- ══ ROW 2: Detection Pipeline ══ -->
+    <div style="display:flex;align-items:center;gap:3px;padding:3px 8px;border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;background:rgba(59,130,246,.03)">
 
-      <!-- DETECT params group -->
+      <!-- DETECT group -->
       <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
         <span class="tb-lbl">DETECT:</span>
         <button class="btn-hz" id="btn-detect-wand" onclick="setTool('wand_pore')"
           style="font-size:9px;padding:1px 7px;height:22px"
-          title="Pore Wand — click INSIDE a dark pore void to flood-fill and trace it as a pore. Best for irregular shrinkage cavities missed by Auto-Detect.">🪄 Pore Wand</button>
+          title="Pore Wand — click inside a dark pore void to flood-fill and trace it">🪄 Pore Wand</button>
         <button class="btn-hz" id="btn-poly-draw" onclick="setTool('poly_draw')"
           style="font-size:9px;padding:1px 7px;height:22px"
-          title="Polygon Draw — click vertices to trace any pore outline precisely. Double-click or click the first point to close. ESC or right-click to cancel.">✦ Poly Draw</button>
-        <!-- Render Mode: Curve = contour polygon area | Solid = pixel-count area projection -->
+          title="Polygon Draw — click vertices to trace any pore outline. Double-click to close.">✦ Poly Draw</button>
+        <!-- Render Mode toggle -->
         <div style="display:inline-flex;height:22px;border:1px solid var(--bd2);border-radius:4px;overflow:hidden;flex-shrink:0"
-             title="Pore area method. Curve: smooth contour polygon. Solid: exact pixel count filled projection. Switching recalculates all metrics instantly.">
+             title="Pore area method: Curve=contour polygon, Solid=pixel count">
           <button id="btn-mode-curve" onclick="setPoreRenderMode('curve')"
-            style="font-size:9px;padding:0 7px;height:22px;border:none;border-right:1px solid var(--bd2);cursor:pointer;background:var(--c4);color:var(--pri);font-weight:700"
-            title="Curve mode — area from smoothed contour polygon (shoelace). Default.">▣ Curve</button>
+            style="font-size:9px;padding:0 7px;height:22px;border:none;border-right:1px solid var(--bd2);cursor:pointer;background:var(--c4);color:var(--pri);font-weight:700">▣ Curve</button>
           <button id="btn-mode-solid" onclick="setPoreRenderMode('solid')"
-            style="font-size:9px;padding:0 7px;height:22px;border:none;cursor:pointer"
-            title="Solid mode — area from true pixel count. Displays filled mask instead of edge curve. More accurate for irregular shrinkage pores.">⬛ Solid</button>
+            style="font-size:9px;padding:0 7px;height:22px;border:none;cursor:pointer">⬛ Solid</button>
         </div>
         <div style="width:1px;height:14px;background:var(--bd2);margin:0 2px"></div>
-        <button class="btn-hz" style="font-size:9px;padding:1px 6px;height:22px" onclick="setDetectPreset('fine')"
-          title="Fine preset — high sensitivity for small gas pores (≥0.05mm). May pick up noise in rough images.">Fine</button>
-        <button class="btn-hz" style="font-size:9px;padding:1px 6px;height:22px" onclick="setDetectPreset('balanced')"
-          title="Balanced preset — general purpose. Detects gas and shrinkage pores ≥0.1mm. Good default for most castings.">Balanced</button>
-        <button class="btn-hz" style="font-size:9px;padding:1px 6px;height:22px" onclick="setDetectPreset('coarse')"
-          title="Coarse preset — targets large shrinkage voids ≥0.3mm. Ignores micro-porosity. Best for rough as-cast surfaces.">Coarse</button>
+        <button class="btn-hz" style="font-size:9px;padding:1px 6px;height:22px" onclick="setDetectPreset('fine')"    title="Fine — high sensitivity for small gas pores ≥0.05mm">Fine</button>
+        <button class="btn-hz" style="font-size:9px;padding:1px 6px;height:22px" onclick="setDetectPreset('balanced')" title="Balanced — general purpose ≥0.1mm">Balanced</button>
+        <button class="btn-hz" style="font-size:9px;padding:1px 6px;height:22px" onclick="setDetectPreset('coarse')"  title="Coarse — large shrinkage voids ≥0.3mm">Coarse</button>
         <div style="width:1px;height:14px;background:var(--bd2);margin:0 2px"></div>
-        <div class="slider-group" title="Threshold — brightness cutoff for pore detection. 50=Auto (Otsu). Lower: only darkest pores. Higher: includes gray areas too.">
+        <div class="slider-group" title="Threshold — brightness cutoff. 50=Auto (Otsu)">
           <span style="font-size:8px;font-weight:700">Thresh</span>
           <input type="range" id="detect-threshold" min="10" max="90" value="50" step="5"
             oninput="document.getElementById('detect-sens-val').textContent=this.value+(this.value=='50'?' (Auto)':this.value>50?' +'+(this.value-50):' '+(this.value-50));_scheduleLiveDetect();"
             style="width:44px">
           <span id="detect-sens-val" style="font-size:8px;font-weight:700;min-width:40px">50 (Auto)</span>
         </div>
-        <div class="slider-group" title="Min Pore Diameter — smallest pore to detect (mm). Raise to filter noise; lower to catch fine gas pores.">
+        <div class="slider-group" title="Min Pore Diameter — smallest pore to detect (mm)">
           <span style="font-size:8px;font-weight:700">Min Φ</span>
           <input type="range" id="detect-min-dia" min="0.05" max="2.0" value="0.1" step="0.05"
             oninput="document.getElementById('detect-min-dia-val').textContent=parseFloat(this.value).toFixed(2)+'mm';_scheduleLiveDetect();"
@@ -643,22 +645,22 @@
           <span id="detect-min-dia-val" style="font-size:8px;font-weight:700;width:32px">0.10mm</span>
         </div>
         <button class="btn-hz" style="font-size:9px;padding:1px 6px;height:22px" onclick="toggleDetectAdvanced()" id="btn-adv-toggle"
-          title="Advanced tracing panel — tune blur, morphological closing, contour curve detail, max aspect ratio and area filters for complex porosity patterns">⚙ Advanced</button>
+          title="Advanced tracing panel">⚙ Advanced</button>
       </div>
 
       <!-- EXCLUDE group -->
-      <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:2px;flex-shrink:0">
         <span class="tb-lbl">EXCL:</span>
         <button class="btn-hz" id="btn-excl-rect" onclick="setTool('exclude_rect')"
           style="font-size:9px;padding:1px 6px;height:22px"
-          title="Exclusion Rectangle — draw a box to mask a region. Pores inside are ignored. Use for bolt holes, markings, or flash.">▭ Rect</button>
+          title="Exclusion Rectangle — box to mask a region (bolt holes, markings)">▭ Rect</button>
         <button class="btn-hz" id="btn-excl-circle" onclick="setTool('exclude_circle')"
           style="font-size:9px;padding:1px 6px;height:22px"
-          title="Exclusion Circle — draw a circle to mask a round region. Ideal for bore holes and circular features.">○ Circle</button>
+          title="Exclusion Circle — mask a round region (bore holes)">○ Circle</button>
         <button class="btn-hz" id="btn-excl-wand" onclick="setTool('exclude_wand')"
           style="font-size:9px;padding:1px 6px;height:22px"
-          title="Excl Wand — click a BRIGHT boundary or structural feature to auto-trace and exclude it from detection. Best for complex edge profiles and bolt holes.">🚫 Excl Wand</button>
-        <!-- Wand options (only shown when excl wand active) -->
+          title="Excl Wand — auto-trace bright boundary to exclude">🚫 Wand</button>
+        <!-- Wand options inline -->
         <div id="wand-options" style="display:none;align-items:center;gap:4px;border-left:1px solid var(--bd2);padding-left:5px">
           <span style="font-size:8px;font-weight:700">Tol:</span>
           <input type="range" id="wand-tolerance" min="5" max="120" value="40" style="width:40px"
@@ -673,60 +675,87 @@
         </div>
         <button class="btn-hz" id="btn-excl-select" onclick="setTool('excl_select')"
           style="font-size:9px;padding:1px 6px;height:22px"
-          title="Edit exclusion zones — click to select, drag to move, resize handles at corners">✏ Edit</button>
+          title="Edit exclusion zones — drag to move, resize handles">✏ Edit</button>
         <button class="btn-hz" onclick="clearExclusionZones()"
           style="font-size:9px;padding:1px 6px;height:22px"
           title="Remove all exclusion zones">↺ Clear</button>
         <span class="excl-zone-badge" id="excl-zone-count">0</span>
       </div>
+    </div>
 
-      <!-- MEASURE group — Deep Upgrade -->
+    <!-- ══ ROW 3: Placement + Measurement + Analysis ══ -->
+    <div style="display:flex;align-items:center;gap:3px;padding:3px 8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;background:rgba(52,211,153,.02)">
+
+      <!-- PLACE group -->
       <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
-        <span class="tb-lbl">MEASURE:</span>
-        <button class="btn-hz" id="tool-measure" onclick="setTool('measure')" style="font-size:9px;padding:1px 6px;height:22px"
-          title="Gap tool — click two points to measure edge-to-edge distance. Verifies minimum spacing A×Φs.">⟷ Gap</button>
-        <button class="btn-hz" id="meas-tool-angle" onclick="activateMeasureTool('angle')" style="font-size:9px;padding:1px 6px;height:22px"
-          title="Angle — click 3 points (vertex, arm1, arm2) to measure included angle">∠ Angle</button>
-        <button class="btn-hz" id="meas-tool-ruler" onclick="activateMeasureTool('ruler')" style="font-size:9px;padding:1px 6px;height:22px"
-          title="Ruler — click a chain of points to measure total path length · double-click or Enter to finish">📏 Ruler</button>
-        <button class="btn-hz" id="meas-tool-lasso" onclick="activateMeasureTool('lasso')" style="font-size:9px;padding:1px 6px;height:22px"
-          title="Area Lasso — click polygon vertices to measure enclosed area · double-click or Enter to close">⬡ Area</button>
-        <button class="btn-hz" id="meas-tool-caliper" onclick="activateMeasureTool('caliper')" style="font-size:9px;padding:1px 6px;height:22px"
-          title="Caliper — click two points to measure a diameter or span directly on the image">⊙ Caliper</button>
-        <button class="btn-hz" id="meas-tool-refline" onclick="activateMeasureTool('refline')" style="font-size:9px;padding:1px 6px;height:22px"
-          title="Reference Line — click to place H guide (hold Shift for V guide)">— Ref</button>
-        <div style="width:1px;height:14px;background:var(--bd2);margin:0 2px"></div>
-        <button class="btn-hz" id="tool-datum" onclick="setTool('datum')" style="font-size:9px;padding:1px 6px;height:22px"
-          title="Datum zone — draw the inspection reference rectangle per VW50093. Only pores inside are evaluated.">□ Datum</button>
-        <button class="btn-hz" id="btn-clear-datum" onclick="clearDatum()" style="display:none;font-size:9px;padding:1px 6px;height:22px"
-          title="Remove the datum reference area">✕ Datum</button>
-        <div style="width:1px;height:14px;background:var(--bd2);margin:0 2px"></div>
-        <button class="btn-hz on" id="meas-labels-toggle" onclick="toggleMeasLabels()" style="font-size:9px;padding:1px 5px;height:22px"
-          title="Toggle measurement labels on/off">🏷</button>
-        <button class="btn-hz" id="meas-snap-toggle" onclick="toggleSnapToPore()" style="font-size:9px;padding:1px 5px;height:22px"
-          title="Snap to pore edge — snaps measurement clicks to nearest pore boundary">🧲 Snap</button>
-        <button class="btn-hz" onclick="clearAllMeasAnnots()" style="font-size:9px;padding:1px 5px;height:22px"
-          title="Clear all measurement annotations">✕ Clear Meas</button>
-        <div style="width:1px;height:14px;background:var(--bd2);margin:0 2px"></div>
-        <button class="btn-hz" id="btn-heatmap" onclick="toggleHeatMap()" style="font-size:9px;padding:1px 6px;height:22px"
-          title="Heat Map — toggle a porosity density colour overlay on the canvas">🌡 Heat Map</button>
-        <input id="heatmap-opacity" type="range" min="10" max="100" value="55" style="display:none;width:40px;height:14px;cursor:pointer"
-          oninput="setHeatMapOpacity(this.value)" title="Heat map opacity">
+        <span class="tb-lbl">PLACE:</span>
+        <button class="btn-hz" id="tool-place" onclick="setTool('place')"
+          style="font-size:9px;padding:1px 6px;height:22px"
+          title="Place Pore — click on canvas to drop a manual pore at that position">+ Pore</button>
+        <button class="btn-hz" id="tool-select-row3" onclick="setTool('select')"
+          style="font-size:9px;padding:1px 6px;height:22px"
+          title="Select — click pore to select and edit">↖ Select</button>
       </div>
 
-      <!-- LINKS group -->
-      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-        <span class="tb-lbl">LINKS:</span>
-        <div class="slider-group" title="Pore link range — draws lines between pores within this distance. Nearest=only closest pair. Helps spot clusters and spacing violations.">
+      <!-- DATUM group -->
+      <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
+        <span class="tb-lbl">DATUM:</span>
+        <button class="btn-hz" id="tool-datum" onclick="setTool('datum')"
+          style="font-size:9px;padding:1px 6px;height:22px"
+          title="Datum zone — draw the inspection reference rectangle per VW50093. Only pores inside are evaluated.">□ Draw</button>
+        <button class="btn-hz" id="btn-clear-datum" onclick="clearDatum()" style="display:none;font-size:9px;padding:1px 6px;height:22px"
+          title="Remove the datum reference area">✕ Clear</button>
+      </div>
+
+      <!-- MEASURE group -->
+      <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
+        <span class="tb-lbl">MEASURE:</span>
+        <button class="btn-hz" id="tool-measure" onclick="setTool('measure')"
+          style="font-size:9px;padding:1px 6px;height:22px"
+          title="Gap — click 2 points to measure edge-to-edge spacing (A×Φs check)">⟷ Gap</button>
+        <button class="btn-hz" id="meas-tool-caliper" onclick="activateMeasureTool('caliper')"
+          style="font-size:9px;padding:1px 6px;height:22px"
+          title="Caliper — click 2 points to measure diameter or span">⊙ Caliper</button>
+        <button class="btn-hz" id="meas-tool-ruler" onclick="activateMeasureTool('ruler')"
+          style="font-size:9px;padding:1px 6px;height:22px"
+          title="Ruler — click path points · Enter or double-click to finish">📏 Ruler</button>
+        <button class="btn-hz" id="meas-tool-angle" onclick="activateMeasureTool('angle')"
+          style="font-size:9px;padding:1px 6px;height:22px"
+          title="Angle — click 3 points (vertex, arm1, arm2)">∠ Angle</button>
+        <button class="btn-hz" id="meas-tool-lasso" onclick="activateMeasureTool('lasso')"
+          style="font-size:9px;padding:1px 6px;height:22px"
+          title="Area Lasso — click polygon vertices · Enter or double-click to close">⬡ Area</button>
+        <button class="btn-hz" id="meas-tool-refline" onclick="activateMeasureTool('refline')"
+          style="font-size:9px;padding:1px 6px;height:22px"
+          title="Reference Line — click to place H guide · Shift for V guide">— Ref</button>
+      </div>
+
+      <!-- MEASURE OPTIONS group -->
+      <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
+        <button class="btn-hz on" id="meas-labels-toggle" onclick="toggleMeasLabels()"
+          style="font-size:9px;padding:1px 5px;height:22px" title="Toggle measurement labels on/off">🏷 Labels</button>
+        <button class="btn-hz" id="meas-snap-toggle" onclick="toggleSnapToPore()"
+          style="font-size:9px;padding:1px 5px;height:22px" title="Snap measurement clicks to nearest pore edge">🧲 Snap</button>
+        <button class="btn-hz" onclick="clearAllMeasAnnots()"
+          style="font-size:9px;padding:1px 5px;height:22px" title="Clear all measurement annotations">✕ Annots</button>
+      </div>
+
+      <!-- ANALYSIS group -->
+      <div style="display:flex;align-items:center;gap:3px;flex-shrink:0">
+        <span class="tb-lbl">ANALYSIS:</span>
+        <div class="slider-group" title="Pore link range — draws lines between pores within this distance">
+          <span style="font-size:8px;font-weight:700">Links</span>
           <input type="range" id="link-range" min="0" max="20" step="0.5" value="0"
-            oninput="document.getElementById('link-disp').textContent=this.value==0?'Nearest':this.value+'mm';if(typeof drawCanvas==='function') drawCanvas();"
-            style="width:50px">
-          <span id="link-disp" style="font-size:9px;font-weight:700;width:36px">Nearest</span>
+            oninput="document.getElementById('link-disp').textContent=this.value==0?'Off':this.value+'mm';if(typeof drawCanvas==='function') drawCanvas();"
+            style="width:44px">
+          <span id="link-disp" style="font-size:9px;font-weight:700;width:28px">Off</span>
         </div>
       </div>
     </div>
 
   </div><!-- end img-toolbar -->
+
+
 
   <!-- ADVANCED DETECT PANEL -->
   <div id="detect-advanced" style="display:none;background:var(--c1);border-bottom:1px solid var(--bd);padding:6px 12px;overflow-x:auto;white-space:nowrap;scrollbar-width:none">
