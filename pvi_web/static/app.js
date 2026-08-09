@@ -645,25 +645,31 @@ function switchRegistryTab(tab) {
 let _regTab = 'analysis'; // default tab
 function switchRegTab(tab) {
   _regTab = tab;
-  const tabAnalysis   = document.getElementById('reg-tab-analysis');
-  const tabPorelist   = document.getElementById('reg-tab-porelist');
-  const panelAnalysis = document.getElementById('reg-panel-analysis');
-  const panelPorelist = document.getElementById('reg-panel-porelist');
+  const tabAnalysis      = document.getElementById('reg-tab-analysis');
+  const tabPorelist      = document.getElementById('reg-tab-porelist');
+  const tabMeasurements  = document.getElementById('reg-tab-measurements');
+  const panelAnalysis    = document.getElementById('reg-panel-analysis');
+  const panelPorelist    = document.getElementById('reg-panel-porelist');
+  const panelMeasurements= document.getElementById('reg-panel-measurements');
   if (!panelAnalysis || !panelPorelist) return;
 
   const activeStyle   = 'font-size:9px;font-weight:700;padding:4px 10px;border:1px solid var(--bd2);border-bottom:none;border-radius:4px 4px 0 0;background:var(--c1);color:var(--tx);cursor:pointer;letter-spacing:.04em';
   const inactiveStyle = 'font-size:9px;font-weight:700;padding:4px 10px;border:1px solid var(--bd2);border-bottom:1px solid var(--c1);border-radius:4px 4px 0 0;background:var(--c3);color:var(--dim);cursor:pointer;letter-spacing:.04em';
 
+  [tabAnalysis, tabPorelist, tabMeasurements].forEach(btn => { if(btn) btn.style.cssText = inactiveStyle; });
+  [panelAnalysis, panelPorelist].forEach(p => { if(p) p.style.display = 'none'; });
+  if (panelMeasurements) panelMeasurements.style.display = 'none';
+
   if (tab === 'analysis') {
     if (tabAnalysis)   tabAnalysis.style.cssText   = activeStyle;
-    if (tabPorelist)   tabPorelist.style.cssText   = inactiveStyle;
     panelAnalysis.style.display = 'flex';
-    panelPorelist.style.display = 'none';
+  } else if (tab === 'measurements') {
+    if (tabMeasurements) tabMeasurements.style.cssText = activeStyle;
+    if (panelMeasurements) { panelMeasurements.style.display = 'flex'; }
+    if (typeof _renderMeasList === 'function') _renderMeasList();
   } else {
     if (tabPorelist)   tabPorelist.style.cssText   = activeStyle;
-    if (tabAnalysis)   tabAnalysis.style.cssText   = inactiveStyle;
     panelPorelist.style.display = 'flex';
-    panelAnalysis.style.display = 'none';
   }
 }
 
@@ -2029,6 +2035,12 @@ function drawCanvas(){
 
   // Scale ruler (bottom-left)
   drawRuler();
+
+  // ── Measurement Annotations (new tools: angle/ruler/lasso/caliper/refline) ──
+  if (typeof window.drawMeasAnnotations === 'function') {
+    window.drawMeasAnnotations(mctx);
+  }
+
   mctx.restore();
 
   // Force GPU Compositor refresh to fix Chrome rendering freeze bugs
@@ -2504,6 +2516,10 @@ function bindCanvasEvents(){
     if(e.key==='Shift') { window._scaleShift=true;
       if(S.imgState.imgTool==='scale_line' && S.imgState.scaleDrawing) drawCanvas();
     }
+    // Pass key to measure engine (Enter=finish, Escape=cancel)
+    if (typeof window._measHandleKey === 'function') {
+      if (window._measHandleKey(e.key)) { e.preventDefault(); }
+    }
   });
   document.addEventListener('keyup', e=>{
     if(e.key==='Shift') { window._scaleShift=false;
@@ -2650,6 +2666,12 @@ function bindCanvasEvents(){
     if(S.tool==='place'){
       if(pore){ S.selectedId=pore.id; drawCanvas(); }
       else { placePore(mm.x, mm.y); }
+    } else if(S.tool==='meas_custom'){
+      // Delegate to measure engine
+      if (typeof window._measHandleClick === 'function') {
+        window._measHandleClick(mm, e);
+      }
+      return;
     } else if(S.tool==='measure'){
       if(!S.measurePt1){ S.measurePt1=mm; drawCanvas(); }
       else { S.measurePt1=null; drawCanvas(); }
@@ -2795,6 +2817,12 @@ function bindCanvasEvents(){
     const mm=canvasToMm(p.x,p.y);
     document.getElementById('sb-cursor').textContent=`x:${mm.x.toFixed(2)} y:${mm.y.toFixed(2)} mm`;
     
+    // Pass to measure engine for live annotation preview
+    if (S.tool === 'meas_custom' && typeof window._measHandleMouseMove === 'function') {
+      window._measHandleMouseMove(mm);
+      drawCanvas();
+    }
+
     // Image tool mousemove
     if(S.imgMode && handleImageToolMousemove(p)) return;
     // Image position drag
@@ -3417,6 +3445,10 @@ function setTool(t){
   }
   S.tool = t;
   S.measurePt1 = null;
+  // Cancel any in-progress custom measure annotation
+  if (t !== 'meas_custom' && typeof window.cancelMeasureTool === 'function') {
+    window.cancelMeasureTool();
+  }
 
   // Clear excl selection/edit state when leaving excl_select
   if(t !== 'excl_select'){ S._exclSelected = null; S._exclEditPts = null; S._exclRotating = null; }
@@ -3475,7 +3507,7 @@ function setTool(t){
   const cursors = {
     place:'crosshair', wand_pore:'crosshair', select:'grab',
     poly_draw:'crosshair',
-    measure:'crosshair', datum:'cell',
+    measure:'crosshair', meas_custom:'crosshair', datum:'cell',
     exclude_rect:'crosshair', exclude_circle:'crosshair', exclude_wand:'crosshair',
     excl_select:'default', pan:'grab'
   };
@@ -4201,6 +4233,10 @@ function showEditPanel(){
   const epType=document.getElementById('ep-type');
   if(epType) epType.value=p.type||'gas';
   preEditState = JSON.stringify(AP());
+  // Render extended metrics panel
+  if (typeof window.renderPoreMetricsPanel === 'function') {
+    window.renderPoreMetricsPanel(p.id);
+  }
   // Scroll into view after render
   requestAnimationFrame(()=>ep.scrollIntoView({behavior:'smooth',block:'nearest'}));
 }

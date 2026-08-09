@@ -531,6 +531,8 @@
         <div class="mph-sub" id="ms-verdict">No spec loaded</div>
       </div>
     </div>
+    <!-- Measurements HUD strip -->
+    <div id="meas-hud" style="display:none;flex-wrap:wrap;gap:4px;padding:2px 0;border-top:1px solid rgba(255,255,255,.06);margin-top:3px;align-items:center;font-size:9px"></div>
     <div class="ph-right" style="display:flex; gap:6px; align-items:center;">
       <div id="img-scale-info" class="img-scale-pill" style="display:none;margin-right:4px"></div>
       <input type="file" id="img-file-input" accept="image/*" style="display:none" onchange="loadImageFile(event)">
@@ -678,15 +680,33 @@
         <span class="excl-zone-badge" id="excl-zone-count">0</span>
       </div>
 
-      <!-- MEASURE group -->
+      <!-- MEASURE group — Deep Upgrade -->
       <div style="display:flex;align-items:center;gap:2px;border-right:1px solid var(--bd);padding-right:6px;flex-shrink:0">
         <span class="tb-lbl">MEASURE:</span>
         <button class="btn-hz" id="tool-measure" onclick="setTool('measure')" style="font-size:9px;padding:1px 6px;height:22px"
           title="Gap tool — click two points to measure edge-to-edge distance. Verifies minimum spacing A×Φs.">⟷ Gap</button>
+        <button class="btn-hz" id="meas-tool-angle" onclick="activateMeasureTool('angle')" style="font-size:9px;padding:1px 6px;height:22px"
+          title="Angle — click 3 points (vertex, arm1, arm2) to measure included angle">∠ Angle</button>
+        <button class="btn-hz" id="meas-tool-ruler" onclick="activateMeasureTool('ruler')" style="font-size:9px;padding:1px 6px;height:22px"
+          title="Ruler — click a chain of points to measure total path length · double-click or Enter to finish">📏 Ruler</button>
+        <button class="btn-hz" id="meas-tool-lasso" onclick="activateMeasureTool('lasso')" style="font-size:9px;padding:1px 6px;height:22px"
+          title="Area Lasso — click polygon vertices to measure enclosed area · double-click or Enter to close">⬡ Area</button>
+        <button class="btn-hz" id="meas-tool-caliper" onclick="activateMeasureTool('caliper')" style="font-size:9px;padding:1px 6px;height:22px"
+          title="Caliper — click two points to measure a diameter or span directly on the image">⊙ Caliper</button>
+        <button class="btn-hz" id="meas-tool-refline" onclick="activateMeasureTool('refline')" style="font-size:9px;padding:1px 6px;height:22px"
+          title="Reference Line — click to place H guide (hold Shift for V guide)">— Ref</button>
+        <div style="width:1px;height:14px;background:var(--bd2);margin:0 2px"></div>
         <button class="btn-hz" id="tool-datum" onclick="setTool('datum')" style="font-size:9px;padding:1px 6px;height:22px"
           title="Datum zone — draw the inspection reference rectangle per VW50093. Only pores inside are evaluated.">□ Datum</button>
         <button class="btn-hz" id="btn-clear-datum" onclick="clearDatum()" style="display:none;font-size:9px;padding:1px 6px;height:22px"
           title="Remove the datum reference area">✕ Datum</button>
+        <div style="width:1px;height:14px;background:var(--bd2);margin:0 2px"></div>
+        <button class="btn-hz on" id="meas-labels-toggle" onclick="toggleMeasLabels()" style="font-size:9px;padding:1px 5px;height:22px"
+          title="Toggle measurement labels on/off">🏷</button>
+        <button class="btn-hz" id="meas-snap-toggle" onclick="toggleSnapToPore()" style="font-size:9px;padding:1px 5px;height:22px"
+          title="Snap to pore edge — snaps measurement clicks to nearest pore boundary">🧲 Snap</button>
+        <button class="btn-hz" onclick="clearAllMeasAnnots()" style="font-size:9px;padding:1px 5px;height:22px"
+          title="Clear all measurement annotations">✕ Clear Meas</button>
       </div>
 
       <!-- LINKS group -->
@@ -805,6 +825,10 @@
             style="font-size:9px;font-weight:700;padding:4px 10px;border:1px solid var(--bd2);border-bottom:1px solid var(--c1);border-radius:4px 4px 0 0;background:var(--c3);color:var(--dim);cursor:pointer;letter-spacing:.04em">
             Pore List
           </button>
+          <button id="reg-tab-measurements" onclick="switchRegTab('measurements')"
+            style="font-size:9px;font-weight:700;padding:4px 10px;border:1px solid var(--bd2);border-bottom:1px solid var(--c1);border-radius:4px 4px 0 0;background:var(--c3);color:var(--dim);cursor:pointer;letter-spacing:.04em">
+            📐 Measurements
+          </button>
         </div>
       </div>
 
@@ -907,6 +931,17 @@
         <div id="excl-registry-section"  style="border-top:1px solid var(--bd);flex-shrink:0"></div>
       </div>
 
+      <!-- ── TAB 3: Measurements ── -->
+      <div id="reg-panel-measurements" style="flex:1;overflow-y:auto;display:none;flex-direction:column">
+        <div style="padding:5px 10px 4px;font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--bd);background:rgba(255,255,255,.02);display:flex;align-items:center;justify-content:space-between">
+          <span>Measurement Annotations</span>
+          <button onclick="exportMeasCSV()" style="font-size:8px;padding:2px 6px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);border-radius:3px;cursor:pointer;color:#34d399">⬇ CSV</button>
+        </div>
+        <div id="meas-list-panel" style="flex:1;padding:6px 8px">
+          <div style="font-size:10px;color:var(--dim);text-align:center;padding:16px">No measurements yet.<br>Use MEASURE tools in the toolbar.</div>
+        </div>
+      </div>
+
       <!-- ── TAB 2: Pore List ── -->
       <div id="reg-panel-porelist" style="flex:1;overflow-y:auto;display:none;flex-direction:column">
         <div style="padding:5px 10px 4px;font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--bd);background:rgba(255,255,255,.02)">
@@ -916,7 +951,7 @@
           <div style="font-size:10px;color:var(--dim);text-align:center;padding:16px">No pores · click canvas to place</div>
         </div>
 
-        <!-- Selected pore edit panel -->
+        <!-- Selected pore edit panel — UPGRADED -->
         <div id="pore-edit-panel" style="display:none;padding:10px 12px;border-top:2px solid var(--bd2);background:var(--c3);flex-shrink:0">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
             <div class="pp-title" style="margin:0;font-size:10px">Edit Pore <span id="ep-pore-id" style="font-size:9px;color:var(--dim);font-weight:400"></span></div>
@@ -929,9 +964,13 @@
             </div>
             <div class="fi-item">
               <div class="fl">Type</div>
-              <select class="fi" id="ep-type" onchange="const p=AP().find(p=>p.id===S.selectedId);if(p){p.type=this.value;drawCanvas();updateLiveMetrics();updatePoreRegistry();}" style="font-size:12px;padding:4px 8px">
-                <option value="gas">Gas pore</option>
-                <option value="shrink">Shrinkage</option>
+              <select class="fi" id="ep-type" onchange="const p=AP().find(p=>p.id===S.selectedId);if(p){p.type=this.value;drawCanvas();updateLiveMetrics();updatePoreRegistry();if(typeof renderPoreMetricsPanel==='function')renderPoreMetricsPanel(p.id);}" style="font-size:12px;padding:4px 8px">
+                <option value="gas">🔵 Gas pore</option>
+                <option value="shrink">🟤 Shrinkage</option>
+                <option value="micro">🟢 Micro-porosity</option>
+                <option value="oxide">🟣 Oxide inclusion</option>
+                <option value="cold_shut">🟠 Cold shut</option>
+                <option value="manual">⚪ Manual / Unknown</option>
               </select>
             </div>
             <div class="fi-item">
@@ -941,6 +980,15 @@
             <div class="fi-item">
               <div class="fl">Y depth (mm)</div>
               <div class="fi-wrap"><input class="fi" id="ep-y" oninput="applyEditPanelLive()" onchange="pushHistoryLive()" type="number" step="0.1" style="font-size:12px;padding:6px 30px 6px 10px"><span class="fi-unit">mm</span></div>
+            </div>
+            <!-- Extended Metrics Panel -->
+            <div style="border-top:1px solid rgba(255,255,255,.08);padding-top:7px;margin-top:2px">
+              <div style="font-size:8px;font-weight:800;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px;cursor:pointer;display:flex;align-items:center;justify-content:space-between"
+                onclick="const mp=document.getElementById('pore-metrics-panel');if(mp){mp.style.display=mp.style.display==='none'?'block':'none';}">
+                <span>📊 Shape Metrics</span>
+                <span style="font-size:9px;color:var(--dim)">▾</span>
+              </div>
+              <div id="pore-metrics-panel" style="display:block;font-size:9px;line-height:1.6"></div>
             </div>
             <button onclick="S.selectedId=null;document.getElementById('pore-edit-panel').style.display='none';setTool('select');drawCanvas();updatePoreRegistry();" style="width:100%;font-size:10px;padding:5px 0;background:var(--c4);border:1px solid var(--bd);border-radius:4px;cursor:pointer;color:var(--dim);margin-top:2px">Done ✓</button>
           </div>
@@ -1522,5 +1570,6 @@
   };
 })();
 </script>
+<script src="/static/measure_engine.js"></script>
 </body>
 </html>

@@ -36,6 +36,7 @@ class PoreModel(BaseModel):
     x: float
     y: float
     dia: float
+    # type: 'gas' | 'shrink' | 'micro' | 'oxide' | 'cold_shut' | 'manual'
     type: str = 'gas'
     zone: str = 'hr'
     is_excluded: Optional[bool] = None
@@ -44,6 +45,14 @@ class PoreModel(BaseModel):
     crop_fraction: Optional[float] = None
     max_length: Optional[float] = None
     raw_dia: Optional[float] = None
+    # ── Extended shape metrics (computed by calc_pore_metrics / JS) ──────────
+    circularity: Optional[float] = None      # 4π·A / P²  (1 = perfect circle)
+    aspect_ratio: Optional[float] = None     # Feret Max / Feret Min
+    roundness: Optional[float] = None        # 4·A / (π · Major²)
+    convexity: Optional[float] = None        # pore area / convex hull area
+    perimeter: Optional[float] = None        # estimated perimeter from polygon (mm)
+    feret_min: Optional[float] = None        # minimum calliper width (mm)
+    nearest_neighbor: Optional[float] = None # edge-to-edge distance to closest pore (mm)
 
 class ExclusionZoneModel(BaseModel):
     type: Literal["rect", "circle", "polygon"]

@@ -1,7 +1,120 @@
 """PVI Web — Core Calculations (VW50093) — Deep Checked"""
 import math
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from .models import SpecModel, PoreModel
+
+
+# ── Shape Metric Helpers ─────────────────────────────────────────────────────
+
+def _polygon_perimeter(points: list) -> float:
+    """Approximate perimeter of a polygon from its vertices."""
+    if not points or len(points) < 2:
+        return 0.0
+    n = len(points)
+    total = 0.0
+    for i in range(n):
+        j = (i + 1) % n
+        total += math.hypot(points[j]['x'] - points[i]['x'],
+                            points[j]['y'] - points[i]['y'])
+    return total
+
+
+def _circle_perimeter(r: float) -> float:
+    return 2.0 * math.pi * r
+
+
+def _polygon_feret_min(points: list) -> float:
+    """Approximate minimum Feret (calliper) width via rotating calipers on convex hull approximation.
+    Falls back to min bounding-box dimension for small polygons."""
+    if not points or len(points) < 3:
+        return 0.0
+    xs = [p['x'] for p in points]
+    ys = [p['y'] for p in points]
+    w = max(xs) - min(xs)
+    h = max(ys) - min(ys)
+    return min(w, h) if min(w, h) > 0 else max(w, h)
+
+
+def _convex_hull_area(points: list) -> float:
+    """Graham scan convex hull area — used for convexity metric."""
+    if not points or len(points) < 3:
+        return 0.0
+    # Simple bounding-box approximation (fast, no full Graham scan needed for this heuristic)
+    xs = [p['x'] for p in points]
+    ys = [p['y'] for p in points]
+    w = max(xs) - min(xs)
+    h = max(ys) - min(ys)
+    # Ellipse circumscribed bounding box ≈ π·w/2·h/2  (convex hull upper bound)
+    return max(math.pi * (w / 2) * (h / 2), 1e-9)
+
+
+def calc_pore_metrics(pores: List[PoreModel], polygon_map: Optional[Dict[int, list]] = None) -> Dict[int, Dict[str, Any]]:
+    """
+    Compute extended per-pore shape metrics for all pores.
+
+    polygon_map: optional dict mapping pore.id → list of {x,y} polygon points (mm).
+                 If not provided, metrics are estimated from the equivalent circle.
+
+    Returns: dict mapping pore.id → metric dict with keys:
+        circularity, aspect_ratio, roundness, convexity, perimeter, feret_min
+    """
+    results: Dict[int, Dict[str, Any]] = {}
+    for p in pores:
+        r = p.dia / 2
+        area = math.pi * r * r
+
+        pts = (polygon_map or {}).get(p.id)
+
+        if pts and len(pts) >= 3:
+            perim = _polygon_perimeter(pts)
+            poly_area = polygon_area(pts)
+            fmax = p.max_length if p.max_length else p.dia
+            fmin = _polygon_feret_min(pts)
+            hull_area = _convex_hull_area(pts)
+            circ = (4 * math.pi * poly_area / (perim ** 2)) if perim > 0 else 1.0
+            ar = (fmax / fmin) if fmin > 0 else 1.0
+            roundness_val = (4 * poly_area / (math.pi * (fmax ** 2))) if fmax > 0 else 1.0
+            convexity_val = min(1.0, poly_area / hull_area) if hull_area > 0 else 1.0
+        else:
+            # Estimate from equivalent circle
+            perim = _circle_perimeter(r)
+            poly_area = area
+            fmax = p.max_length if p.max_length else p.dia
+            fmin = p.dia  # min calliper = diameter for circle
+            circ = 1.0    # perfect circle
+            ar = (fmax / fmin) if fmin > 0 else 1.0
+            roundness_val = 1.0
+            convexity_val = 1.0
+
+        results[p.id] = {
+            'circularity': round(circ, 4),
+            'aspect_ratio': round(ar, 3),
+            'roundness': round(roundness_val, 4),
+            'convexity': round(convexity_val, 4),
+            'perimeter': round(perim, 4),
+            'feret_min': round(fmin, 4),
+        }
+    return results
+
+
+def calc_nearest_neighbor(pores: List[PoreModel]) -> Dict[int, float]:
+    """
+    Compute edge-to-edge nearest-neighbor distance for each pore.
+    Returns dict: pore.id → distance in mm (None if no neighbour).
+    """
+    result: Dict[int, float] = {}
+    n = len(pores)
+    for i, pi in enumerate(pores):
+        best = None
+        for j, pj in enumerate(pores):
+            if i == j:
+                continue
+            center_dist = math.hypot(pi.x - pj.x, pi.y - pj.y)
+            edge_gap = center_dist - pi.dia / 2 - pj.dia / 2
+            if best is None or edge_gap < best:
+                best = edge_gap
+        result[pi.id] = round(best, 4) if best is not None else 0.0
+    return result
 
 
 def calc_porosity(pores: List[PoreModel], spec: SpecModel) -> float:

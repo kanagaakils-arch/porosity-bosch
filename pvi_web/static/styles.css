@@ -224,6 +224,45 @@ select.fi option{background:var(--c2)}
   font-size:11px;background:none;border:none;color:var(--dim)}
 .pr-del:hover{color:var(--red);background:var(--ra)}
 
+/* ── Measurement Annotations List ── */
+.meas-list-item{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 8px;border-radius:var(--r);
+  border-bottom:1px solid rgba(255,255,255,.04);
+  transition:background .1s;
+}
+.meas-list-item:hover{background:var(--c3)}
+.meas-list-item.meas-hidden{opacity:.35}
+.meas-list-item.meas-highlight{
+  background:rgba(167,139,250,.18);
+  outline:1px solid rgba(167,139,250,.5);
+  animation:meas-hl-pulse .9s ease;
+}
+@keyframes meas-hl-pulse{
+  0%{background:rgba(167,139,250,.4)}
+  100%{background:rgba(167,139,250,.18)}
+}
+.meas-color-dot{
+  width:12px;height:12px;border-radius:50%;cursor:pointer;
+  border:1.5px solid rgba(255,255,255,.25);flex-shrink:0;
+  transition:transform .15s;
+}
+.meas-color-dot:hover{transform:scale(1.35)}
+.meas-btn{
+  background:none;border:none;cursor:pointer;color:var(--dim);
+  font-size:12px;padding:1px 4px;border-radius:3px;transition:all .1s;
+}
+.meas-btn:hover{color:var(--tx);background:var(--c4)}
+.meas-btn-del:hover{color:var(--red)!important;background:var(--ra)!important}
+/* HUD strip items */
+.meas-hud-item{
+  font-size:9px;cursor:pointer;padding:1px 6px;
+  border-radius:10px;background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.1);
+  transition:background .15s;white-space:nowrap;
+}
+.meas-hud-item:hover{background:rgba(255,255,255,.14)}
+
 /* ── SCALE RULER ── */
 #scale-ruler{position:absolute;bottom:10px;left:12px;pointer-events:none}
 /* Scale-not-set warning banner on canvas */
